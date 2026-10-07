@@ -9,6 +9,7 @@ Run after tools/build.sh.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import unicodedata
 from pathlib import Path
@@ -112,6 +113,11 @@ def main() -> None:
     (SITE / "data.js").write_text("window.KERF = " + json.dumps(data, separators=(",", ":")) + ";\n")
 
     page = (SITE / "page.html").read_text()
+    # stamp asset URLs with a content hash, so a changed file gets a new URL
+    # and the cache headers in vercel.json can never pair a new page with old data
+    for rel in ["data.js", *(f"fonts/{name}" for name in WOFF2.values())]:
+        digest = hashlib.sha256((SITE / rel).read_bytes()).hexdigest()[:10]
+        page = page.replace(f'"{rel}"', f'"{rel}?v={digest}"')
     (SITE / "index.html").write_text(
         '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
