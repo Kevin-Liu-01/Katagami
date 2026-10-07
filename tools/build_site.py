@@ -1,16 +1,20 @@
 """Generate the specimen site's assets from the built fonts.
 
-    site/fonts/KerfSans.woff2, site/fonts/KerfMono.woff2
-    site/data.js     window.KERF: metrics, character tables, features, outlines
-    site/index.html  site/page.html wrapped in a document
+The site lives in its own repo, Kerf-Website, checked out next to this one
+(or wherever KERF_SITE points). This writes into it:
 
-Run after tools/build.sh.
+    fonts/KerfSans.woff2, fonts/KerfRound.woff2, fonts/KerfMono.woff2
+    data.js     window.KERF: metrics, character tables, features, outlines
+    index.html  page.html wrapped in a document, asset URLs stamped with hashes
+
+Run after tools/build.sh, then commit and push Kerf-Website; Vercel deploys it.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import unicodedata
 from pathlib import Path
 
@@ -23,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from kerf_build.fontops import decompose  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-SITE = ROOT / "site"
+SITE = Path(os.environ.get("KERF_SITE", ROOT.parent / "Kerf-Website"))
 FONTS = {"sans": ROOT / "fonts/sans/KerfSans[wght].ttf", "round": ROOT / "fonts/round/KerfRound[wght].ttf",
          "mono": ROOT / "fonts/mono/KerfMono[wght].ttf"}
 WOFF2 = {"sans": "KerfSans.woff2", "round": "KerfRound.woff2", "mono": "KerfMono.woff2"}
