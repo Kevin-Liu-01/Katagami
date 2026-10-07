@@ -43,7 +43,7 @@ STRETCH = {"f": 0.66, "t": 0.62, "r": 0.60, "ȷ": 0.50, "J": 0.62, "s": 0.66, "c
 # is how a monospace m finds room for its counters.
 COMP_FLOOR = 0.45
 
-PROMOTE = ["cv01-one.fea", "cv05-l-tail.fea", "cv08-i-serif.fea"]
+PROMOTE = ["cv05-l-tail.fea", "cv08-i-serif.fea"]  # the long-flag 1 already comes from Kerf Sans
 MASTER_STYLES = {"Thin": (100, 100), "Regular": (400, 400), "Bold": (700, 740)}
 INSTANCES = ["Thin", "ExtraLight", "Light", "Regular", "Medium", "SemiBold", "Bold"]
 WEIGHT_MAP = [(100, 100), (200, 200), (300, 300), (400, 400), (500, 500), (600, 620), (700, 740)]

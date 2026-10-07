@@ -32,6 +32,33 @@ FEATURES = ROOT / "vendor" / "inter" / "src" / "features"
 G_TAIL_STROKE = 0.94  # width of the g tail's rising stroke, in stems
 G_TAIL_HANDLE = 0.72  # handle fraction of the g tail's turn, matching the squared lowercase
 KEEP_ROUND = ("circle", "circled", "ring", "degree", "bullet", "dotted")
+TIGHT_RADIUS = 1.6  # in stems: arcs tighter than this square in proportion to their radius
+
+# After an alternate becomes the default, its feature switches back to
+# Inter's original, so its label has to say so.
+SWAPPED_LABELS = {
+    "cv01-one.fea": ("Alternate one", "Inter one"),
+    "cv02-four.fea": ("Open four", "Closed four"),
+    "cv03-six.fea": ("Open six", "Curved six"),
+    "cv04-nine.fea": ("Open nine", "Curved nine"),
+    "cv09-three.fea": ("Flat-top three", "Round-top three"),
+    "cv10-g-spur.fea": ("Capital G with spur", "Capital G without spur"),
+    "cv12-compact-f.fea": ("Compact f", "Wide f"),
+    "cv16-a-tail.fea": ("Lower-case a with tail", "Lower-case a without tail"),
+}
+DIGIT_FILES = {"cv02-four.fea", "cv03-six.fea", "cv04-nine.fea", "cv09-three.fea"}
+
+
+def relabel_features(fonts, promoted) -> None:
+    for f in fonts.values():
+        text = f.features.text
+        for fea in promoted:
+            if fea in SWAPPED_LABELS:
+                old, new = SWAPPED_LABELS[fea]
+                text = text.replace(f'name "{old}";', f'name "{new}";')
+        if DIGIT_FILES <= set(promoted):
+            text = text.replace('name "Open digits";', 'name "Inter digits";')
+        f.features.text = text
 INSTANCES = ["Thin", "ExtraLight", "Light", "Regular", "Medium", "SemiBold", "Bold", "ExtraBold", "Black"]
 
 
@@ -64,7 +91,7 @@ def shape_curves(fonts, p: Profile) -> None:
     for g in ref:
         if not g.contours or keeps_round(ref, g.name):
             continue
-        plan = plan_squaring(g)
+        plan = plan_squaring(g, TIGHT_RADIUS * stem(ref))
         if not plan:
             continue
         s = p.square_upper if is_upper(ref, g.name) else p.square_lower
@@ -329,6 +356,7 @@ def build(p: Profile) -> Path:
         promote_square_punctuation(fonts)
     if p.promote:
         promote_alternates(fonts, p.promote, FEATURES)
+        relabel_features(fonts, p.promote)
     shape_curves(fonts, p)
     if p.terminal_angle is not None:
         level_terminals(fonts, p.terminal_angle)

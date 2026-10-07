@@ -30,6 +30,8 @@ class Profile:
                                                (600, 580), (700, 670), (800, 780), (900, 900))
 
 
+DIGITS = ("cv01-one.fea", "cv02-four.fea", "cv03-six.fea", "cv04-nine.fea", "cv09-three.fea")
+
 SANS = Profile(
     key="sans",
     family="Kerf Sans",
@@ -37,7 +39,9 @@ SANS = Profile(
     square_upper=0.36,
     square_lower=0.32,
     square_punctuation=True,
-    g_tail=True,
+    # flat-top 3, open 4, straight-stem 6 and 9, long-flag 1, compact f
+    promote=DIGITS + ("cv12-compact-f.fea",),
+    terminal_angle=0.0,  # Camber cuts c, e, s and a level
     widths={
         "O": 0.90, "Q": 0.90, "C": 0.92, "G": 0.92, "D": 0.96,
         "o": 0.92, "c": 0.94, "e": 0.94,
@@ -49,28 +53,29 @@ SANS = Profile(
                 (600, 620), (700, 740), (800, 840), (900, 900)),
 )
 
-# Inter + PP Mori + Geist, measured against DM Sans and Nacelle (SPEC.md, Kerf Round).
+# Inter + PP Mori + Geist (measured against DM Sans and Nacelle), moved
+# partway toward Kerf Sans. SPEC.md, Kerf Round.
 ROUND = Profile(
     key="round",
     family="Kerf Round",
     file_stem="KerfRound",
-    # superellipse 2.13 (Mori 2.12, DM Sans 2.13) from Inter's 2.16
-    square_upper=-0.02,
-    square_lower=-0.02,
-    counter_boost=1.0,
+    # squared at a little under half of Kerf Sans (superellipse about 2.4)
+    square_upper=0.16,
+    square_lower=0.14,
     notch_fill=0.35,
-    # G with spur, compact f, a with a foot spur
-    promote=("cv10-g-spur.fea", "cv12-compact-f.fea", "cv16-a-tail.fea"),
-    # toward the mean of Inter, Mori and Geist ink proportions
+    # Kerf Sans' figures and compact f, plus G with spur and a with a foot spur
+    promote=DIGITS + ("cv10-g-spur.fea", "cv12-compact-f.fea", "cv16-a-tail.fea"),
+    # between Inter and Kerf Sans for the rounds; a, E, F, L, S stay wider
     widths={
-        "O": 1.045, "Q": 1.045, "C": 1.035, "G": 1.035, "D": 1.02,
-        "o": 1.02, "c": 1.02, "e": 1.015, "s": 1.03, "a": 1.10,
-        "E": 1.055, "F": 1.05, "L": 1.03, "S": 1.025,
+        "O": 0.96, "Q": 0.96, "C": 0.97, "G": 0.97, "D": 0.98,
+        "o": 0.97, "c": 0.98, "e": 0.98, "a": 1.06,
+        "E": 1.05, "F": 1.05, "L": 1.03, "S": 1.02,
     },
-    spacing=-11,  # o sidebearing 51 -> about 45 per 1000
-    space_width=512,  # 250 per 1000 (Inter 281, Mori 225, Geist 250)
-    terminal_angle=3.0,  # Inter 16 degrees, Mori and DM Sans 0, Geist 2-4
-    ascender_lift=45,  # ascenders 3 percent above the caps, like Mori
+    spacing=-6,  # halfway from the Mori and Geist spacing back to Inter's
+    space_width=544,  # between Geist's 250 and Inter's 281 per 1000
+    terminal_angle=2.0,
+    weight_map=((100, 100), (200, 200), (300, 300), (400, 400), (500, 500),
+                (600, 600), (700, 705), (800, 810), (900, 900)),
 )
 
 PROFILES = {p.key: p for p in (SANS, ROUND)}

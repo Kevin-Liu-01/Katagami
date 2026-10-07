@@ -79,11 +79,13 @@ def curve_segments(contour: Contour) -> list[SegmentRef]:
     return out
 
 
-def plan_squaring(glyph: Glyph) -> list[tuple[int, SegmentRef, bool]]:
+def plan_squaring(glyph: Glyph, tight: float = 0.0) -> list[tuple[int, SegmentRef, bool, float]]:
     """Choose which segments to square, from the reference master.
 
-    Returns (contour index, segment, is_counter). Only near-quarter arcs
-    whose handles look circular qualify; flat curves and tight joins are left.
+    Returns (contour index, segment, is_counter, strength factor). Only
+    near-quarter arcs whose handles look circular qualify. An arc whose
+    radius is under `tight` units (the hooks of f, t, j and r) gets a
+    factor below 1 in proportion, so small curves stay supple.
     """
     plan = []
     for ci, contour in enumerate(glyph.contours):
@@ -97,7 +99,11 @@ def plan_squaring(glyph: Glyph) -> list[tuple[int, SegmentRef, bool]]:
                 continue
             if not (0.35 < f0 < 0.85 and 0.35 < f1 < 0.85):
                 continue
-            plan.append((ci, seg, counter))
+            pts = contour.points
+            p0, p3, c1, c2 = pts[seg.p0], pts[seg.p3], pts[seg.c1], pts[seg.c2]
+            radius = min(math.hypot(c1.x - p0.x, c1.y - p0.y) / f0, math.hypot(c2.x - p3.x, c2.y - p3.y) / f1)
+            factor = min(1.0, radius / tight) if tight else 1.0
+            plan.append((ci, seg, counter, factor))
     return plan
 
 
@@ -105,13 +111,13 @@ def apply_squaring(glyph: Glyph, plan, s_outer: float, s_inner: float, join: flo
     """Square each planned arc. A handle anchored on a corner point (where a
     curve meets a stem) gets `join` times the strength, so the curve eases
     into the stem instead of cutting a deep notch at the join."""
-    for ci, seg, counter in plan:
+    for ci, seg, counter, factor in plan:
         contour = glyph.contours[ci]
         fr = _segment_fractions(contour, seg)
         if fr is None:
             continue
         f0, f1, _ = fr
-        s = s_inner if counter else s_outer
+        s = (s_inner if counter else s_outer) * factor
         pts = contour.points
         for fi, ci_, pi in ((f0, seg.c1, seg.p0), (f1, seg.c2, seg.p3)):
             k_s = s if pts[pi].smooth else s * join

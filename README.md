@@ -3,7 +3,7 @@
 Kerf is an open source type family with three members:
 
 - **Kerf Sans**: a sans serif with squared curves, horizontal cuts and square punctuation. Variable weight from 100 to 900.
-- **Kerf Round**: a rounder, universal sans serif tuned toward PP Mori and Geist: wider rounds, near-flat terminals, tall ascenders and tighter spacing. Variable weight from 100 to 900.
+- **Kerf Round**: a rounder, universal sans serif between Inter and Kerf Sans, proportioned after PP Mori and Geist. Variable weight from 100 to 900.
 - **Kerf Mono**: the same letters fitted to a 0.6 em cell, with flagged i, l and j, a serif I, a footed 1, a centre-bar zero and generated box drawing. Variable weight from 100 to 700.
 
 Kerf Sans is derived from [Inter](https://github.com/rsms/inter) by Rasmus Andersson. It moves Inter toward the geometry of Camber by Eduardo Manso. Kerf Mono follows the monospace tradition that Berkeley Mono also comes from. Neither Camber nor Berkeley Mono contributed any outlines: both were measured as references only. See [SPEC.md](SPEC.md) for every design decision and the numbers behind it.

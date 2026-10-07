@@ -51,6 +51,8 @@ The build moves each handle fraction a share s of the way toward 1:
 - Where a curve meets a stem at a corner point (the shoulders of n, h, m and r, the joins of b, d, p and q), the handle on that corner gets 30 percent of the squaring. The curve stays square through its middle and eases into the stem, so the notch at the join stays as shallow as Inter's.
 - Arcs qualify when their tangents are within 60 degrees of perpendicular and both handle fractions are between 0.35 and 0.85. Circled forms, the degree sign, bullets and the Geometric Shapes block stay round.
 
+Arcs tighter than 1.6 stems in radius (the hooks of f, t, j and r, small counters) get the squaring in proportion to their radius, so small curves stay supple while bowls stay square.
+
 Which arcs to square is decided on the Regular master and applied to every master, so the masters stay compatible for interpolation.
 
 ## Widths
@@ -73,7 +75,11 @@ Accented and composite glyphs are re-seated on their changed bases, and their ma
 
 ## Terminals
 
-The tail of g is redrawn on every master. The bottom stroke runs left, turns up through one squared quarter curve (handle fraction 0.72), and rises vertically into a horizontal cut. The rising stroke is 0.94 stems wide, and the cut sits at the height and left edge Inter gives the terminal at that weight, which keeps it clear of the bowl in Black.
+The cut ends of c, e, s and a are turned level (0 degrees) from Inter's 16 degrees. Both ends of each cut slide along their own curve's tangent with their handle, so the stroke keeps its curve. Inter's capitals and figures are already cut level. The g keeps Inter's tail and its angled terminal.
+
+## Figures
+
+Inter's alternate figures become the defaults: a 1 with a long flag (cv01), an open 4 (cv02), a 6 and 9 with straight stems into their bowls (cv03, cv04) and a flat-topped 3 (cv09). Each feature now switches back to Inter's form and is relabelled to say so ("Closed four", "Inter digits" for ss01). The f is Inter's compact f (cv12).
 
 ## Joins
 
@@ -112,7 +118,7 @@ Every outline is scaled horizontally about its centre, then centred in the 1232-
 | l | flag at the top left, tail to the right |
 | j | flag at the top left |
 | I | serifs top and bottom |
-| 1 | flag and foot |
+| 1 | long flag, from Kerf Sans |
 | 0 | vertical bar in the centre of the counter; slashed zero under `zero` |
 
 Flags are 20 percent of the cell long and as thick as the hyphen.
@@ -136,24 +142,21 @@ U+2500 to U+259F are drawn by `tools/kerf_build/boxdraw.py`, not taken from Inte
 
 ## Kerf Round
 
-Kerf Round is Inter moved toward a fusion of PP Mori (Pangram Pangram) and Geist (Vercel), with DM Sans and Nacelle as secondary references. All five were measured from their own webfonts at 1000 px, as Camber was; none of their outlines is used. The parameters live in `tools/kerf_build/profiles.py` as the `round` profile and run through the same transforms as Kerf Sans.
+Kerf Round sits between Inter and Kerf Sans. Its proportions come from PP Mori (Pangram Pangram) and Geist (Vercel), with DM Sans and Nacelle as secondary references, all measured from their own webfonts at 1000 px as Camber was; none of their outlines is used. The parameters live in `tools/kerf_build/profiles.py` as the `round` profile.
 
-| Measure (per 1000 em, Regular) | Inter | PP Mori | Geist | Kerf Round |
-|---|---|---|---|---|
-| Superellipse, O | 2.15 | 2.12 | 2.23 | about 2.13 |
-| O ink width ÷ H ink width | 1.14 | 1.19 | 1.23 | about 1.19 |
-| Terminal angle, c e s a | 16° | 0° | 2–4° | 3° |
-| o sidebearing | 51 | 41 | 44 | 45 |
-| Space | 281 | 225 | 250 | 250 |
-| Ascender ÷ cap height | 1.00 | 1.06 | 1.00 | 1.03 |
+| Measure (per 1000 em, Regular) | Inter | PP Mori | Geist | Kerf Round | Kerf Sans |
+|---|---|---|---|---|---|
+| Superellipse, o | 2.15 | 2.12 | 2.18 | 2.36 | 2.68 |
+| Terminal angle, c e s a | 16° | 0° | 2–4° | 2° | 0° |
+| o sidebearing | 51 | 41 | 44 | 48 | 51 |
+| Space | 281 | 225 | 250 | 266 | 281 |
 
-- **Curves:** handles move 2 percent of the way toward a circle (rounding is negative squaring).
-- **Widths:** O and Q 1.045, C and G 1.035, D 1.02, o and c 1.02, e 1.015, s 1.03, a 1.10, E 1.055, F 1.05, L 1.03, S 1.025, with stems held.
-- **Terminals:** each angled cut between two curves is turned to 3 degrees. Both ends slide along their own curve's tangent with their handle. Inter's capitals and figures are already cut level.
-- **Ascenders:** lowercase strokes above the x-height stretch so ascenders rise 45 units (3 percent of the cap height) above the caps; accents on those letters rise with them.
-- **Letterforms:** Inter's G with spur (cv10), compact f (cv12) and a with a foot spur (cv16) become the defaults. Round dots and round punctuation stay.
-- **Joins:** bowl-to-stem notches fill 35 percent of the way, as in Kerf Sans but lighter.
-- **Weight:** Inter's own weight mapping.
+- **Curves:** squared at 0.16 (caps) and 0.14 (lowercase), a little under half of Kerf Sans, with the same counter boost, join easing and tight-curve rule.
+- **Widths:** O and Q 0.96, C and G 0.97, D 0.98, o 0.97, c and e 0.98: between Inter and Kerf Sans. The a (1.06), E and F (1.05), L (1.03) and S (1.02) stay wider, after Mori and Geist.
+- **Letterforms:** Kerf's figures and compact f, plus Inter's G with spur (cv10) and a with a foot spur (cv16). Dots and punctuation stay round.
+- **Joins:** bowl-to-stem notches fill 35 percent of the way.
+- **Spacing:** sidebearings 6 units tighter than Inter, space 544 units.
+- **Weight:** halfway between Inter's mapping and Kerf Sans' (Bold at 705).
 
 ## Not done yet
 
