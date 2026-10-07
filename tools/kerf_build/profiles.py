@@ -53,29 +53,21 @@ SANS = Profile(
                 (600, 620), (700, 740), (800, 840), (900, 900)),
 )
 
-# Inter + PP Mori + Geist (measured against DM Sans and Nacelle), moved
-# partway toward Kerf Sans. SPEC.md, Kerf Round.
+# Inter with Kerf's figures and f, a light squaring and a few Mori and Geist
+# touches. Kept close to Inter's proportions, spacing and terminals.
+# SPEC.md, Kerf Round.
 ROUND = Profile(
     key="round",
     family="Kerf Round",
     file_stem="KerfRound",
-    # squared at a little under half of Kerf Sans (superellipse about 2.4)
-    square_upper=0.16,
-    square_lower=0.14,
+    # a light squaring: superellipse about 2.23 from Inter's 2.15
+    square_upper=0.05,
+    square_lower=0.04,
     notch_fill=0.35,
-    # Kerf Sans' figures and compact f, plus G with spur and a with a foot spur
-    promote=DIGITS + ("cv10-g-spur.fea", "cv12-compact-f.fea", "cv16-a-tail.fea"),
-    # between Inter and Kerf Sans for the rounds; a, E, F, L, S stay wider
-    widths={
-        "O": 0.96, "Q": 0.96, "C": 0.97, "G": 0.97, "D": 0.98,
-        "o": 0.97, "c": 0.98, "e": 0.98, "a": 1.06,
-        "E": 1.05, "F": 1.05, "L": 1.03, "S": 1.02,
-    },
-    spacing=-6,  # halfway from the Mori and Geist spacing back to Inter's
-    space_width=544,  # between Geist's 250 and Inter's 281 per 1000
-    terminal_angle=2.0,
-    weight_map=((100, 100), (200, 200), (300, 300), (400, 400), (500, 500),
-                (600, 600), (700, 705), (800, 810), (900, 900)),
+    # Kerf's figures and compact f, and G with spur (Mori, Geist, DM Sans, Nacelle)
+    promote=DIGITS + ("cv10-g-spur.fea", "cv12-compact-f.fea"),
+    spacing=-3,
+    space_width=552,  # 270 per 1000 (Inter 281)
 )
 
 PROFILES = {p.key: p for p in (SANS, ROUND)}

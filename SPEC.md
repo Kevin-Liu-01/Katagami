@@ -142,21 +142,20 @@ U+2500 to U+259F are drawn by `tools/kerf_build/boxdraw.py`, not taken from Inte
 
 ## Kerf Round
 
-Kerf Round sits between Inter and Kerf Sans. Its proportions come from PP Mori (Pangram Pangram) and Geist (Vercel), with DM Sans and Nacelle as secondary references, all measured from their own webfonts at 1000 px as Camber was; none of their outlines is used. The parameters live in `tools/kerf_build/profiles.py` as the `round` profile.
+Kerf Round is the universal member, kept close to Inter. It started as a fusion of Inter, PP Mori (Pangram Pangram) and Geist (Vercel), measured from their webfonts with DM Sans and Nacelle as secondary references (none of their outlines is used), and was then brought back toward Inter's proportions. The parameters live in `tools/kerf_build/profiles.py` as the `round` profile.
 
-| Measure (per 1000 em, Regular) | Inter | PP Mori | Geist | Kerf Round | Kerf Sans |
-|---|---|---|---|---|---|
-| Superellipse, o | 2.15 | 2.12 | 2.18 | 2.36 | 2.68 |
-| Terminal angle, c e s a | 16° | 0° | 2–4° | 2° | 0° |
-| o sidebearing | 51 | 41 | 44 | 48 | 51 |
-| Space | 281 | 225 | 250 | 266 | 281 |
+| Measure (per 1000 em, Regular) | Inter | Kerf Round | Kerf Sans |
+|---|---|---|---|
+| Superellipse, o | 2.15 | 2.21 | 2.68 |
+| Terminal angle, c e s a | 16° | 16° | 0° |
+| o sidebearing | 51 | 49 | 51 |
+| Space | 281 | 270 | 281 |
 
-- **Curves:** squared at 0.16 (caps) and 0.14 (lowercase), a little under half of Kerf Sans, with the same counter boost, join easing and tight-curve rule.
-- **Widths:** O and Q 0.96, C and G 0.97, D 0.98, o 0.97, c and e 0.98: between Inter and Kerf Sans. The a (1.06), E and F (1.05), L (1.03) and S (1.02) stay wider, after Mori and Geist.
-- **Letterforms:** Kerf's figures and compact f, plus Inter's G with spur (cv10) and a with a foot spur (cv16). Dots and punctuation stay round.
+- **Curves:** squared at 0.05 (caps) and 0.04 (lowercase), with the tight-curve rule.
+- **Widths, terminals and weights:** Inter's.
+- **Letterforms:** Kerf's figures and compact f, and Inter's G with spur (cv10), which PP Mori, Geist, DM Sans and Nacelle all have. Dots and punctuation stay round.
 - **Joins:** bowl-to-stem notches fill 35 percent of the way.
-- **Spacing:** sidebearings 6 units tighter than Inter, space 544 units.
-- **Weight:** halfway between Inter's mapping and Kerf Sans' (Bold at 705).
+- **Spacing:** sidebearings 3 units tighter than Inter, space 552 units.
 
 ## Not done yet
 

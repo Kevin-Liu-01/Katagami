@@ -128,8 +128,9 @@ def main() -> None:
         "</head>\n<body>\n" + page + "\n</body>\n</html>\n"
     )
     for p in sorted(SITE.rglob("*")):
-        if p.is_file():
-            print(f"{p.stat().st_size / 1024:8.1f} KB  {p.relative_to(ROOT)}")
+        rel = p.relative_to(SITE)
+        if p.is_file() and not any(part.startswith(".") for part in rel.parts):
+            print(f"{p.stat().st_size / 1024:8.1f} KB  {rel}")
 
 
 if __name__ == "__main__":
