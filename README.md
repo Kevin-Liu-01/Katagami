@@ -35,6 +35,8 @@ The build fetches Inter's sources at a pinned commit into `vendor/inter`, conver
 
 `tools/proof.py sans|mono|family` renders proof sheets to `build/proofs/`.
 
+`tools/build_site.py` writes the specimen site to `site/`: WOFF2 fonts, `data.js` (metrics, character tables, features and the hero outlines from Inter and Kerf) and `index.html`, which wraps the hand-written `site/page.html`. Serve `site/` with any static server.
+
 ## Layout
 
 | Path | Contents |
@@ -44,6 +46,7 @@ The build fetches Inter's sources at a pinned commit into `vendor/inter`, conver
 | `tools/kerf_build/outline.py` | point-preserving transforms: curve squaring, horizontal emboldening |
 | `tools/kerf_build/fontops.py` | glyph swaps, resizing, composite re-seating, naming |
 | `tools/kerf_build/boxdraw.py` | box drawing and block elements |
+| `tools/build_site.py`, `site/` | specimen site |
 
 ## License
 
