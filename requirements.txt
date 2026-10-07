@@ -1,0 +1,7 @@
+fontmake==3.12.1
+glyphsLib
+ufoLib2
+fonttools[ufo,woff]
+skia-pathops
+drawbot-skia
+uharfbuzz
