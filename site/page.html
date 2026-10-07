@@ -33,6 +33,7 @@
 @font-face { font-family: "Kerf Mono"; src: url("fonts/KerfMono.woff2") format("woff2"); font-weight: 100 700; font-display: swap; }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--sheet); color: var(--ink); font-family: var(--sans); font-size: var(--step-0); line-height: 1.5; -webkit-font-smoothing: antialiased; }
 a { color: inherit; text-underline-offset: 3px; text-decoration-thickness: 1px; }
 a:hover { color: var(--cut); }
@@ -167,7 +168,7 @@ td.n { font-family: var(--mono); font-size: 0.875rem; font-variant-numeric: tabu
 @media (max-width: 860px) { .glyphs { grid-template-columns: 1fr; } .inspector { position: static; } .cells { max-height: 420px; } }
 
 /* glyph wall */
-.bore { position: relative; height: clamp(460px, 78vh, 860px); border-block: 1px solid var(--rule); background: var(--sheet); overflow: hidden; }
+.bore { position: relative; user-select: none; -webkit-user-select: none; height: clamp(460px, 78vh, 860px); border-block: 1px solid var(--rule); background: var(--sheet); overflow: hidden; }
 .bore canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; outline: none; }
 .bore canvas:active { cursor: grabbing; }
 .bore canvas:focus-visible { box-shadow: inset 0 0 0 2px var(--score); }
@@ -913,7 +914,11 @@ struct VO {
   let cols = u.atlas.x;
   let cy = floor(i.cell / cols);
   let cx = i.cell - cols * cy;
-  let cov = textureSample(atlas, samp, (vec2f(cx, cy) + i.uv) * u.atlas.yz).a;
+  let raw = textureSample(atlas, samp, (vec2f(cx, cy) + i.uv) * u.atlas.yz).r;
+  // when a texel covers more than a pixel, steepen the coverage ramp by the
+  // same factor so the edge stays one pixel wide
+  let texelsPerPx = max(fwidth(i.uv.x), fwidth(i.uv.y)) * u.fog.w;
+  let cov = clamp((raw - 0.5) * max(1.0, 1.0 / max(texelsPerPx, 1e-3)) + 0.5, 0.0, 1.0);
   let e = min(min(i.uv.x, 1.0 - i.uv.x), min(i.uv.y, 1.0 - i.uv.y));
   let w = fwidth(e);
   let edge = 1.0 - smoothstep(w * 0.5, w * 1.6, e);
@@ -946,7 +951,7 @@ struct VO {
     ctx.configure({ device, format, alphaMode: "opaque" });
     const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    const SAMPLES = 4, CELL = 64, ACOLS = 64, LEVELS = 5;
+    const SAMPLES = 4, CELL = 128, ACOLS = 64, LEVELS = 6;
     const R = 10, COLS = 48, PITCH = (2 * Math.PI * R) / COLS, ROWP = PITCH * 1.06, TILE = PITCH * 0.9;
     const FOV = (52 * Math.PI) / 180, NEAR = 0.1, FAR = 60;
     const module = device.createShaderModule({ code: WGSL });
@@ -981,51 +986,82 @@ struct VO {
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", readColors);
     new MutationObserver(readColors).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
-    async function buildAtlas() {
-      const family = gstate.fam === "sans" ? "Kerf Sans" : "Kerf Mono";
-      const font = `${gstate.w} 40px "${family}"`;
+    /* The atlas holds each glyph's anti-aliased coverage in a 128 px cell
+       (glyphs drawn at 80 px). Text is drawn 256 glyphs at a time, one batch
+       per task so input stays responsive, copied straight into the atlas, and
+       the mipmaps are built on the GPU. The shader sharpens the coverage by the
+       magnification, so edges stay one pixel wide when plates come close. */
+    const HC = CELL, BATCH_ROWS = 4, BW = HC * ACOLS, BH = HC * BATCH_ROWS;
+    const PASS = device.createShaderModule({ code: `
+struct VOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
+@vertex fn tri(@builtin(vertex_index) i: u32) -> VOut {
+  let p = vec2f(f32((i << 1u) & 2u), f32(i & 2u));
+  var o: VOut;
+  o.pos = vec4f(p * 2.0 - 1.0, 0.0, 1.0);
+  o.uv = vec2f(p.x, 1.0 - p.y);
+  return o;
+}
+@group(0) @binding(0) var src: texture_2d<f32>;
+@group(0) @binding(1) var samp: sampler;
+@fragment fn down(v: VOut) -> @location(0) vec4f {
+  return vec4f(textureSampleLevel(src, samp, v.uv, 0.0).r, 0.0, 0.0, 1.0);
+}` });
+    const downPipe = device.createRenderPipeline({ layout: "auto", vertex: { module: PASS, entryPoint: "tri" }, fragment: { module: PASS, entryPoint: "down", targets: [{ format: "r8unorm" }] } });
+    const TU = GPUTextureUsage;
+    const linear = device.createSampler({ magFilter: "linear", minFilter: "linear" });
+    const raster = document.createElement("canvas");
+    raster.width = BW; raster.height = BH;
+    const rg = raster.getContext("2d");
+    let buildGen = 0;
+
+    async function buildAtlas(glyphs, fam, weight, gen) {
+      const font = `${weight} 80px ${fam === "sans" ? '"Kerf Sans"' : '"Kerf Mono"'}`;
       await document.fonts.load(font);
-      const rows = Math.max(16, Math.ceil(list.length / ACOLS));
-      const W = CELL * ACOLS, H = CELL * rows;
-      const c = document.createElement("canvas");
-      c.width = W; c.height = H;
-      const g = c.getContext("2d");
-      g.fillStyle = "#fff"; g.textAlign = "center"; g.textBaseline = "alphabetic"; g.font = font;
-      list.forEach((ch, i) => g.fillText(show(ch[0]), (i % ACOLS) * CELL + CELL / 2, Math.floor(i / ACOLS) * CELL + 42));
-      const tex = device.createTexture({
-        size: [W, H], format: "rgba8unorm", mipLevelCount: LEVELS,
-        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
-      });
-      let src = c;
-      for (let l = 0; l < LEVELS; l++) {
-        const lw = W >> l, lh = H >> l;
-        if (l > 0) {
-          const d = document.createElement("canvas");
-          d.width = lw; d.height = lh;
-          const dg = d.getContext("2d");
-          dg.imageSmoothingQuality = "high";
-          dg.drawImage(src, 0, 0, lw, lh);
-          src = d;
+      const rows = Math.max(BATCH_ROWS * 2, Math.ceil(glyphs.length / ACOLS / BATCH_ROWS) * BATCH_ROWS);
+      const W = HC * ACOLS, H = HC * rows;
+      const tex = device.createTexture({ size: [W, H], format: "r8unorm", mipLevelCount: LEVELS, usage: TU.TEXTURE_BINDING | TU.COPY_DST | TU.RENDER_ATTACHMENT });
+      const per = ACOLS * BATCH_ROWS;
+      for (let b = 0; b * per < glyphs.length; b++) {
+        if (gen !== buildGen) { tex.destroy(); return null; }
+        rg.fillStyle = "#000"; rg.fillRect(0, 0, BW, BH);
+        rg.fillStyle = "#fff"; rg.font = font; rg.textAlign = "center"; rg.textBaseline = "alphabetic";
+        for (let i = 0; i < per && b * per + i < glyphs.length; i++) {
+          rg.fillText(show(glyphs[b * per + i][0]), (i % ACOLS) * HC + HC / 2, Math.floor(i / ACOLS) * HC + 84);
         }
-        device.queue.copyExternalImageToTexture({ source: src }, { texture: tex, mipLevel: l }, [lw, lh]);
+        device.queue.copyExternalImageToTexture({ source: raster }, { texture: tex, origin: [0, b * BH] }, [BW, BH]);
+        await new Promise((r) => setTimeout(r, 0));  // one batch per task keeps input responsive
       }
-      atlasTex?.destroy();
-      atlasTex = tex; atlasW = W; atlasH = H;
+      const enc = device.createCommandEncoder();
+      for (let l = 1; l < LEVELS; l++) {
+        const rp = enc.beginRenderPass({ colorAttachments: [{ view: tex.createView({ baseMipLevel: l, mipLevelCount: 1 }), loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
+        rp.setPipeline(downPipe);
+        rp.setBindGroup(0, device.createBindGroup({ layout: downPipe.getBindGroupLayout(0), entries: [
+          { binding: 0, resource: tex.createView({ baseMipLevel: l - 1, mipLevelCount: 1 }) }, { binding: 1, resource: linear }] }));
+        rp.draw(3);
+        rp.end();
+      }
+      device.queue.submit([enc.finish()]);
+      return gen === buildGen ? { tex, W, H } : (tex.destroy(), null);
     }
 
     async function rebuild(weightOnly = false) {
+      const gen = ++buildGen;
+      const glyphs = weightOnly ? list : glyphList();
+      const atlas = await buildAtlas(glyphs, gstate.fam, gstate.w, gen);
+      if (!atlas) return;
+      // swap the glyph list and its atlas together, so the wall never shows a half-built state
       if (!weightOnly) {
         close(true);
-        list = glyphList();
-        N = list.length;
+        list = glyphs; N = list.length;
         inst = new Float32Array((N + 1) * 4);
         for (let i = 0; i < N; i++) inst[i * 4] = i;
         active.clear(); hover = -1;
         ibuf?.destroy();
         ibuf = device.createBuffer({ size: inst.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
-        cam.y = maxY(); cam.yaw = 0.35;
+        cam.y = maxY(); cam.yaw = 0.35; cam.vy = cam.vyaw = 0;
       }
-      await buildAtlas();
+      atlasTex?.destroy();
+      atlasTex = atlas.tex; atlasW = atlas.W; atlasH = atlas.H;
       bind = device.createBindGroup({
         layout: pipeline.getBindGroupLayout(0),
         entries: [
@@ -1042,7 +1078,8 @@ struct VO {
     const minY = () => Math.min(-((N - 1) / COLS) * ROWP + inset(), maxY());
 
     function resize() {
-      const dpr = Math.min(2, devicePixelRatio || 1);
+      // full device resolution up to 3x, inside a budget of about 7 million pixels
+      const dpr = Math.min(devicePixelRatio || 1, 3, Math.sqrt(7e6 / Math.max(1, canvas.clientWidth * canvas.clientHeight)));
       const w = Math.max(1, Math.round(canvas.clientWidth * dpr)), h = Math.max(1, Math.round(canvas.clientHeight * dpr));
       if (canvas.width === w && canvas.height === h && msaa) return;
       canvas.width = w; canvas.height = h;
@@ -1229,7 +1266,9 @@ struct VO {
         const hi = maxY();
         if (cam.y > hi) { cam.y += (hi - cam.y) * 0.18 * dt; cam.vy *= 0.5; moving = true; }
         if (cam.y < lo) { cam.y += (lo - cam.y) * 0.18 * dt; cam.vy *= 0.5; moving = true; }
-        if (!reduce && sel < 0 && now - lastInput > 3000) { cam.yaw += 0.0007 * dt; moving = true; }
+        // drift for a while after the last input, then stop drawing frames
+        const idle = now - lastInput;
+        if (!reduce && sel < 0 && idle > 3000 && idle < 23000) { cam.yaw += 0.0007 * dt; moving = true; }
       }
       // lean into fast vertical moves
       const lean = reduce ? 0 : Math.max(-0.14, Math.min(0.14, (drag ? 0 : cam.vy) * 0.9));
@@ -1272,7 +1311,7 @@ struct VO {
       uni.set([ACOLS, CELL / atlasW, CELL / atlasH, N], 24);
       uni.set([...colors.bg, 1], 40); uni.set([...colors.plate, 1], 44); uni.set([...colors.ink, 1], 48);
       uni.set([...colors.cut, 1], 52); uni.set([...colors.rule, 1], 56);
-      uni.set([R * 0.9, R * 2.6, sel >= 0 ? Math.min(1, popT) * 0.6 : 0, 0], 60);
+      uni.set([R * 0.9, R * 2.6, sel >= 0 ? Math.min(1, popT) * 0.6 : 0, CELL], 60);
       device.queue.writeBuffer(ubuf, 0, uni);
       device.queue.writeBuffer(ibuf, 0, inst);
 
@@ -1308,7 +1347,12 @@ struct VO {
     };
   }
 
-  startWall().then((w) => {
+  // start WebGPU and build the atlas only when the wall is about to scroll into view
+  const startWhenNear = () => new Promise((resolve) => {
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { io.disconnect(); resolve(); } }, { rootMargin: "100% 0px" });
+    io.observe($("#bore"));
+  });
+  startWhenNear().then(startWall).then((w) => {
     wall = w;
     if (w) return;
     // no WebGPU: the grid is the whole library
