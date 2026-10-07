@@ -28,6 +28,8 @@ WOFF2 = {"sans": "KerfSans.woff2", "mono": "KerfMono.woff2"}
 OUTLINE_CHARS = {"K": "K", "e": "e", "r": "r", "f": "f", "O": "O", "o": "o"}
 INTER_UFO = ROOT / "build/ufo/Inter-Regular.ufo"
 KERF_UFO = ROOT / "build/sans/KerfSans-Regular.ufo"
+MONO_UFO = ROOT / "build/mono/KerfMono-Regular.ufo"
+HERO = "Kerf"  # morphs between Kerf Mono and Kerf Sans; the mono is fitted point for point
 
 
 def group(cp: int) -> str:
@@ -80,12 +82,17 @@ def contours(font, ch: str) -> dict:
 
 
 def outlines() -> dict:
-    inter, kerf = ufoLib2.Font.open(INTER_UFO), ufoLib2.Font.open(KERF_UFO)
+    inter, kerf, mono = (ufoLib2.Font.open(p) for p in (INTER_UFO, KERF_UFO, MONO_UFO))
+    shape = lambda o: [len(c) for c in o["contours"]]  # noqa: E731
     out = {}
     for ch, gname in OUTLINE_CHARS.items():
         a, b = contours(inter, gname), contours(kerf, gname)
-        assert [len(c) for c in a["contours"]] == [len(c) for c in b["contours"]], ch
+        assert shape(a) == shape(b), ch
         out[ch] = {"inter": a, "kerf": b}
+        if ch in HERO:
+            m = contours(mono, gname)
+            assert shape(m) == shape(b), f"{ch}: Kerf Mono and Kerf Sans outlines differ"
+            out[ch]["mono"] = m
     return out
 
 

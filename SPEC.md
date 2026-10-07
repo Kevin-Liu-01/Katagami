@@ -72,7 +72,11 @@ Accented and composite glyphs are re-seated on their changed bases, and their ma
 
 ## Terminals
 
-The tail of g ends in a horizontal cut. Both points of Inter's angled terminal slide along their own tangents to the mean of their heights, so the hook keeps its curve.
+The tail of g is redrawn on every master. The bottom stroke runs left, turns up through one squared quarter curve (handle fraction 0.72), and rises vertically into a horizontal cut. The rising stroke is 0.94 stems wide, and the cut sits at the height and left edge Inter gives the terminal at that weight, which keeps it clear of the bowl in Black.
+
+## Joins
+
+Inter's heavy weights cut deep notches where bowls join stems, which leaves a hairline in bold a and u. Each such notch (a corner where a curve meets a stem edge that runs to the baseline or x-height: a, u, n, m, h, b, p, r) moves 45 percent of the way toward the baseline or x-height, with its step and handle. The handle stays between the corner and the far end of its curve, so the bowl flattens into the join instead of dipping below the baseline.
 
 ## Punctuation
 

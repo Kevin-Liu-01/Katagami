@@ -80,11 +80,52 @@ p { margin: 0; max-width: 62ch; }
 .morph .end { font-family: var(--mono); font-size: var(--step--1); color: var(--ink-2); }
 .readout { font-family: var(--mono); font-size: var(--step--1); white-space: nowrap; }
 .readout b { font-weight: 600; color: var(--cut); }
-input[type="range"] { accent-color: var(--ink); min-width: 0; }
-input[type="checkbox"] { accent-color: var(--ink); }
+/* Controls. Sliders are rulers: a hairline rail with ticks every tenth, an ink
+   fill to the value, and a square handle split by a red cut line. Checkboxes
+   fill with a red block. All stay native inputs underneath. */
+input[type="range"] { -webkit-appearance: none; appearance: none; background: transparent; height: 26px; min-width: 0; margin: 0; cursor: ew-resize; --p: 50%; }
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 26px; border: 0;
+  background:
+    linear-gradient(var(--ink), var(--ink)) 0 calc(50% - 1px) / var(--p) 2px no-repeat,
+    linear-gradient(var(--rule), var(--rule)) 0 50% / 100% 1px no-repeat,
+    repeating-linear-gradient(90deg, var(--ink-2) 0 1px, transparent 1px 10%) 0 100% / calc(100% - 1px) 5px no-repeat,
+    linear-gradient(var(--ink-2), var(--ink-2)) 100% 100% / 1px 5px no-repeat;
+}
+input[type="range"]::-moz-range-track {
+  height: 26px; border: 0;
+  background:
+    linear-gradient(var(--ink), var(--ink)) 0 calc(50% - 1px) / var(--p) 2px no-repeat,
+    linear-gradient(var(--rule), var(--rule)) 0 50% / 100% 1px no-repeat,
+    repeating-linear-gradient(90deg, var(--ink-2) 0 1px, transparent 1px 10%) 0 100% / calc(100% - 1px) 5px no-repeat,
+    linear-gradient(var(--ink-2), var(--ink-2)) 100% 100% / 1px 5px no-repeat;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 11px; height: 20px; margin-top: 3px; border-radius: 2px; border: 1.5px solid var(--ink);
+  background: linear-gradient(var(--cut), var(--cut)) center / 1.5px 100% no-repeat, var(--panel);
+  transition: transform 0.12s ease;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 11px; height: 20px; border-radius: 2px; border: 1.5px solid var(--ink); box-sizing: border-box;
+  background: linear-gradient(var(--cut), var(--cut)) center / 1.5px 100% no-repeat, var(--panel);
+}
+input[type="range"]:hover::-webkit-slider-thumb, input[type="range"]:active::-webkit-slider-thumb { transform: scaleY(1.12); border-color: var(--cut); }
+input[type="range"]:hover::-moz-range-thumb { border-color: var(--cut); }
+input[type="range"]:focus-visible { outline: none; }
+input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px color-mix(in srgb, var(--score) 45%, transparent); }
+input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 3px color-mix(in srgb, var(--score) 45%, transparent); }
+input[type="checkbox"] {
+  -webkit-appearance: none; appearance: none; flex: none; width: 15px; height: 15px; margin: 0; border: 1.5px solid var(--ink-2); border-radius: 3px;
+  display: inline-grid; place-content: center; background: var(--panel); cursor: pointer; vertical-align: -2px;
+}
+input[type="checkbox"]::before { content: ""; width: 7px; height: 7px; border-radius: 1px; background: var(--cut); transform: scale(0); transition: transform 0.12s ease; }
+input[type="checkbox"]:checked { border-color: var(--ink); }
+input[type="checkbox"]:checked::before { transform: scale(1); }
+input[type="checkbox"]:hover { border-color: var(--ink); }
 button, .seg button { font: inherit; color: inherit; }
-.btn { font-size: 0.875rem; background: transparent; border: 1px solid var(--rule); border-radius: 6px; padding: 5px 12px; cursor: pointer; }
-.btn:hover { border-color: var(--ink-2); }
+.btn { font-size: 0.875rem; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 5px 12px; cursor: pointer; transition: border-color 0.12s ease, background 0.12s ease; }
+.btn:hover { border-color: var(--ink); }
+.btn:active { transform: translateY(1px); }
 
 .intro { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 32px 64px; padding-block: 48px 72px; align-items: start; }
 .intro h1 { font-size: clamp(2.25rem, 5.4vw, 4.25rem); line-height: 1.02; font-weight: 600; letter-spacing: -0.02em; }
@@ -155,9 +196,11 @@ td.n { font-family: var(--mono); font-size: 0.875rem; font-variant-numeric: tabu
 .seg button { background: none; border: 0; padding: 6px 12px; cursor: pointer; font-size: 0.875rem; color: var(--ink-2); }
 .seg button + button { border-left: 1px solid var(--rule); }
 .seg button[aria-pressed="true"] { background: var(--ink); color: var(--sheet); }
+.seg button:hover:not([aria-pressed="true"]) { color: var(--ink); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chips button { font-size: 0.8125rem; border: 1px solid var(--rule); background: none; border-radius: 4px; padding: 4px 9px; cursor: pointer; color: var(--ink-2); }
-.chips button[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); }
+.chips button[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); box-shadow: inset 3px 0 0 var(--cut); }
+.chips button:hover { color: var(--ink); }
 .chips button span { font-family: var(--mono); font-size: 0.75rem; margin-left: 4px; }
 .glyphs { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 24px; align-items: start; }
 .inspector { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 68px); }
@@ -252,12 +295,12 @@ footer .big { font-size: clamp(4rem, 16vw, 12rem); font-weight: 800; letter-spac
   <div class="wrap hero">
     <figure class="drawing" style="margin:0">
       <div class="grid" aria-hidden="true"></div>
-      <svg id="hero" role="img" aria-label="The word Kerf drawn as outlines with Bézier points, handles, and metric lines"></svg>
+      <svg id="hero" role="img" aria-label="The word Kerf drawn as outlines with Bézier points, handles and metric lines, between Kerf Mono and Kerf Sans"></svg>
       <div class="controls">
         <div class="morph">
-          <span class="end">Inter</span>
-          <input id="morph" type="range" min="0" max="1" step="0.001" value="1" aria-label="Morph the curves from Inter to Kerf">
-          <span class="end">Kerf</span>
+          <span class="end">Kerf Mono</span>
+          <input id="morph" type="range" min="0" max="1" step="0.001" value="1" aria-label="Morph the word from Kerf Mono to Kerf Sans">
+          <span class="end">Kerf Sans</span>
         </div>
         <span class="readout num" id="readout"></span>
         <label><input id="construct" type="checkbox" checked> Points</label>
@@ -465,13 +508,17 @@ footer .big { font-size: clamp(4rem, 16vw, 12rem); font-weight: 800; letter-spac
     if (parent) parent.appendChild(e);
     return e;
   };
+  // ruler sliders show their value as an ink fill up to the handle
+  const paintRange = (r) => r.style.setProperty("--p", `${((r.value - r.min) / (r.max - r.min)) * 100}%`);
+  document.addEventListener("input", (e) => { if (e.target.matches?.('input[type="range"]')) paintRange(e.target); });
+  const paintAllRanges = () => document.querySelectorAll('input[type="range"]').forEach(paintRange);
   const M = D.sans.metrics;
   const fmt = (n) => n.toLocaleString("en-US");
   const lerp = (a, b, t) => a + (b - a) * t;
 
   /* ---------- outline helpers ---------- */
   function morph(ch, t) {
-    const A = D.outlines[ch].inter, B = D.outlines[ch].kerf;
+    const A = D.outlines[ch].mono, B = D.outlines[ch].kerf;
     return {
       adv: lerp(A.adv, B.adv, t),
       contours: A.contours.map((c, i) => c.map((p, j) => {
@@ -579,22 +626,22 @@ footer .big { font-size: clamp(4rem, 16vw, 12rem); font-weight: 800; letter-spac
       ox += glyph.adv;
     }
     el("line", { x1: ox, x2: ox, y1: Y(M.ascender) - 40 * px, y2: Y(M.descender), stroke: "var(--score)", "stroke-width": px, "stroke-dasharray": `${4 * px} ${4 * px}`, opacity: 0.6 }, g);
-    const f = sum / count, n = -1 / Math.log2(0.5 + 0.375 * f);
-    readout.innerHTML = `f <b>${f.toFixed(3)}</b> &nbsp; n <b>${n.toFixed(2)}</b>`;
+    const total = glyphs.reduce((s, g) => s + g.adv, 0);
+    readout.innerHTML = `width <b>${fmt(Math.round(total))}</b> &nbsp; f <b>${(sum / count).toFixed(3)}</b>`;
   }
   morphIn.addEventListener("input", drawHero);
   construct.addEventListener("change", drawHero);
   let playing = 0;
   $("#play").addEventListener("click", () => {
     const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) { morphIn.value = 1; drawHero(); return; }
+    if (reduce) { morphIn.value = 1; paintRange(morphIn); drawHero(); return; }
     const start = performance.now(), id = ++playing, dur = 2400;
     const step = (now) => {
       if (id !== playing) return;
       const x = Math.min(1, (now - start) / dur);
       // out to Inter and back to Kerf
       const t = x < 0.5 ? 1 - ease(x * 2) : ease((x - 0.5) * 2);
-      morphIn.value = t; drawHero();
+      morphIn.value = t; paintRange(morphIn); drawHero();
       if (x < 1) requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
@@ -844,7 +891,7 @@ fi` },
   }
   const gw = $("#gw");
   segWire("#gfam", (v) => {
-    gstate.fam = v; gw.max = v === "mono" ? 700 : 900;
+    gstate.fam = v; gw.max = v === "mono" ? 700 : 900; paintRange(gw);
     if (gstate.w > +gw.max) { gstate.w = +gw.max; gw.value = gstate.w; $("#gwo").textContent = gstate.w; }
     if (!D[v].chars.some((c) => c[3] === gstate.filter)) gstate.filter = "all";
     renderFilter(); renderCells(); wall?.rebuild();
@@ -1393,6 +1440,7 @@ struct VOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
   segWire("#tfam", (v) => {
     tstate.fam = v; const tw = $("#tw"); tw.max = v === "mono" ? 700 : 900;
     if (+tw.value > +tw.max) tw.value = tw.max;
+    paintRange(tw);
     tstate.feats = new Set([...tstate.feats].filter((t) => D[v].features.some((f) => f.tag === t)));
     renderFeats(); applyTester();
   });
@@ -1410,6 +1458,7 @@ struct VOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
     rows.map(([k, a, b]) => `<tr><td>${k}</td><td class="n">${a}</td><td class="n">${b}</td></tr>`).join("") + "</tbody>";
 
   /* ---------- go ---------- */
+  paintAllRanges();
   drawHero();
   let rz;
   addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { drawHero(); renderInspector(); }, 120); });

@@ -30,6 +30,9 @@ SQUARE_UPPER = 0.36
 SQUARE_LOWER = 0.32
 COUNTER_BOOST = 1.25  # counters move further so corner strokes don't fatten
 JOIN_EASE = 0.3  # share of the squaring a handle gets where a curve meets a stem
+NOTCH_FILL = 0.45  # share of the way a bowl-to-stem notch corner moves toward the stem's end
+G_TAIL_STROKE = 0.94  # width of the g tail's rising stroke, in stems
+G_TAIL_HANDLE = 0.72  # handle fraction of the g tail's turn, matching the squared lowercase
 
 # Horizontal ink scale per glyph. Rounds come in toward the straights.
 WIDTH = {
@@ -84,42 +87,113 @@ def square_curves(fonts) -> None:
             apply_squaring(f[g.name], plan, s, min(0.9, s * COUNTER_BOOST), JOIN_EASE)
 
 
-def level_g_terminal(fonts) -> None:
-    """End the tail of g in a horizontal cut.
+def redraw_g_tail(fonts) -> None:
+    """Redraw the tail of g so it ends in a level cut.
 
-    The terminal is the straight edge between two corner points below the
-    baseline, on the left of the glyph. Both points slide along their own
-    tangents (with their handles) to the mean of their heights, so the hook
-    keeps its curve and the cut becomes level.
+    The bottom stroke runs left, turns up through one squared quarter curve,
+    and rises vertically into a horizontal cut. The cut sits at the height
+    and left edge Inter gives the terminal at that weight, and the rising
+    stroke is as wide as the stem, so the end is a clean rectangle. The point
+    count is unchanged, so the masters stay compatible.
     """
     ref = fonts["Regular"]["g"]
     for ci, contour in enumerate(ref.contours):
         pts = contour.points
-        for i, p in enumerate(pts):
-            q = pts[i - 1]
-            if p.type == "line" and q.type and not p.smooth and not q.smooth and p.y < 0 and q.y < 0:
-                break
-        else:
-            continue
-        a_i, b_i = i - 1, i  # inner end of the hook, outer end of the hook
-        break
+        found = [i for i, p in enumerate(pts)
+                 if p.type == "line" and pts[i - 1].type and not p.smooth and not pts[i - 1].smooth and p.y < 0 and pts[i - 1].y < 0]
+        if found:
+            b_i = found[0]
+            a_i = b_i - 1  # inner end of the hook; b_i is the outer end
+            break
     else:
         raise ValueError("g terminal not found")
     for f in fonts.values():
         pts = f["g"].contours[ci].points
         n = len(pts)
-        a, b = pts[a_i % n], pts[b_i % n]
-        y = (a.y + b.y) / 2
-        # each end's handle sits on the far side of it along the tangent
-        for end, handle in ((a, pts[(a_i - 1) % n]), (b, pts[(b_i + 1) % n])):
-            dy = end.y - handle.y
-            if abs(dy) < 1e-6:
+        P = lambda k: pts[k % n]  # noqa: E731
+        inner_end, outer_end, inner_bot, outer_bot = P(a_i), P(b_i), P(a_i - 3), P(b_i + 3)
+        y = (inner_end.y + outer_end.y) / 2
+        x_out = outer_end.x
+        x_in = x_out + stem(f) * G_TAIL_STROKE
+        k = G_TAIL_HANDLE
+        # outer edge: down from the cut, around to the bottom of the bowl
+        outer_end.x, outer_end.y = x_out, y
+        P(b_i + 1).x, P(b_i + 1).y = x_out, y - k * (y - outer_bot.y)
+        P(b_i + 2).x, P(b_i + 2).y = outer_bot.x - k * (outer_bot.x - x_out), outer_bot.y
+        # inner edge: from the bottom of the counter, around and up to the cut
+        P(a_i - 2).x, P(a_i - 2).y = inner_bot.x - k * (inner_bot.x - x_in), inner_bot.y
+        P(a_i - 1).x, P(a_i - 1).y = x_in, inner_bot.y + k * (y - inner_bot.y)
+        inner_end.x, inner_end.y = x_in, y
+
+
+def find_notches(glyph, xheight: float) -> list[tuple[int, int, list[int], float, int]]:
+    """Corners where a bowl meets a stem through a notch.
+
+    A notch is a corner where a curve arrives, followed by at most one short
+    step, then a near-vertical stem edge running to the baseline or the
+    x-height (Inter's bowl-to-stem joins in a, u, n, h and the rest). Returns
+    (contour, corner, points to move with the handle last, baseline or
+    x-height, the curve's other end).
+    """
+    out = []
+    for ci, c in enumerate(glyph.contours):
+        pts = c.points
+        n = len(pts)
+        for i, p in enumerate(pts):
+            if p.type != "curve" or p.smooth:
                 continue
-            t = (y - end.y) / dy
-            dx, dyy = (end.x - handle.x) * t, (end.y - handle.y) * t
-            for pt in (end, handle):
-                pt.x += dx
-                pt.y += dyy
+            for direction in (1, -1):
+                # walk along line segments away from the curve
+                chain, k = [i], i
+                for _ in range(2):
+                    j = (k + direction) % n
+                    seg_end_type = pts[j].type if direction == 1 else pts[k].type
+                    if pts[j].type is None or seg_end_type != "line":
+                        break
+                    chain.append(j)
+                    k = j
+                if len(chain) < 2:
+                    continue
+                end = pts[chain[-1]]
+                prev = pts[chain[-2]]
+                vertical = abs(end.x - prev.x) < 0.1 * abs(end.y - prev.y)
+                # the stem edge runs down past the baseline or up past the x-height
+                ref = 0.0 if end.y < p.y else xheight
+                reaches = end.y <= 2 if ref == 0.0 else end.y >= xheight - 2
+                step_ok = len(chain) == 2 or abs(pts[chain[1]].y - p.y) < 2
+                # a stem edge ends in the stem's flat end; a terminal (the arm of r) ends in a curve
+                cap = pts[(chain[-1] + direction) % n]
+                capped = cap.type is not None and abs(cap.y - end.y) < 2 and (direction == 1 and cap.type == "line" or direction == -1 and end.type == "line")
+                if vertical and reaches and step_ok and capped and abs(ref - p.y) > 20:
+                    handle = (i - direction) % n  # the curve's handle at the corner
+                    far = (i - 3 * direction) % n  # the curve's other end
+                    out.append((ci, i, chain[:-1] + [handle], ref, far))
+    return out
+
+
+def fill_notches(fonts) -> None:
+    """Move each notch corner part of the way toward its stem's end.
+
+    Inter's heavy weights cut deep notches where bowls join stems, which
+    leaves a hairline in bold a and u. Moving the corner, its step and its
+    handle a share of the way toward the baseline (or x-height) shortens the
+    notch and thickens the join, in proportion at every weight.
+    """
+    ref = fonts["Regular"]
+    plans = {g.name: find_notches(g, ref.info.xHeight) for g in ref
+             if g.contours and g.unicodes and unicodedata.category(chr(g.unicodes[0])) == "Ll"}
+    for f in fonts.values():
+        for name, notches in plans.items():
+            g = f[name]
+            for ci, corner, moving, ref, far in notches:
+                pts = g.contours[ci].points
+                dy = (ref - pts[corner].y) * NOTCH_FILL
+                for k in moving:
+                    pts[k].y += dy
+                # the handle stays between the corner and the curve's far end,
+                # so the bowl flattens into the join instead of sagging past it
+                h, lo, hi = pts[moving[-1]], *sorted((pts[far].y, pts[corner].y))
+                h.y = min(max(h.y, lo), hi)
 
 
 def adjust_widths(fonts) -> None:
@@ -156,7 +230,8 @@ def main() -> None:
     fonts = load_inter_masters()
     promote_square_punctuation(fonts)
     square_curves(fonts)
-    level_g_terminal(fonts)
+    fill_notches(fonts)
+    redraw_g_tail(fonts)
     adjust_widths(fonts)
 
     if OUT.exists():
