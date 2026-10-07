@@ -47,6 +47,7 @@ The build moves each handle fraction a share s of the way toward 1:
 - Caps: s = 0.36, which takes f from 0.60 to about 0.74 (n about 2.8).
 - Lowercase and everything else: s = 0.32, which takes f to about 0.73 (n about 2.7).
 - Counters move 1.25 times as far, so the stroke at a 45 degree corner does not get heavier.
+- Where a curve meets a stem at a corner point (the shoulders of n, h, m and r, the joins of b, d, p and q), the handle on that corner gets 30 percent of the squaring. The curve stays square through its middle and eases into the stem, so the notch at the join stays as shallow as Inter's.
 - Arcs qualify when their tangents are within 60 degrees of perpendicular and both handle fractions are between 0.35 and 0.85. Circled forms, the degree sign, bullets and the Geometric Shapes block stay round.
 
 Which arcs to square is decided on the Regular master and applied to every master, so the masters stay compatible for interpolation.
@@ -68,6 +69,10 @@ Horizontal ink scale per glyph in Kerf Sans. Sidebearings are kept, and vertical
 | S | 1.02 |
 
 Accented and composite glyphs are re-seated on their changed bases, and their marks keep their position relative to the base.
+
+## Terminals
+
+The tail of g ends in a horizontal cut. Both points of Inter's angled terminal slide along their own tangents to the mean of their heights, so the hook keeps its curve.
 
 ## Punctuation
 

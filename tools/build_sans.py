@@ -29,6 +29,7 @@ OUT = ROOT / "build" / "sans"
 SQUARE_UPPER = 0.36
 SQUARE_LOWER = 0.32
 COUNTER_BOOST = 1.25  # counters move further so corner strokes don't fatten
+JOIN_EASE = 0.3  # share of the squaring a handle gets where a curve meets a stem
 
 # Horizontal ink scale per glyph. Rounds come in toward the straights.
 WIDTH = {
@@ -80,7 +81,45 @@ def square_curves(fonts) -> None:
             continue
         s = SQUARE_UPPER if is_upper(ref, g.name) else SQUARE_LOWER
         for f in fonts.values():
-            apply_squaring(f[g.name], plan, s, min(0.9, s * COUNTER_BOOST))
+            apply_squaring(f[g.name], plan, s, min(0.9, s * COUNTER_BOOST), JOIN_EASE)
+
+
+def level_g_terminal(fonts) -> None:
+    """End the tail of g in a horizontal cut.
+
+    The terminal is the straight edge between two corner points below the
+    baseline, on the left of the glyph. Both points slide along their own
+    tangents (with their handles) to the mean of their heights, so the hook
+    keeps its curve and the cut becomes level.
+    """
+    ref = fonts["Regular"]["g"]
+    for ci, contour in enumerate(ref.contours):
+        pts = contour.points
+        for i, p in enumerate(pts):
+            q = pts[i - 1]
+            if p.type == "line" and q.type and not p.smooth and not q.smooth and p.y < 0 and q.y < 0:
+                break
+        else:
+            continue
+        a_i, b_i = i - 1, i  # inner end of the hook, outer end of the hook
+        break
+    else:
+        raise ValueError("g terminal not found")
+    for f in fonts.values():
+        pts = f["g"].contours[ci].points
+        n = len(pts)
+        a, b = pts[a_i % n], pts[b_i % n]
+        y = (a.y + b.y) / 2
+        # each end's handle sits on the far side of it along the tangent
+        for end, handle in ((a, pts[(a_i - 1) % n]), (b, pts[(b_i + 1) % n])):
+            dy = end.y - handle.y
+            if abs(dy) < 1e-6:
+                continue
+            t = (y - end.y) / dy
+            dx, dyy = (end.x - handle.x) * t, (end.y - handle.y) * t
+            for pt in (end, handle):
+                pt.x += dx
+                pt.y += dyy
 
 
 def adjust_widths(fonts) -> None:
@@ -117,6 +156,7 @@ def main() -> None:
     fonts = load_inter_masters()
     promote_square_punctuation(fonts)
     square_curves(fonts)
+    level_g_terminal(fonts)
     adjust_widths(fonts)
 
     if OUT.exists():

@@ -101,7 +101,10 @@ def plan_squaring(glyph: Glyph) -> list[tuple[int, SegmentRef, bool]]:
     return plan
 
 
-def apply_squaring(glyph: Glyph, plan, s_outer: float, s_inner: float) -> None:
+def apply_squaring(glyph: Glyph, plan, s_outer: float, s_inner: float, join: float = 1.0) -> None:
+    """Square each planned arc. A handle anchored on a corner point (where a
+    curve meets a stem) gets `join` times the strength, so the curve eases
+    into the stem instead of cutting a deep notch at the join."""
     for ci, seg, counter in plan:
         contour = glyph.contours[ci]
         fr = _segment_fractions(contour, seg)
@@ -111,7 +114,8 @@ def apply_squaring(glyph: Glyph, plan, s_outer: float, s_inner: float) -> None:
         s = s_inner if counter else s_outer
         pts = contour.points
         for fi, ci_, pi in ((f0, seg.c1, seg.p0), (f1, seg.c2, seg.p3)):
-            target = fi + s * (1 - fi)
+            k_s = s if pts[pi].smooth else s * join
+            target = fi + k_s * (1 - fi)
             k = target / fi
             c, p = pts[ci_], pts[pi]
             c.x = p.x + (c.x - p.x) * k

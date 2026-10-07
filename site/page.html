@@ -166,6 +166,37 @@ td.n { font-family: var(--mono); font-size: 0.875rem; font-variant-numeric: tabu
 .cells button[aria-current="true"] { background: var(--ink); color: var(--sheet); }
 @media (max-width: 860px) { .glyphs { grid-template-columns: 1fr; } .inspector { position: static; } .cells { max-height: 420px; } }
 
+/* glyph wall */
+.bore { position: relative; height: clamp(460px, 78vh, 860px); border-block: 1px solid var(--rule); background: var(--sheet); overflow: hidden; }
+.bore canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; outline: none; }
+.bore canvas:active { cursor: grabbing; }
+.bore canvas:focus-visible { box-shadow: inset 0 0 0 2px var(--score); }
+.hud { position: absolute; font-family: var(--mono); font-size: 12px; line-height: 1.4; color: var(--ink-2); pointer-events: none; padding: 5px 9px; border-radius: 4px; background: color-mix(in srgb, var(--sheet) 82%, transparent); }
+.hud:empty { display: none; }
+.hud-tl { top: 14px; left: var(--gutter); }
+.hud-bl { bottom: 14px; left: var(--gutter); }
+.hud-br { bottom: 14px; right: var(--gutter); text-align: right; max-width: 48%; }
+.pop { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; pointer-events: none; }
+.pop-card { pointer-events: auto; width: min(760px, 100%); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; opacity: 0; transform: scale(0.985); transition: opacity 0.2s ease, transform 0.2s ease; box-shadow: 0 40px 90px -40px rgb(0 0 0 / 0.45); }
+.pop.in .pop-card { opacity: 1; transform: none; }
+.pop-card svg { display: block; width: 100%; height: auto; border-right: 1px solid var(--rule); }
+.pop-body { padding: 20px; display: grid; gap: 16px; align-content: start; min-width: 0; }
+.pop-name { font-size: 1.25rem; font-weight: 600; line-height: 1.2; text-wrap: balance; }
+.pop-body .info { border: 1px solid var(--rule); border-radius: 6px; }
+.pop-body .info dt, .pop-body .info dd { padding-inline: 12px; }
+.pop-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 640px) {
+  .pop-card { grid-template-columns: 1fr; max-height: 100%; overflow-y: auto; }
+  .pop-card svg { border-right: 0; border-bottom: 1px solid var(--rule); max-height: 34vh; }
+  .hud-tl { display: none; }
+}
+#gridview { padding-top: 4px; }
+.info { display: grid; grid-template-columns: auto 1fr; margin: 0; font-size: 0.875rem; }
+.info dt, .info dd { margin: 0; padding: 8px 16px; border-bottom: 1px solid var(--rule); }
+.info dt { color: var(--ink-2); }
+.info dd { font-family: var(--mono); font-size: 0.8125rem; text-align: right; overflow-wrap: anywhere; }
+.info > :nth-last-child(-n+2) { border-bottom: 0; }
+
 /* tester */
 .tester { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 24px; align-items: start; }
 .sample { min-height: 320px; padding: 24px; border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); outline: none; overflow-wrap: anywhere; }
@@ -310,7 +341,7 @@ footer .big { font-size: clamp(4rem, 16vw, 12rem); font-weight: 800; letter-spac
     <div class="wrap">
       <div class="plate-head">
         <h2>Glyphs</h2>
-        <p>Every character in both fonts. Select one to see it on its metrics, with its code point and advance width.</p>
+        <p id="glyphs-lede">Every character in both fonts, cut into the inside of a cylinder in code point order. Drag to turn, scroll to move between rows, and click a glyph to pull it out of the wall.</p>
       </div>
       <div class="glyph-tools">
         <div class="seg" role="group" aria-label="Family" id="gfam">
@@ -318,13 +349,40 @@ footer .big { font-size: clamp(4rem, 16vw, 12rem); font-weight: 800; letter-spac
           <button type="button" data-v="mono" aria-pressed="false">Mono</button>
         </div>
         <div class="chips" id="gfilter" role="group" aria-label="Filter"></div>
+        <div class="seg" role="group" aria-label="View" id="gview">
+          <button type="button" data-v="wall" aria-pressed="true">Wall</button>
+          <button type="button" data-v="grid" aria-pressed="false">Grid</button>
+        </div>
         <label style="margin-left:auto">Weight <input id="gw" type="range" min="100" max="900" step="1" value="400"> <output class="mono num" id="gwo">400</output></label>
       </div>
+    </div>
+    <div class="bore" id="bore">
+      <canvas id="gpu" tabindex="0" aria-label="Glyph wall. Drag or use the arrow keys to move, Enter to pull out the glyph in the centre."></canvas>
+      <div class="hud hud-tl">Drag to turn. Scroll to move. Click a glyph to pull it out.</div>
+      <div class="hud hud-bl num" id="hud-row"></div>
+      <div class="hud hud-br" id="hud-hover"></div>
+      <div class="pop" id="pop" hidden>
+        <div class="pop-card" role="dialog" aria-labelledby="pop-name">
+          <svg id="pop-svg" role="img" aria-label="Selected glyph on its metric lines"></svg>
+          <div class="pop-body">
+            <div class="pop-name" id="pop-name"></div>
+            <dl class="info" id="pop-info"></dl>
+            <div class="pop-actions">
+              <button class="btn" type="button" id="pop-prev">← Previous</button>
+              <button class="btn" type="button" id="pop-next">Next →</button>
+              <button class="btn" type="button" id="pop-copy">Copy</button>
+              <button class="btn" type="button" id="pop-close">Put back</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="wrap" id="gridview" hidden>
       <div class="glyphs">
         <div class="inspector">
           <div class="card">
             <svg id="insp" role="img" aria-label="Selected glyph on its metric lines"></svg>
-            <dl id="ginfo"></dl>
+            <dl class="info" id="ginfo"></dl>
           </div>
         </div>
         <div class="cells" id="cells"></div>
@@ -699,14 +757,38 @@ fi` },
   $("#boxgrid").innerHTML = box.join("");
 
   /* ---------- glyphs ---------- */
-  const gstate = { fam: "sans", filter: "all", cp: 0x52, w: 400 };
+  const gstate = { fam: "sans", filter: "all", view: "wall", cp: 0x52, w: 400 };
   const GROUPS = ["all", "letters", "figures", "punctuation", "symbols", "marks", "drawing"];
   const cells = $("#cells"), insp = $("#insp"), ginfo = $("#ginfo");
-  function famFont(f) { return f === "sans" ? '"Kerf Sans"' : '"Kerf Mono"'; }
-  function show(cp) {
-    if (cp < 0x300 || cp > 0x36f) return String.fromCodePoint(cp);
-    return "◌" + String.fromCodePoint(cp);
+  const famFont = (f) => (f === "sans" ? '"Kerf Sans"' : '"Kerf Mono"');
+  const hex = (cp) => cp.toString(16).toUpperCase().padStart(4, "0");
+  const show = (cp) => (cp >= 0x300 && cp <= 0x36f ? "◌" : "") + String.fromCodePoint(cp);
+  const glyphList = () => D[gstate.fam].chars.filter((c) => gstate.filter === "all" || c[3] === gstate.filter);
+
+  // A glyph on its metric lines, drawn with the real font.
+  function drawGlyph(svg, dl, c) {
+    const m = D[gstate.fam].metrics, adv = c[2];
+    const top = m.ascender + 180, bot = m.descender - 140, H = top - bot;
+    const W = Math.max(adv + 520, H * 1.05), x0 = (W - adv) / 2;
+    const Y = (y) => top - y;
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.replaceChildren();
+    const px = W / Math.max(240, svg.clientWidth || 480);
+    for (const [y, name] of [[m.ascender, "asc"], [m.capHeight, "cap"], [m.xHeight, "x"], [0, "base"], [m.descender, "desc"]]) {
+      el("line", { x1: 0, x2: W, y1: Y(y), y2: Y(y), stroke: "var(--score)", "stroke-width": px, opacity: y === 0 ? 0.9 : 0.4 }, svg);
+      el("text", { x: 10 * px, y: Y(y) - 5 * px, "font-family": "Kerf Mono, ui-monospace, monospace", "font-size": 11 * px, fill: "var(--score)" }, svg).textContent = `${y} ${name}`;
+    }
+    for (const x of [x0, x0 + adv]) el("line", { x1: x, x2: x, y1: 0, y2: H, stroke: "var(--cut)", "stroke-width": px, "stroke-dasharray": `${4 * px} ${4 * px}` }, svg);
+    const t = el("text", { x: x0, y: Y(0), "font-size": m.upm, fill: "var(--ink)" }, svg);
+    t.style.fontFamily = famFont(gstate.fam);
+    t.style.fontVariationSettings = `"wght" ${gstate.w}`;
+    t.textContent = show(c[0]);
+    dl.innerHTML = [
+      ["Code point", `U+${hex(c[0])}`], ["Glyph", c[1]],
+      ["Advance", gstate.fam === "sans" ? `${c[2]} at 400` : `${c[2]} (cell)`], ["Group", c[3]],
+    ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
   }
+
   function renderFilter() {
     const list = D[gstate.fam].chars;
     const counts = Object.fromEntries(GROUPS.map((g) => [g, g === "all" ? list.length : list.filter((c) => c[3] === g).length]));
@@ -714,39 +796,19 @@ fi` },
       `<button type="button" data-v="${g}" aria-pressed="${g === gstate.filter}">${g[0].toUpperCase() + g.slice(1)}<span>${counts[g]}</span></button>`).join("");
   }
   function renderCells() {
-    const list = D[gstate.fam].chars.filter((c) => gstate.filter === "all" || c[3] === gstate.filter);
+    if (gstate.view !== "grid") return;
+    const list = glyphList();
+    if (!list.some((c) => c[0] === gstate.cp) && list.length) gstate.cp = list[0][0];
     cells.style.fontFamily = famFont(gstate.fam);
     cells.style.fontVariationSettings = `"wght" ${gstate.w}`;
-    cells.innerHTML = list.map((c) => `<button type="button" data-cp="${c[0]}" title="U+${c[0].toString(16).toUpperCase().padStart(4, "0")}"${c[0] === gstate.cp ? ' aria-current="true"' : ""}>${show(c[0])}</button>`).join("");
-    if (!list.some((c) => c[0] === gstate.cp) && list.length) { gstate.cp = list[0][0]; cells.firstChild.setAttribute("aria-current", "true"); }
+    cells.innerHTML = list.map((c) => `<button type="button" data-cp="${c[0]}" title="U+${hex(c[0])}"${c[0] === gstate.cp ? ' aria-current="true"' : ""}>${show(c[0])}</button>`).join("");
     renderInspector();
   }
   function renderInspector() {
-    const fam = D[gstate.fam], m = fam.metrics;
-    const c = fam.chars.find((x) => x[0] === gstate.cp) || fam.chars[0];
-    const adv = c[2];
-    const padX = 260, top = m.ascender + 180, bot = m.descender - 140;
-    const H = top - bot, W = Math.max(adv + padX * 2, H * 1.05);
-    const x0 = (W - adv) / 2;
-    const Y = (y) => top - y;
-    insp.setAttribute("viewBox", `0 0 ${W} ${H}`);
-    insp.replaceChildren();
-    const px = W / Math.max(260, insp.clientWidth || 480);
-    for (const [y, name] of [[m.ascender, "asc"], [m.capHeight, "cap"], [m.xHeight, "x"], [0, "base"], [m.descender, "desc"]]) {
-      el("line", { x1: 0, x2: W, y1: Y(y), y2: Y(y), stroke: "var(--score)", "stroke-width": px, opacity: y === 0 ? 0.9 : 0.4 }, insp);
-      const t = el("text", { x: 10 * px, y: Y(y) - 5 * px, "font-family": "Kerf Mono, ui-monospace, monospace", "font-size": 11 * px, fill: "var(--score)" }, insp);
-      t.textContent = `${y} ${name}`;
-    }
-    for (const x of [x0, x0 + adv]) el("line", { x1: x, x2: x, y1: 0, y2: H, stroke: "var(--cut)", "stroke-width": px, "stroke-dasharray": `${4 * px} ${4 * px}` }, insp);
-    const t = el("text", { x: x0, y: Y(0), "font-size": m.upm, fill: "var(--ink)" }, insp);
-    t.style.fontFamily = famFont(gstate.fam);
-    t.style.fontVariationSettings = `"wght" ${gstate.w}`;
-    t.textContent = show(c[0]);
-    const hex = c[0].toString(16).toUpperCase().padStart(4, "0");
-    ginfo.innerHTML = [
-      ["Name", D.names[c[0]] || "Unnamed"], ["Code point", `U+${hex}`], ["Glyph", c[1]],
-      ["Advance", gstate.fam === "sans" ? `${c[2]} at 400` : `${c[2]} (cell)`], ["Group", c[3]],
-    ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+    if (gstate.view !== "grid") return;
+    const fam = D[gstate.fam];
+    drawGlyph(insp, ginfo, fam.chars.find((x) => x[0] === gstate.cp) || fam.chars[0]);
+    ginfo.insertAdjacentHTML("afterbegin", `<dt>Name</dt><dd>${D.names[gstate.cp] || "Unnamed"}</dd>`);
   }
   cells.addEventListener("click", (e) => {
     const b = e.target.closest("button[data-cp]");
@@ -756,10 +818,6 @@ fi` },
     gstate.cp = +b.dataset.cp;
     renderInspector();
   });
-  $("#gfilter").addEventListener("click", (e) => {
-    const b = e.target.closest("button"); if (!b) return;
-    gstate.filter = b.dataset.v; renderFilter(); renderCells();
-  });
   function segWire(id, fn) {
     const root = $(id);
     root.addEventListener("click", (e) => {
@@ -768,19 +826,496 @@ fi` },
       fn(b.dataset.v);
     });
   }
+  function setView(v) {
+    gstate.view = v;
+    $("#bore").hidden = v !== "wall";
+    $("#gridview").hidden = v !== "grid";
+    $("#gview").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x.dataset.v === v));
+    renderCells();
+    wall?.setActive(v === "wall");
+  }
   const gw = $("#gw");
   segWire("#gfam", (v) => {
     gstate.fam = v; gw.max = v === "mono" ? 700 : 900;
     if (gstate.w > +gw.max) { gstate.w = +gw.max; gw.value = gstate.w; $("#gwo").textContent = gstate.w; }
     if (!D[v].chars.some((c) => c[3] === gstate.filter)) gstate.filter = "all";
-    renderFilter(); renderCells();
+    renderFilter(); renderCells(); wall?.rebuild();
   });
+  $("#gfilter").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    gstate.filter = b.dataset.v; renderFilter(); renderCells(); wall?.rebuild();
+  });
+  segWire("#gview", setView);
+  let gwTimer;
   gw.addEventListener("input", () => {
     gstate.w = +gw.value; $("#gwo").textContent = gstate.w;
     cells.style.fontVariationSettings = `"wght" ${gstate.w}`;
     renderInspector();
+    clearTimeout(gwTimer); gwTimer = setTimeout(() => wall?.rebuild(true), 90);
   });
-  renderFilter(); renderCells();
+  renderFilter();
+
+  /* ---------- glyph wall (WebGPU) ----------
+     The glyphs wind down the inside of a cylinder as a helix, COLS to a
+     turn, in code point order. The camera stands on the axis. */
+  const WGSL = `
+struct U {
+  vp: mat4x4f, cam: vec4f,
+  geo: vec4f,    // radius, columns, row pitch, tile size
+  atlas: vec4f,  // atlas columns, cell u, cell v, glyph count
+  fly: vec4f, flyR: vec4f, flyN: vec4f,  // the pulled-out glyph: centre+scale, right+alpha, normal
+  bg: vec4f, plate: vec4f, ink: vec4f, cut: vec4f, rule: vec4f,
+  fog: vec4f,
+};
+@group(0) @binding(0) var<uniform> u: U;
+@group(0) @binding(1) var<storage, read> inst: array<vec4f>;  // atlas cell, lift, hole, hover
+@group(0) @binding(2) var samp: sampler;
+@group(0) @binding(3) var atlas: texture_2d<f32>;
+
+struct VO {
+  @builtin(position) pos: vec4f,
+  @location(0) uv: vec2f,
+  @location(1) @interpolate(flat) cell: f32,
+  @location(2) dist: f32,
+  @location(3) @interpolate(flat) state: vec4f,  // hole, hover, alpha, dim
+  @location(4) facing: f32,
+};
+
+@vertex fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VO {
+  var q = array<vec2f, 6>(vec2f(-0.5, -0.5), vec2f(0.5, -0.5), vec2f(-0.5, 0.5), vec2f(-0.5, 0.5), vec2f(0.5, -0.5), vec2f(0.5, 0.5));
+  let c = q[vi];
+  let d = inst[ii];
+  var center: vec3f; var right: vec3f; var nrm: vec3f; var s: f32; var alpha = 1.0; var dim = u.fog.z;
+  if (ii < u32(u.atlas.w)) {
+    // a helix: one turn per row, so reading never jumps a seam
+    let turns = f32(ii) / u.geo.y;
+    let th = turns * 6.28318530718;
+    let outw = vec3f(sin(th), 0.0, -cos(th));
+    center = outw * (u.geo.x - d.y * 0.9) + vec3f(0.0, -turns * u.geo.z, 0.0);
+    right = vec3f(cos(th), 0.0, sin(th));
+    nrm = -outw;
+    s = u.geo.w * (1.0 + d.y * 0.18);
+  } else {
+    center = u.fly.xyz; right = u.flyR.xyz; nrm = u.flyN.xyz; s = u.fly.w; alpha = u.flyR.w; dim = 0.0;
+  }
+  let wp = center + right * (c.x * s) + vec3f(0.0, c.y * s, 0.0);
+  var o: VO;
+  o.pos = u.vp * vec4f(wp, 1.0);
+  o.uv = vec2f(c.x + 0.5, 0.5 - c.y);
+  o.cell = d.x;
+  o.dist = distance(wp, u.cam.xyz);
+  o.state = vec4f(d.z, d.w, alpha, dim);
+  o.facing = clamp(dot(nrm, normalize(u.cam.xyz - center)), 0.0, 1.0);
+  return o;
+}
+
+@fragment fn fs(i: VO) -> @location(0) vec4f {
+  let cols = u.atlas.x;
+  let cy = floor(i.cell / cols);
+  let cx = i.cell - cols * cy;
+  let cov = textureSample(atlas, samp, (vec2f(cx, cy) + i.uv) * u.atlas.yz).a;
+  let e = min(min(i.uv.x, 1.0 - i.uv.x), min(i.uv.y, 1.0 - i.uv.y));
+  let w = fwidth(e);
+  let edge = 1.0 - smoothstep(w * 0.5, w * 1.6, e);
+  let plate = mix(u.plate.rgb, u.ink.rgb, 0.035);
+  let ink = mix(u.ink.rgb, u.cut.rgb, i.state.y);
+  var col = mix(mix(plate, ink, cov), u.rule.rgb, edge * 0.9);
+  // the slot a pulled-out glyph leaves behind, outlined like a cut line
+  let slot = mix(mix(u.bg.rgb, u.ink.rgb, 0.1), u.cut.rgb, edge);
+  col = mix(col, slot, i.state.x);
+  // glancing walls fall into shadow, distance fades into the sheet
+  col = mix(u.bg.rgb, col, 0.3 + 0.7 * i.facing);
+  col = mix(col, u.bg.rgb, smoothstep(u.fog.x, u.fog.y, i.dist));
+  // the wall steps back while a glyph is out
+  col = mix(col, u.bg.rgb, i.state.w);
+  return vec4f(col * i.state.z, i.state.z);
+}`;
+
+  let wall = null;
+  async function startWall() {
+    const canvas = $("#gpu");
+    if (!navigator.gpu) return null;
+    let device;
+    try {
+      const adapter = await navigator.gpu.requestAdapter();
+      if (!adapter) return null;
+      device = await adapter.requestDevice();
+    } catch { return null; }
+    const ctx = canvas.getContext("webgpu");
+    const format = navigator.gpu.getPreferredCanvasFormat();
+    ctx.configure({ device, format, alphaMode: "opaque" });
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    const SAMPLES = 4, CELL = 64, ACOLS = 64, LEVELS = 5;
+    const R = 10, COLS = 48, PITCH = (2 * Math.PI * R) / COLS, ROWP = PITCH * 1.06, TILE = PITCH * 0.9;
+    const FOV = (52 * Math.PI) / 180, NEAR = 0.1, FAR = 60;
+    const module = device.createShaderModule({ code: WGSL });
+    const pipeline = device.createRenderPipeline({
+      layout: "auto",
+      vertex: { module, entryPoint: "vs" },
+      fragment: { module, entryPoint: "fs", targets: [{ format, blend: { color: { srcFactor: "one", dstFactor: "one-minus-src-alpha" }, alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha" } } }] },
+      primitive: { topology: "triangle-list" },
+      depthStencil: { format: "depth24plus", depthWriteEnabled: true, depthCompare: "less" },
+      multisample: { count: SAMPLES },
+    });
+    const ubuf = device.createBuffer({ size: 256, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    const sampler = device.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", maxAnisotropy: 16 });
+    const uni = new Float32Array(64);
+
+    let list = [], N = 0, inst = new Float32Array(4), ibuf = null, atlasTex = null, bind = null, atlasW = 1, atlasH = 1;
+    let msaa = null, depth = null;
+    const cam = { yaw: 0, y: 0, vyaw: 0, vy: 0, pitch: 0 };
+    let hover = -1, sel = -1, popT = 0, popDir = 0, flyAlpha = 1, flyTarget = null, active = new Set();
+    let drag = null, lastInput = 0, running = false, visible = false, enabled = true, colors = {};
+
+    function readColors() {
+      const cs = getComputedStyle(document.documentElement);
+      const rgb = (name) => {
+        const v = cs.getPropertyValue(name).trim();
+        const h = v.replace("#", "");
+        return [0, 2, 4].map((k) => parseInt(h.slice(k, k + 2), 16) / 255);
+      };
+      colors = { bg: rgb("--sheet"), plate: rgb("--panel"), ink: rgb("--ink"), cut: rgb("--cut"), rule: rgb("--rule") };
+    }
+    readColors();
+    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", readColors);
+    new MutationObserver(readColors).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+    async function buildAtlas() {
+      const family = gstate.fam === "sans" ? "Kerf Sans" : "Kerf Mono";
+      const font = `${gstate.w} 40px "${family}"`;
+      await document.fonts.load(font);
+      const rows = Math.max(16, Math.ceil(list.length / ACOLS));
+      const W = CELL * ACOLS, H = CELL * rows;
+      const c = document.createElement("canvas");
+      c.width = W; c.height = H;
+      const g = c.getContext("2d");
+      g.fillStyle = "#fff"; g.textAlign = "center"; g.textBaseline = "alphabetic"; g.font = font;
+      list.forEach((ch, i) => g.fillText(show(ch[0]), (i % ACOLS) * CELL + CELL / 2, Math.floor(i / ACOLS) * CELL + 42));
+      const tex = device.createTexture({
+        size: [W, H], format: "rgba8unorm", mipLevelCount: LEVELS,
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+      let src = c;
+      for (let l = 0; l < LEVELS; l++) {
+        const lw = W >> l, lh = H >> l;
+        if (l > 0) {
+          const d = document.createElement("canvas");
+          d.width = lw; d.height = lh;
+          const dg = d.getContext("2d");
+          dg.imageSmoothingQuality = "high";
+          dg.drawImage(src, 0, 0, lw, lh);
+          src = d;
+        }
+        device.queue.copyExternalImageToTexture({ source: src }, { texture: tex, mipLevel: l }, [lw, lh]);
+      }
+      atlasTex?.destroy();
+      atlasTex = tex; atlasW = W; atlasH = H;
+    }
+
+    async function rebuild(weightOnly = false) {
+      if (!weightOnly) {
+        close(true);
+        list = glyphList();
+        N = list.length;
+        inst = new Float32Array((N + 1) * 4);
+        for (let i = 0; i < N; i++) inst[i * 4] = i;
+        active.clear(); hover = -1;
+        ibuf?.destroy();
+        ibuf = device.createBuffer({ size: inst.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+        cam.y = maxY(); cam.yaw = 0.35;
+      }
+      await buildAtlas();
+      bind = device.createBindGroup({
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: ubuf } }, { binding: 1, resource: { buffer: ibuf } },
+          { binding: 2, resource: sampler }, { binding: 3, resource: atlasTex.createView() },
+        ],
+      });
+      kick();
+    }
+    const rowsCount = () => Math.max(1, Math.ceil(N / COLS));
+    // keep the camera far enough inside the helix that the wall fills the view
+    const inset = () => R * Math.tan(FOV / 2) - TILE;
+    const maxY = () => Math.max(-inset(), -((N - 1) / COLS) * ROWP / 2);
+    const minY = () => Math.min(-((N - 1) / COLS) * ROWP + inset(), maxY());
+
+    function resize() {
+      const dpr = Math.min(2, devicePixelRatio || 1);
+      const w = Math.max(1, Math.round(canvas.clientWidth * dpr)), h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+      if (canvas.width === w && canvas.height === h && msaa) return;
+      canvas.width = w; canvas.height = h;
+      msaa?.destroy(); depth?.destroy();
+      msaa = device.createTexture({ size: [w, h], format, sampleCount: SAMPLES, usage: GPUTextureUsage.RENDER_ATTACHMENT });
+      depth = device.createTexture({ size: [w, h], format: "depth24plus", sampleCount: SAMPLES, usage: GPUTextureUsage.RENDER_ATTACHMENT });
+      kick();
+    }
+    new ResizeObserver(resize).observe(canvas);
+
+    // camera basis and matrices (column-major, WebGPU depth 0..1)
+    function basis() {
+      const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+      const F = [Math.sin(cam.yaw) * cp, sp, -Math.cos(cam.yaw) * cp];
+      const Rt = [Math.cos(cam.yaw), 0, Math.sin(cam.yaw)];
+      const Up = [Rt[1] * F[2] - Rt[2] * F[1], Rt[2] * F[0] - Rt[0] * F[2], Rt[0] * F[1] - Rt[1] * F[0]];
+      return { F, Rt, Up, E: [0, cam.y, 0] };
+    }
+    function viewProj(aspect) {
+      const { F, Rt, Up, E } = basis();
+      const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+      const V = [Rt[0], Up[0], -F[0], 0, Rt[1], Up[1], -F[1], 0, Rt[2], Up[2], -F[2], 0, -dot(Rt, E), -dot(Up, E), dot(F, E), 1];
+      const f = 1 / Math.tan(FOV / 2), nf = 1 / (NEAR - FAR);
+      const P = [f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, FAR * nf, -1, 0, 0, FAR * NEAR * nf, 0];
+      const out = new Array(16).fill(0);
+      for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) for (let k = 0; k < 4; k++) out[c * 4 + r] += P[k * 4 + r] * V[c * 4 + k];
+      return out;
+    }
+    // ray through a canvas point, in world space, with unit forward depth
+    function ray(nx, ny) {
+      const { F, Rt, Up, E } = basis();
+      const ty = Math.tan(FOV / 2), tx = ty * (canvas.clientWidth / canvas.clientHeight);
+      return { E, d: [0, 1, 2].map((k) => F[k] + Rt[k] * nx * tx + Up[k] * ny * ty) };
+    }
+    function slotOf(i) {
+      const th = (i / COLS) * Math.PI * 2;
+      return { th, P: [R * Math.sin(th), -(i / COLS) * ROWP, -R * Math.cos(th)] };
+    }
+    function pick(clientX, clientY) {
+      const r = canvas.getBoundingClientRect();
+      const nx = ((clientX - r.left) / r.width) * 2 - 1, ny = 1 - ((clientY - r.top) / r.height) * 2;
+      const { E, d } = ray(nx, ny);
+      const t = R / Math.hypot(d[0], d[2]);
+      const hx = E[0] + d[0] * t, hy = E[1] + d[1] * t, hz = E[2] + d[2] * t;
+      const th = (Math.atan2(hx, -hz) + Math.PI * 2) % (Math.PI * 2);
+      const colF = (th / (Math.PI * 2)) * COLS, col = Math.round(colF) % COLS;
+      const turn = Math.round(-hy / ROWP - col / COLS), i = col + turn * COLS;
+      return turn < 0 || i >= N ? -1 : i;  // the nearest plate, gaps included
+    }
+
+    // pull-out card
+    const pop = $("#pop"), popSvg = $("#pop-svg"), popInfo = $("#pop-info");
+    function fillCard() {
+      const c = list[sel];
+      drawGlyph(popSvg, popInfo, c);
+      $("#pop-name").textContent = D.names[c[0]] || `U+${hex(c[0])}`;
+      $("#pop-copy").textContent = "Copy";
+    }
+    function open(i) {
+      if (i < 0) return;
+      if (sel >= 0) inst[sel * 4 + 2] = 0;
+      sel = i; inst[sel * 4 + 2] = 1; inst[N * 4] = i;
+      pop.hidden = false; pop.classList.remove("in");
+      fillCard();
+      // fly to the centre of the card's drawing, sized to it
+      const br = canvas.getBoundingClientRect(), sr = popSvg.getBoundingClientRect();
+      const nx = ((sr.left + sr.width / 2 - br.left) / br.width) * 2 - 1;
+      const ny = 1 - ((sr.top + sr.height / 2 - br.top) / br.height) * 2;
+      const dist = 4.2, { E, d } = ray(nx, ny);
+      const H = 2 * dist * Math.tan(FOV / 2) * (sr.height / br.height);
+      flyTarget = { P: [0, 1, 2].map((k) => E[k] + d[k] * dist), S: H * 0.62 };
+      popDir = 1; flyAlpha = 1;
+      if (reduce) popT = 1;
+      kick();
+    }
+    function close(now = false) {
+      if (sel < 0) return;
+      pop.classList.remove("in");
+      if (now || reduce) { inst[sel * 4 + 2] = 0; sel = -1; popT = 0; popDir = 0; pop.hidden = true; return; }
+      popDir = -1; flyAlpha = 1; kick();
+    }
+    function step(k) {
+      if (sel < 0) return;
+      const n = (sel + k + N) % N;
+      inst[sel * 4 + 2] = 0; sel = n; inst[sel * 4 + 2] = 1; inst[N * 4] = n;
+      fillCard();
+      // keep the wall turned toward the glyph being read
+      const { th } = slotOf(sel);
+      cam.yaw = cam.yaw + ((((th - cam.yaw) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI);
+      cam.y = slotOf(sel).P[1];
+      kick();
+    }
+    $("#pop-close").addEventListener("click", () => close());
+    $("#pop-prev").addEventListener("click", () => step(-1));
+    $("#pop-next").addEventListener("click", () => step(1));
+    $("#pop-copy").addEventListener("click", (e) => {
+      const ch = String.fromCodePoint(list[sel][0]);
+      navigator.clipboard?.writeText(ch).then(() => { e.target.textContent = "Copied"; }, () => { e.target.textContent = ch; });
+    });
+
+    // input
+    canvas.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      canvas.setPointerCapture(e.pointerId);
+      drag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: false };
+      cam.vyaw = cam.vy = 0; lastInput = performance.now(); kick();
+    });
+    canvas.addEventListener("pointermove", (e) => {
+      lastInput = performance.now();
+      if (!drag) {
+        const i = sel >= 0 ? -1 : pick(e.clientX, e.clientY);
+        if (i !== hover) {
+          if (hover >= 0) inst[hover * 4 + 3] = 0;
+          hover = i;
+          if (hover >= 0) { active.add(hover); inst[hover * 4 + 3] = 1; }
+          const c = list[hover];
+          $("#hud-hover").textContent = c ? `U+${hex(c[0])}  ${D.names[c[0]] || ""}` : "";
+          kick();
+        }
+        return;
+      }
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y, now = performance.now(), dt = Math.max(1, now - drag.t);
+      const tx = Math.tan(FOV / 2) * (canvas.clientWidth / canvas.clientHeight);
+      const radPerPx = (2 * tx) / canvas.clientWidth, unitsPerPx = (2 * R * Math.tan(FOV / 2)) / canvas.clientHeight;
+      cam.yaw -= dx * radPerPx; cam.y += dy * unitsPerPx;
+      cam.vyaw = (-dx * radPerPx * 16) / dt; cam.vy = (dy * unitsPerPx * 16) / dt;
+      drag.x = e.clientX; drag.y = e.clientY; drag.t = now;
+      if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 5) drag.moved = true;
+      kick();
+    });
+    const endDrag = (e) => {
+      if (!drag) return;
+      const click = !drag.moved;
+      drag = null;
+      if (click) {
+        if (sel >= 0) close();
+        else open(pick(e.clientX, e.clientY));
+      }
+      kick();
+    };
+    canvas.addEventListener("pointerup", endDrag);
+    canvas.addEventListener("pointercancel", () => { drag = null; });
+    canvas.addEventListener("pointerleave", () => {
+      if (hover >= 0) { inst[hover * 4 + 3] = 0; hover = -1; $("#hud-hover").textContent = ""; kick(); }
+    });
+    canvas.addEventListener("wheel", (e) => {
+      const dy = e.deltaY * (e.deltaMode === 1 ? 16 : 1), dx = e.deltaX * (e.deltaMode === 1 ? 16 : 1);
+      const vertical = Math.abs(dy) >= Math.abs(dx);
+      // at the top or bottom row, hand the wheel back to the page
+      if (vertical && ((cam.y >= maxY() - 0.01 && dy < 0) || (cam.y <= minY() + 0.01 && dy > 0))) return;
+      e.preventDefault();
+      lastInput = performance.now();
+      cam.vy -= dy * 0.0011; cam.vyaw += dx * 0.00022;
+      kick();
+    }, { passive: false });
+    canvas.addEventListener("keydown", (e) => {
+      const turn = (2 * Math.PI) / COLS;
+      const k = { ArrowLeft: () => (cam.yaw -= turn), ArrowRight: () => (cam.yaw += turn), ArrowUp: () => (cam.y += ROWP), ArrowDown: () => (cam.y -= ROWP),
+        Enter: () => { const r = canvas.getBoundingClientRect(); sel >= 0 ? close() : open(pick(r.left + r.width / 2, r.top + r.height / 2)); },
+        Escape: () => close() }[e.key];
+      if (!k) return;
+      e.preventDefault(); k(); lastInput = performance.now(); kick();
+    });
+    addEventListener("keydown", (e) => { if (e.key === "Escape" && sel >= 0) close(); });
+
+    // frame
+    let last = performance.now(), raf = 0;
+    function kick() { if (!raf && visible && enabled) raf = requestAnimationFrame(frame); }
+    const easeOutBack = (x) => 1 + 2.2 * Math.pow(x - 1, 3) + 1.2 * Math.pow(x - 1, 2);
+    const easeInOut = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+    function frame(now) {
+      raf = 0;
+      if (!bind || !msaa) return;
+      const dt = Math.min(3, (now - last) / 16.667); last = now;
+      let moving = false;
+      if (!drag) {
+        cam.yaw += cam.vyaw * dt; cam.y += cam.vy * dt;
+        cam.vyaw *= Math.pow(0.93, dt); cam.vy *= Math.pow(0.9, dt);
+        if (Math.abs(cam.vyaw) < 1e-5) cam.vyaw = 0;
+        if (Math.abs(cam.vy) < 1e-4) cam.vy = 0;
+        moving = cam.vyaw !== 0 || cam.vy !== 0;
+        // spring back inside the rows
+        const lo = minY();
+        const hi = maxY();
+        if (cam.y > hi) { cam.y += (hi - cam.y) * 0.18 * dt; cam.vy *= 0.5; moving = true; }
+        if (cam.y < lo) { cam.y += (lo - cam.y) * 0.18 * dt; cam.vy *= 0.5; moving = true; }
+        if (!reduce && sel < 0 && now - lastInput > 3000) { cam.yaw += 0.0007 * dt; moving = true; }
+      }
+      // lean into fast vertical moves
+      const lean = reduce ? 0 : Math.max(-0.14, Math.min(0.14, (drag ? 0 : cam.vy) * 0.9));
+      cam.pitch += (lean - cam.pitch) * 0.15 * dt;
+      if (Math.abs(cam.pitch) > 1e-4) moving = true;
+      // hover lift
+      for (const i of active) {
+        const target = i === hover ? 1 : 0;
+        inst[i * 4 + 1] += (target - inst[i * 4 + 1]) * Math.min(1, 0.22 * dt);
+        if (target === 0 && inst[i * 4 + 1] < 0.002) { inst[i * 4 + 1] = 0; active.delete(i); } else moving = true;
+      }
+      // pull out and put back
+      if (popDir !== 0) {
+        popT = Math.max(0, Math.min(1, popT + popDir * dt * (popDir > 0 ? 0.042 : 0.055)));
+        moving = true;
+        if (popDir > 0 && popT >= 1) { popDir = 0; pop.classList.add("in"); }
+        if (popDir < 0 && popT <= 0) { popDir = 0; inst[sel * 4 + 2] = 0; sel = -1; pop.hidden = true; }
+      }
+      if (sel >= 0 && popDir === 0 && popT >= 1 && flyAlpha > 0) { flyAlpha = Math.max(0, flyAlpha - 0.12 * dt); moving = true; }
+      if (popDir < 0) flyAlpha = 1;
+
+      // the pulled-out glyph
+      if (sel >= 0 && flyTarget) {
+        const { th, P } = slotOf(sel);
+        const e = popDir < 0 ? easeInOut(popT) : easeOutBack(popT);
+        const turn = ((((cam.yaw - th) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI)) - Math.PI;
+        const a = th + turn * Math.min(1, e);
+        const C = [0, 1, 2].map((k) => P[k] + (flyTarget.P[k] - P[k]) * e);
+        uni.set([C[0], C[1], C[2], TILE + (flyTarget.S - TILE) * e], 28);
+        uni.set([Math.cos(a), 0, Math.sin(a), flyAlpha], 32);
+        uni.set([-Math.sin(a), 0, Math.cos(a), 0], 36);
+      } else {
+        uni.set([0, 0, 0, 0], 28); uni.set([1, 0, 0, 0], 32); uni.set([0, 0, 1, 0], 36);
+      }
+
+      // uniforms
+      uni.set(viewProj(canvas.width / canvas.height), 0);
+      uni.set([0, cam.y, 0, cam.yaw], 16);
+      uni.set([R, COLS, ROWP, TILE], 20);
+      uni.set([ACOLS, CELL / atlasW, CELL / atlasH, N], 24);
+      uni.set([...colors.bg, 1], 40); uni.set([...colors.plate, 1], 44); uni.set([...colors.ink, 1], 48);
+      uni.set([...colors.cut, 1], 52); uni.set([...colors.rule, 1], 56);
+      uni.set([R * 0.9, R * 2.6, sel >= 0 ? Math.min(1, popT) * 0.6 : 0, 0], 60);
+      device.queue.writeBuffer(ubuf, 0, uni);
+      device.queue.writeBuffer(ibuf, 0, inst);
+
+      const enc = device.createCommandEncoder();
+      const pass = enc.beginRenderPass({
+        colorAttachments: [{ view: msaa.createView(), resolveTarget: ctx.getCurrentTexture().createView(), clearValue: { r: colors.bg[0], g: colors.bg[1], b: colors.bg[2], a: 1 }, loadOp: "clear", storeOp: "discard" }],
+        depthStencilAttachment: { view: depth.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "discard" },
+      });
+      pass.setPipeline(pipeline);
+      pass.setBindGroup(0, bind);
+      pass.draw(6, sel >= 0 && flyAlpha > 0 ? N + 1 : N);
+      pass.end();
+      device.queue.submit([enc.finish()]);
+
+      // HUD
+      const turnNow = -cam.y / ROWP, row = Math.max(0, Math.min(rowsCount() - 1, Math.floor(turnNow)));
+      const a = list[row * COLS], b = list[Math.min(N - 1, row * COLS + COLS - 1)];
+      if (a && b) $("#hud-row").textContent = `Turn ${row + 1} of ${rowsCount()}   U+${hex(a[0])}–U+${hex(b[0])}`;
+
+      if (moving || drag) kick();
+    }
+
+    new IntersectionObserver(([en]) => { visible = en.isIntersecting; if (visible) { last = performance.now(); kick(); } }).observe(canvas);
+    // colour changes need a redraw even when nothing moves
+    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => kick());
+
+    resize();
+    await rebuild();
+    return {
+      rebuild: (weightOnly) => rebuild(weightOnly),
+      setActive: (on) => { enabled = on; if (on) { resize(); kick(); } },
+      kick,
+    };
+  }
+
+  startWall().then((w) => {
+    wall = w;
+    if (w) return;
+    // no WebGPU: the grid is the whole library
+    $("#gview").hidden = true;
+    $("#glyphs-lede").textContent = "Every character in both fonts. This browser has no WebGPU, so they are shown as a grid. Select one to see it on its metrics.";
+    setView("grid");
+  });
 
   /* ---------- tester ---------- */
   const sample = $("#sample");
