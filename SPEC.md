@@ -1,9 +1,10 @@
 # Kerf design spec
 
-Kerf is a type family with two members that share one skeleton:
+Kerf is a type family with three members built from one source:
 
-- **Kerf Sans**, a proportional sans serif for interfaces and text.
-- **Kerf Mono**, a monospace for code, terminals and tables.
+- **Kerf Sans**, a squared proportional sans serif for interfaces and display.
+- **Kerf Round**, a rounder, universal sans serif for interfaces and text.
+- **Kerf Mono**, a monospace for code, terminals and tables, fitted from Kerf Sans.
 
 Kerf Sans starts from the outlines of [Inter](https://github.com/rsms/inter) (SIL OFL 1.1) and moves them toward the squared geometry of Camber (Eduardo Manso, Emtype Foundry). Kerf Mono is built from Kerf Sans and takes its approach to the monospace cell from the machine-readable faces of the 1970s, the same tradition Berkeley Mono (US Graphics) draws on.
 
@@ -132,6 +133,27 @@ U+2500 to U+259F are drawn by `tools/kerf_build/boxdraw.py`, not taken from Inte
 | Glyphs | Inter's full set | about 1,140 |
 | Scripts | Latin, Greek, Cyrillic (from Inter) | Latin |
 | Features | Inter's full feature set | mark positioning, `zero` |
+
+## Kerf Round
+
+Kerf Round is Inter moved toward a fusion of PP Mori (Pangram Pangram) and Geist (Vercel), with DM Sans and Nacelle as secondary references. All five were measured from their own webfonts at 1000 px, as Camber was; none of their outlines is used. The parameters live in `tools/kerf_build/profiles.py` as the `round` profile and run through the same transforms as Kerf Sans.
+
+| Measure (per 1000 em, Regular) | Inter | PP Mori | Geist | Kerf Round |
+|---|---|---|---|---|
+| Superellipse, O | 2.15 | 2.12 | 2.23 | about 2.13 |
+| O ink width ÷ H ink width | 1.14 | 1.19 | 1.23 | about 1.19 |
+| Terminal angle, c e s a | 16° | 0° | 2–4° | 3° |
+| o sidebearing | 51 | 41 | 44 | 45 |
+| Space | 281 | 225 | 250 | 250 |
+| Ascender ÷ cap height | 1.00 | 1.06 | 1.00 | 1.03 |
+
+- **Curves:** handles move 2 percent of the way toward a circle (rounding is negative squaring).
+- **Widths:** O and Q 1.045, C and G 1.035, D 1.02, o and c 1.02, e 1.015, s 1.03, a 1.10, E 1.055, F 1.05, L 1.03, S 1.025, with stems held.
+- **Terminals:** each angled cut between two curves is turned to 3 degrees. Both ends slide along their own curve's tangent with their handle. Inter's capitals and figures are already cut level.
+- **Ascenders:** lowercase strokes above the x-height stretch so ascenders rise 45 units (3 percent of the cap height) above the caps; accents on those letters rise with them.
+- **Letterforms:** Inter's G with spur (cv10), compact f (cv12) and a with a foot spur (cv16) become the defaults. Round dots and round punctuation stay.
+- **Joins:** bowl-to-stem notches fill 35 percent of the way, as in Kerf Sans but lighter.
+- **Weight:** Inter's own weight mapping.
 
 ## Not done yet
 

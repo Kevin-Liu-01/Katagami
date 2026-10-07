@@ -23,6 +23,9 @@ class Profile:
     promote: tuple[str, ...] = ()  # Inter feature files whose alternates become the default
     widths: dict[str, float] = field(default_factory=dict)  # horizontal ink scale per glyph
     spacing: int = 0  # units added to each sidebearing; negative tightens
+    space_width: int | None = None  # advance of the space; None keeps Inter's
+    terminal_angle: float | None = None  # degrees from horizontal for cut terminals; None keeps Inter's
+    ascender_lift: int = 0  # units the lowercase ascenders rise above the cap height
     weight_map: tuple[tuple[int, int], ...] = ((100, 100), (200, 200), (300, 300), (400, 400), (500, 500),
                                                (600, 580), (700, 670), (800, 780), (900, 900))
 
@@ -46,15 +49,28 @@ SANS = Profile(
                 (600, 620), (700, 740), (800, 840), (900, 900)),
 )
 
-# Placeholder values until the PP Mori / Geist measurements are in.
+# Inter + PP Mori + Geist, measured against DM Sans and Nacelle (SPEC.md, Kerf Round).
 ROUND = Profile(
     key="round",
     family="Kerf Round",
     file_stem="KerfRound",
-    square_upper=-0.08,
-    square_lower=-0.08,
+    # superellipse 2.13 (Mori 2.12, DM Sans 2.13) from Inter's 2.16
+    square_upper=-0.02,
+    square_lower=-0.02,
     counter_boost=1.0,
     notch_fill=0.35,
+    # G with spur, compact f, a with a foot spur
+    promote=("cv10-g-spur.fea", "cv12-compact-f.fea", "cv16-a-tail.fea"),
+    # toward the mean of Inter, Mori and Geist ink proportions
+    widths={
+        "O": 1.045, "Q": 1.045, "C": 1.035, "G": 1.035, "D": 1.02,
+        "o": 1.02, "c": 1.02, "e": 1.015, "s": 1.03, "a": 1.10,
+        "E": 1.055, "F": 1.05, "L": 1.03, "S": 1.025,
+    },
+    spacing=-11,  # o sidebearing 51 -> about 45 per 1000
+    space_width=512,  # 250 per 1000 (Inter 281, Mori 225, Geist 250)
+    terminal_angle=3.0,  # Inter 16 degrees, Mori and DM Sans 0, Geist 2-4
+    ascender_lift=45,  # ascenders 3 percent above the caps, like Mori
 )
 
 PROFILES = {p.key: p for p in (SANS, ROUND)}

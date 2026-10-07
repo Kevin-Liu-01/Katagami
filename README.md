@@ -1,8 +1,9 @@
 # Kerf
 
-Kerf is an open source type family with two members built on one skeleton:
+Kerf is an open source type family with three members:
 
 - **Kerf Sans**: a sans serif with squared curves, horizontal cuts and square punctuation. Variable weight from 100 to 900.
+- **Kerf Round**: a rounder, universal sans serif tuned toward PP Mori and Geist: wider rounds, near-flat terminals, tall ascenders and tighter spacing. Variable weight from 100 to 900.
 - **Kerf Mono**: the same letters fitted to a 0.6 em cell, with flagged i, l and j, a serif I, a footed 1, a centre-bar zero and generated box drawing. Variable weight from 100 to 700.
 
 Kerf Sans is derived from [Inter](https://github.com/rsms/inter) by Rasmus Andersson. It moves Inter toward the geometry of Camber by Eduardo Manso. Kerf Mono follows the monospace tradition that Berkeley Mono also comes from. Neither Camber nor Berkeley Mono contributed any outlines: both were measured as references only. See [SPEC.md](SPEC.md) for every design decision and the numbers behind it.
@@ -17,6 +18,7 @@ Kerf Sans is derived from [Inter](https://github.com/rsms/inter) by Rasmus Ander
 
 ```
 fonts/sans/KerfSans[wght].ttf
+fonts/round/KerfRound[wght].ttf
 fonts/mono/KerfMono[wght].ttf
 ```
 
@@ -27,7 +29,8 @@ Requires Python 3.11 or later and git.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-tools/build.sh          # both members
+tools/build.sh          # all members
+tools/build.sh round    # Kerf Round only
 tools/build.sh sans     # one member
 ```
 
@@ -41,7 +44,8 @@ The build fetches Inter's sources at a pinned commit into `vendor/inter`, conver
 
 | Path | Contents |
 |---|---|
-| `tools/build_sans.py` | Inter masters to Kerf Sans masters |
+| `tools/kerf_build/profiles.py` | the parameters of Kerf Sans and Kerf Round |
+| `tools/build_sans.py` | Inter masters to a proportional member's masters (`sans` or `round`) |
 | `tools/build_mono.py` | Kerf Sans masters to Kerf Mono masters |
 | `tools/kerf_build/outline.py` | point-preserving transforms: curve squaring, horizontal emboldening |
 | `tools/kerf_build/fontops.py` | glyph swaps, resizing, composite re-seating, naming |

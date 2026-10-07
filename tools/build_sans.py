@@ -12,6 +12,7 @@ Inter -> profile, in order (each step only where the profile asks for it):
 
 from __future__ import annotations
 
+import math
 import shutil
 import sys
 import unicodedata
@@ -180,6 +181,117 @@ def fill_notches(fonts, amount: float) -> None:
                 h.y = min(max(h.y, lo), hi)
 
 
+def find_terminals(glyph, stem_w: float, lo: float = 6, hi: float = 30) -> list[tuple[int, int, int]]:
+    """Straight cuts between two curves, angled lo..hi degrees from horizontal.
+
+    These are the stroke ends of c, e, s, a, C, G, S, 2, 3 and the rest.
+    Steeper cuts (the g tail) and vertical ones (the arm of r) are excluded.
+    Returns (contour, first end, second end).
+    """
+    out = []
+    for ci, c in enumerate(glyph.contours):
+        pts = c.points
+        n = len(pts)
+        for j, q in enumerate(pts):
+            i = (j - 1) % n
+            p = pts[i]
+            if q.type != "line" or p.type != "curve" or p.smooth or q.smooth or pts[(j + 1) % n].type is not None:
+                continue
+            dx, dy = q.x - p.x, q.y - p.y
+            if math.hypot(dx, dy) > 1.6 * stem_w or abs(dx) < 1:
+                continue
+            if lo <= abs(math.degrees(math.atan2(dy, dx))) % 180 <= hi or lo <= 180 - abs(math.degrees(math.atan2(dy, dx))) <= hi:
+                out.append((ci, i, j))
+    return out
+
+
+def level_terminals(fonts, angle: float) -> None:
+    """Turn each cut terminal to `angle` degrees, keeping its slope's direction.
+
+    Both ends slide along their own curve's tangent, with their handle, to
+    heights centred on the cut's old midpoint, so the stroke keeps its curve.
+    An end whose tangent is too flat to slide on is left where it is.
+    """
+    ref = fonts["Regular"]
+    sw = stem(ref)
+    plans = {g.name: find_terminals(g, sw) for g in ref
+             if g.contours and g.width and g.unicodes and unicodedata.category(chr(g.unicodes[0]))[0] in "LN"}
+    plans = {k: v for k, v in plans.items() if v and k != "g"}
+    tan = math.tan(math.radians(angle))
+    for f in fonts.values():
+        for name, terms in plans.items():
+            for ci, i, j in terms:
+                pts = f[name].contours[ci].points
+                n = len(pts)
+                p, q = pts[i], pts[j]
+                mid = (p.y + q.y) / 2
+                dy = math.copysign(abs(q.x - p.x) * tan, q.y - p.y)
+                for end, handle, y in ((p, pts[(i - 1) % n], mid - dy / 2), (q, pts[(j + 1) % n], mid + dy / 2)):
+                    ty, tx = end.y - handle.y, end.x - handle.x
+                    if abs(ty) < 0.2 * abs(tx):
+                        continue
+                    t = (y - end.y) / ty
+                    for pt in (end, handle):
+                        pt.x += tx * t
+                        pt.y += ty * t
+
+
+def lift_ascenders(fonts, lift: float) -> None:
+    """Stretch lowercase strokes above the x-height so ascenders rise by `lift`.
+
+    Points above the x-height scale away from it; accents sitting on a lifted
+    base move up with the base's top anchor.
+    """
+    if not lift:
+        return
+    ref = fonts["Regular"]
+    cat = lambda g: unicodedata.category(chr(g.unicodes[0])) if g.unicodes else ""  # noqa: E731
+    lower = {g.name for g in ref if g.contours and cat(g) == "Ll"}
+    # unencoded parts that only lowercase letters are built from (the stems of f and t);
+    # unencoded and private-use alternates do not count as other users
+    used_by = {}
+    for g in ref:
+        for c in g.components:
+            used_by.setdefault(c.baseGlyph, set()).add(cat(g))
+    lower |= {name for name, cats in used_by.items() if cats - {"", "Co"} == {"Ll"} and not ref[name].unicodes and ref[name].contours}
+    for f in fonts.values():
+        xh = f.info.xHeight
+        top = f["l"].getBounds(f).yMax
+        k = (top + lift - xh) / (top - xh)
+        moved: dict[str, float] = {}
+        for name in lower:
+            g = f[name]
+            if g.getBounds(f).yMax <= xh + 20:
+                continue
+            for c in g.contours:
+                for pt in c.points:
+                    if pt.y > xh:
+                        pt.y = xh + (pt.y - xh) * k
+            for a in g.anchors:
+                if a.name == "top":
+                    old = a.y
+                    a.y = xh + (a.y - xh) * k if a.y > xh else a.y
+                    moved[name] = a.y - old
+        for g in f:
+            if not g.components or g.contours or g.components[0].baseGlyph not in moved:
+                continue
+            for comp in g.components[1:]:
+                t = list(comp.transformation)
+                if f[comp.baseGlyph].width == 0 and t[5] >= 0:
+                    t[5] += moved[g.components[0].baseGlyph]
+                    comp.transformation = tuple(t)
+
+
+def set_space(fonts, width: int | None) -> None:
+    if width is None:
+        return
+    for f in fonts.values():
+        old = f["space"].width
+        for g in f:
+            if g.width == old and g.unicodes and unicodedata.category(chr(g.unicodes[0])) == "Zs" and not g.contours:
+                g.width = width
+
+
 def adjust_widths(fonts, widths: dict[str, float]) -> None:
     for f in fonts.values():
         old = snapshot(f)
@@ -218,12 +330,16 @@ def build(p: Profile) -> Path:
     if p.promote:
         promote_alternates(fonts, p.promote, FEATURES)
     shape_curves(fonts, p)
+    if p.terminal_angle is not None:
+        level_terminals(fonts, p.terminal_angle)
     if p.notch_fill:
         fill_notches(fonts, p.notch_fill)
     if p.g_tail:
         redraw_g_tail(fonts)
     adjust_widths(fonts, p.widths)
+    lift_ascenders(fonts, p.ascender_lift)
     respace(fonts, p.spacing)
+    set_space(fonts, p.space_width)
 
     out = ROOT / "build" / p.key
     if out.exists():

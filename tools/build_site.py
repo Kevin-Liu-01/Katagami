@@ -23,8 +23,9 @@ from kerf_build.fontops import decompose  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SITE = ROOT / "site"
-FONTS = {"sans": ROOT / "fonts/sans/KerfSans[wght].ttf", "mono": ROOT / "fonts/mono/KerfMono[wght].ttf"}
-WOFF2 = {"sans": "KerfSans.woff2", "mono": "KerfMono.woff2"}
+FONTS = {"sans": ROOT / "fonts/sans/KerfSans[wght].ttf", "round": ROOT / "fonts/round/KerfRound[wght].ttf",
+         "mono": ROOT / "fonts/mono/KerfMono[wght].ttf"}
+WOFF2 = {"sans": "KerfSans.woff2", "round": "KerfRound.woff2", "mono": "KerfMono.woff2"}
 OUTLINE_CHARS = {"K": "K", "e": "e", "r": "r", "f": "f", "O": "O", "o": "o"}
 INTER_UFO = ROOT / "build/ufo/Inter-Regular.ufo"
 KERF_UFO = ROOT / "build/sans/KerfSans-Regular.ufo"

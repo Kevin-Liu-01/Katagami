@@ -38,6 +38,7 @@
 
 @font-face { font-family: "Kerf Sans"; src: url("fonts/KerfSans.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
 @font-face { font-family: "Kerf Mono"; src: url("fonts/KerfMono.woff2") format("woff2"); font-weight: 100 700; font-display: swap; }
+@font-face { font-family: "Kerf Round"; src: url("fonts/KerfRound.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -282,6 +283,7 @@ footer .big { font-size: clamp(4rem, 16vw, 12rem); font-weight: 800; letter-spac
     <nav aria-label="Sections">
       <a href="#curves">Curves</a>
       <a href="#sans">Sans</a>
+      <a href="#round">Round</a>
       <a href="#mono">Mono</a>
       <a href="#glyphs">Glyphs</a>
       <a href="#try">Try</a>
@@ -366,6 +368,22 @@ footer .big { font-size: clamp(4rem, 16vw, 12rem); font-weight: 800; letter-spac
     </div>
   </section>
 
+  <section class="plate" id="round" style="font-family: 'Kerf Round', var(--sans)">
+    <div class="wrap">
+      <div class="plate-head">
+        <h2>Kerf Round</h2>
+        <p>The universal member. Inter's outlines moved toward PP Mori and Geist: curves a touch rounder, round letters wider, terminals cut nearly flat, ascenders above the caps, a spur on a and G, a compact f and tighter spacing. Nine weights from Thin to Black.</p>
+      </div>
+      <div class="display-line" style="font-weight:600">Good type, plainly spoken.</div>
+      <div class="ladder" id="ladder-round"></div>
+      <div class="reading">
+        <div><div class="cap">15 px / 400</div><p style="font-size:15px;line-height:1.55">Kerf Round is built for the places where a typeface should not be noticed first: dashboards, settings pages, long documents and the labels on buttons. It keeps Inter's coverage and features, and its weights line up with Kerf Sans.</p></div>
+        <div><div class="cap">18 px / 400</div><p style="font-size:18px;line-height:1.5">Its numbers come from measuring PP Mori and Geist: superellipse 2.13, terminals at 3 degrees and an o sidebearing of 45 per thousand.</p></div>
+        <div><div class="cap">24 px / 600</div><p style="font-size:24px;line-height:1.3;font-weight:600">Invite team, Export CSV, Upgrade plan.</p></div>
+      </div>
+    </div>
+  </section>
+
   <section class="plate" id="mono">
     <div class="wrap">
       <div class="plate-head">
@@ -397,6 +415,7 @@ footer .big { font-size: clamp(4rem, 16vw, 12rem); font-weight: 800; letter-spac
       <div class="glyph-tools">
         <div class="seg" role="group" aria-label="Family" id="gfam">
           <button type="button" data-v="sans" aria-pressed="true">Sans</button>
+          <button type="button" data-v="round" aria-pressed="false">Round</button>
           <button type="button" data-v="mono" aria-pressed="false">Mono</button>
         </div>
         <div class="chips" id="gfilter" role="group" aria-label="Filter"></div>
@@ -452,6 +471,7 @@ footer .big { font-size: clamp(4rem, 16vw, 12rem); font-weight: 800; letter-spac
         <div class="panel">
           <div class="seg" role="group" aria-label="Family" id="tfam">
             <button type="button" data-v="sans" aria-pressed="true">Sans</button>
+            <button type="button" data-v="round" aria-pressed="false">Round</button>
             <button type="button" data-v="mono" aria-pressed="false">Mono</button>
           </div>
           <div class="row"><div><label for="ts">Size</label><output id="tso">44 px</output></div><input id="ts" type="range" min="12" max="160" value="44"></div>
@@ -652,6 +672,7 @@ footer .big { font-size: clamp(4rem, 16vw, 12rem); font-weight: 800; letter-spac
   const S = D.sans.metrics, Mo = D.mono.metrics;
   const facts = [
     ["Kerf Sans", `${fmt(S.glyphs)} glyphs`], ["Sans weights", "100–900"],
+    ["Kerf Round", `${fmt(D.round.metrics.glyphs)} glyphs`], ["Round weights", "100–900"],
     ["Kerf Mono", `${fmt(Mo.glyphs)} glyphs`], ["Mono weights", "100–700"],
     ["Mono cell", `${Mo.cell} / ${Mo.upm}`], ["Format", "Variable TTF, WOFF2"],
     ["License", "SIL OFL 1.1"], ["Version", D.version],
@@ -705,6 +726,8 @@ footer .big { font-size: clamp(4rem, 16vw, 12rem); font-weight: 800; letter-spac
 
   /* ---------- sans ---------- */
   const NAMES = { 100: "Thin", 200: "ExtraLight", 300: "Light", 400: "Regular", 500: "Medium", 600: "SemiBold", 700: "Bold", 800: "ExtraBold", 900: "Black" };
+  $("#ladder-round").innerHTML = Object.entries(NAMES).map(([w, n]) =>
+    `<div class="ladder-row"><span class="w">${n} ${w}</span><span class="s" style="font-weight:${w}">Afternoon light, 0123456789</span></div>`).join("");
   $("#ladder").innerHTML = Object.entries(NAMES).map(([w, n]) =>
     `<div class="ladder-row"><span class="w">${n} ${w}</span><span class="s" style="font-weight:${w}">Hamburgefontsiv 0123456789</span></div>`).join("");
 
@@ -815,7 +838,8 @@ fi` },
   const gstate = { fam: "sans", filter: "all", view: "wall", cp: 0x52, w: 400 };
   const GROUPS = ["all", "letters", "figures", "punctuation", "symbols", "marks", "drawing"];
   const cells = $("#cells"), insp = $("#insp"), ginfo = $("#ginfo");
-  const famFont = (f) => (f === "sans" ? '"Kerf Sans"' : '"Kerf Mono"');
+  const FAMILY = { sans: '"Kerf Sans"', round: '"Kerf Round"', mono: '"Kerf Mono"' };
+  const famFont = (f) => FAMILY[f];
   const hex = (cp) => cp.toString(16).toUpperCase().padStart(4, "0");
   const show = (cp) => (cp >= 0x300 && cp <= 0x36f ? "◌" : "") + String.fromCodePoint(cp);
   const glyphList = () => D[gstate.fam].chars.filter((c) => gstate.filter === "all" || c[3] === gstate.filter);
@@ -840,7 +864,7 @@ fi` },
     t.textContent = show(c[0]);
     dl.innerHTML = [
       ["Code point", `U+${hex(c[0])}`], ["Glyph", c[1]],
-      ["Advance", gstate.fam === "sans" ? `${c[2]} at 400` : `${c[2]} (cell)`], ["Group", c[3]],
+      ["Advance", gstate.fam === "mono" ? `${c[2]} (cell)` : `${c[2]} at 400`], ["Group", c[3]],
     ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
   }
 
@@ -1069,7 +1093,7 @@ struct VOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
     let buildGen = 0;
 
     async function buildAtlas(glyphs, fam, weight, gen) {
-      const font = `${weight} 80px ${fam === "sans" ? '"Kerf Sans"' : '"Kerf Mono"'}`;
+      const font = `${weight} 80px ${famFont(fam)}`;
       await document.fonts.load(font);
       const rows = Math.max(BATCH_ROWS * 2, Math.ceil(glyphs.length / ACOLS / BATCH_ROWS) * BATCH_ROWS);
       const W = HC * ACOLS, H = HC * rows;
@@ -1448,14 +1472,17 @@ struct VOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
   renderFeats(); applyTester();
 
   /* ---------- specs ---------- */
+  const Ro = D.round.metrics;
   const rows = [
-    ["Units per em", S.upm, Mo.upm], ["Ascender", S.ascender, Mo.ascender], ["Cap height", S.capHeight, Mo.capHeight],
-    ["x-height", S.xHeight, Mo.xHeight], ["Descender", S.descender, Mo.descender], ["Advance", "proportional", Mo.cell],
-    ["Weight axis", "100–900", "100–700"], ["Glyphs", fmt(S.glyphs), fmt(Mo.glyphs)], ["Characters", fmt(S.characters), fmt(Mo.characters)],
-    ["Substitution features", D.sans.features.length, D.mono.features.length],
+    ["Units per em", S.upm, Ro.upm, Mo.upm], ["Ascender", S.ascender, Ro.ascender, Mo.ascender],
+    ["Cap height", S.capHeight, Ro.capHeight, Mo.capHeight], ["x-height", S.xHeight, Ro.xHeight, Mo.xHeight],
+    ["Descender", S.descender, Ro.descender, Mo.descender], ["Advance", "proportional", "proportional", Mo.cell],
+    ["Weight axis", "100–900", "100–900", "100–700"], ["Glyphs", fmt(S.glyphs), fmt(Ro.glyphs), fmt(Mo.glyphs)],
+    ["Characters", fmt(S.characters), fmt(Ro.characters), fmt(Mo.characters)],
+    ["Substitution features", D.sans.features.length, D.round.features.length, D.mono.features.length],
   ];
-  $("#metrics").innerHTML = `<thead><tr><th>Metric</th><th>Kerf Sans</th><th>Kerf Mono</th></tr></thead><tbody>` +
-    rows.map(([k, a, b]) => `<tr><td>${k}</td><td class="n">${a}</td><td class="n">${b}</td></tr>`).join("") + "</tbody>";
+  $("#metrics").innerHTML = `<thead><tr><th>Metric</th><th>Kerf Sans</th><th>Kerf Round</th><th>Kerf Mono</th></tr></thead><tbody>` +
+    rows.map(([k, ...v]) => `<tr><td>${k}</td>${v.map((x) => `<td class="n">${x}</td>`).join("")}</tr>`).join("") + "</tbody>";
 
   /* ---------- go ---------- */
   paintAllRanges();

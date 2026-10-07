@@ -154,7 +154,7 @@ def promote_alternates(fonts: dict, fea_files, features_dir: Path) -> None:
     ref = fonts["Regular"]
     pairs = []
     for fea in fea_files:
-        for a, b in re.findall(r"^sub (\S+) by (\S+);", (features_dir / fea).read_text(), re.M):
+        for a, b in re.findall(r"^sub\s+(\S+)\s+by\s+(\S+)\s*;", (features_dir / fea).read_text(), re.M):
             if a in ref and b in ref:
                 pairs.append((a, b))
     for f in fonts.values():
@@ -170,10 +170,18 @@ def respace(fonts: dict, delta: float) -> None:
     """
     if not delta:
         return
+    import unicodedata
+
+    ref = fonts["Regular"]
+    # nonspacing marks and glyphs narrower than the change keep their advance
+    skip = {g.name for g in ref
+            if g.width <= 2 * abs(delta)
+            or (g.unicodes and unicodedata.category(chr(g.unicodes[0])) in ("Mn", "Me"))
+            or g.name.endswith("comb")}
     for f in fonts.values():
         widths = {g.name: g.width for g in f}
         for g in f:
-            if widths[g.name] == 0:
+            if g.name in skip:
                 continue
             if g.contours:
                 for c in g.contours:
@@ -183,7 +191,7 @@ def respace(fonts: dict, delta: float) -> None:
                     a.x += delta
             elif g.components:
                 for comp in g.components[1:]:
-                    if widths.get(comp.baseGlyph, 1) == 0:
+                    if comp.baseGlyph in skip or widths.get(comp.baseGlyph, 1) == 0:
                         t = list(comp.transformation)
                         t[4] += delta
                         comp.transformation = tuple(t)
