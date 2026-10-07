@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build Kerf from Inter's sources. Usage: tools/build.sh [sans|mono|all]
+# Build Kerf from Inter's sources. Usage: tools/build.sh [sans|mono|round|all]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PY=.venv/bin/python
@@ -17,7 +17,7 @@ if [[ ! -d build/ufo ]]; then
 fi
 
 if [[ "$which" == sans || "$which" == all ]]; then
-  $PY tools/build_sans.py
+  $PY tools/build_sans.py sans
   mkdir -p fonts/sans
   .venv/bin/fontmake -m build/sans/KerfSans.designspace -o variable \
     --output-path 'fonts/sans/KerfSans[wght].ttf' --flatten-components
@@ -28,4 +28,11 @@ if [[ "$which" == mono || "$which" == all ]]; then
   mkdir -p fonts/mono
   .venv/bin/fontmake -m build/mono/KerfMono.designspace -o variable \
     --output-path 'fonts/mono/KerfMono[wght].ttf' --flatten-components
+fi
+
+if [[ "$which" == round || "$which" == all ]]; then
+  $PY tools/build_sans.py round
+  mkdir -p fonts/round
+  .venv/bin/fontmake -m build/round/KerfRound.designspace -o variable \
+    --output-path 'fonts/round/KerfRound[wght].ttf' --flatten-components
 fi

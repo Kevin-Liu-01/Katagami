@@ -1,10 +1,13 @@
-"""Build Kerf Sans masters from Inter's Thin, Regular and Black masters.
+"""Build a proportional Kerf member from Inter's Thin, Regular and Black masters.
 
-Inter -> Kerf Sans, in order:
-  1. square punctuation (Inter's ss07) becomes the default; round moves to ss07
-  2. quarter arcs squared toward a superellipse (planned on Regular)
-  3. round letters narrowed, E F L S widened, stems held constant
-  4. composites re-seated on their changed bases
+    python tools/build_sans.py [sans|round]
+
+Inter -> profile, in order (each step only where the profile asks for it):
+  1. Inter alternates promoted to the default (square punctuation, profile picks)
+  2. quarter arcs squared or rounded (planned on Regular)
+  3. bowl-to-stem notches filled, g tail redrawn
+  4. per-glyph widths changed with stems held, composites re-seated
+  5. sidebearings adjusted
 """
 
 from __future__ import annotations
@@ -18,35 +21,16 @@ from fontTools.designspaceLib import AxisDescriptor, DesignSpaceDocument, Instan
 
 sys.path.insert(0, str(Path(__file__).parent))
 from kerf_build.fontops import (  # noqa: E402
-    MASTERS, ROOT, assign_categories, load_inter_masters, reflow_composites, resize_glyph, set_names, snapshot, stem, swap_glyph_outlines,
+    MASTERS, ROOT, assign_categories, load_inter_masters, promote_alternates, reflow_composites, resize_glyph, respace,
+    set_names, snapshot, stem, swap_glyph_outlines,
 )
 from kerf_build.outline import apply_squaring, plan_squaring  # noqa: E402
+from kerf_build.profiles import PROFILES, Profile  # noqa: E402
 
-FAMILY = "Kerf Sans"
-OUT = ROOT / "build" / "sans"
-
-# Squaring strength: fraction of the way from Inter's handles to a square corner.
-SQUARE_UPPER = 0.36
-SQUARE_LOWER = 0.32
-COUNTER_BOOST = 1.25  # counters move further so corner strokes don't fatten
-JOIN_EASE = 0.3  # share of the squaring a handle gets where a curve meets a stem
-NOTCH_FILL = 0.45  # share of the way a bowl-to-stem notch corner moves toward the stem's end
+FEATURES = ROOT / "vendor" / "inter" / "src" / "features"
 G_TAIL_STROKE = 0.94  # width of the g tail's rising stroke, in stems
 G_TAIL_HANDLE = 0.72  # handle fraction of the g tail's turn, matching the squared lowercase
-
-# Horizontal ink scale per glyph. Rounds come in toward the straights.
-WIDTH = {
-    "O": 0.90, "Q": 0.90, "C": 0.92, "G": 0.92, "D": 0.96,
-    "o": 0.92, "c": 0.94, "e": 0.94,
-    "b": 0.96, "d": 0.96, "p": 0.96, "q": 0.96, "g": 0.96,
-    "E": 1.04, "F": 1.04, "L": 1.03, "S": 1.02,
-}
-
 KEEP_ROUND = ("circle", "circled", "ring", "degree", "bullet", "dotted")
-
-# Kerf weights sit heavier than Inter's from SemiBold up (Camber Bold ~ Inter 780).
-WEIGHT_MAP = [(100, 100), (200, 200), (300, 300), (400, 400), (500, 500),
-              (600, 620), (700, 740), (800, 840), (900, 900)]
 INSTANCES = ["Thin", "ExtraLight", "Light", "Regular", "Medium", "SemiBold", "Bold", "ExtraBold", "Black"]
 
 
@@ -74,7 +58,7 @@ def promote_square_punctuation(fonts) -> None:
         f.features.text = f.features.text.replace('name "Square punctuation";', 'name "Round punctuation";')
 
 
-def square_curves(fonts) -> None:
+def shape_curves(fonts, p: Profile) -> None:
     ref = fonts["Regular"]
     for g in ref:
         if not g.contours or keeps_round(ref, g.name):
@@ -82,9 +66,9 @@ def square_curves(fonts) -> None:
         plan = plan_squaring(g)
         if not plan:
             continue
-        s = SQUARE_UPPER if is_upper(ref, g.name) else SQUARE_LOWER
+        s = p.square_upper if is_upper(ref, g.name) else p.square_lower
         for f in fonts.values():
-            apply_squaring(f[g.name], plan, s, min(0.9, s * COUNTER_BOOST), JOIN_EASE)
+            apply_squaring(f[g.name], plan, s, min(0.9, s * p.counter_boost), p.join_ease)
 
 
 def redraw_g_tail(fonts) -> None:
@@ -171,7 +155,7 @@ def find_notches(glyph, xheight: float) -> list[tuple[int, int, list[int], float
     return out
 
 
-def fill_notches(fonts) -> None:
+def fill_notches(fonts, amount: float) -> None:
     """Move each notch corner part of the way toward its stem's end.
 
     Inter's heavy weights cut deep notches where bowls join stems, which
@@ -187,7 +171,7 @@ def fill_notches(fonts) -> None:
             g = f[name]
             for ci, corner, moving, ref, far in notches:
                 pts = g.contours[ci].points
-                dy = (ref - pts[corner].y) * NOTCH_FILL
+                dy = (ref - pts[corner].y) * amount
                 for k in moving:
                     pts[k].y += dy
                 # the handle stays between the corner and the curve's far end,
@@ -196,57 +180,65 @@ def fill_notches(fonts) -> None:
                 h.y = min(max(h.y, lo), hi)
 
 
-def adjust_widths(fonts) -> None:
+def adjust_widths(fonts, widths: dict[str, float]) -> None:
     for f in fonts.values():
         old = snapshot(f)
         sw = stem(f)
-        maps = {name: resize_glyph(f, name, k, sw) for name, k in WIDTH.items()}
+        maps = {name: resize_glyph(f, name, k, sw) for name, k in widths.items()}
         reflow_composites(f, maps, old)
 
 
-def write_designspace(paths: dict[str, Path]) -> Path:
+def write_designspace(p: Profile, out_dir: Path, paths: dict[str, Path]) -> Path:
     ds = DesignSpaceDocument()
     ax = AxisDescriptor()
     ax.tag, ax.name, ax.minimum, ax.default, ax.maximum = "wght", "Weight", 100, 400, 900
-    ax.map = WEIGHT_MAP
+    ax.map = list(p.weight_map)
     ds.addAxis(ax)
+    design = dict(p.weight_map)
     for style, w in MASTERS.items():
         s = SourceDescriptor()
         s.path = str(paths[style])
-        s.familyName, s.styleName = FAMILY, style
-        s.location = {"Weight": dict(WEIGHT_MAP)[w]}
+        s.familyName, s.styleName = p.family, style
+        s.location = {"Weight": design[w]}
         ds.addSource(s)
     for i, style in enumerate(INSTANCES):
         inst = InstanceDescriptor()
-        inst.familyName, inst.styleName = FAMILY, style
-        inst.location = {"Weight": dict(WEIGHT_MAP)[(i + 1) * 100]}
+        inst.familyName, inst.styleName = p.family, style
+        inst.location = {"Weight": design[(i + 1) * 100]}
         ds.addInstance(inst)
-    out = OUT / "KerfSans.designspace"
+    out = out_dir / f"{p.file_stem}.designspace"
     ds.write(out)
     return out
 
 
-def main() -> None:
+def build(p: Profile) -> Path:
     fonts = load_inter_masters()
-    promote_square_punctuation(fonts)
-    square_curves(fonts)
-    fill_notches(fonts)
-    redraw_g_tail(fonts)
-    adjust_widths(fonts)
+    if p.square_punctuation:
+        promote_square_punctuation(fonts)
+    if p.promote:
+        promote_alternates(fonts, p.promote, FEATURES)
+    shape_curves(fonts, p)
+    if p.notch_fill:
+        fill_notches(fonts, p.notch_fill)
+    if p.g_tail:
+        redraw_g_tail(fonts)
+    adjust_widths(fonts, p.widths)
+    respace(fonts, p.spacing)
 
-    if OUT.exists():
-        shutil.rmtree(OUT)
-    OUT.mkdir(parents=True)
-    shutil.copytree(ROOT / "vendor" / "inter" / "src" / "features", OUT / "features")
+    out = ROOT / "build" / p.key
+    if out.exists():
+        shutil.rmtree(out)
+    out.mkdir(parents=True)
+    shutil.copytree(FEATURES, out / "features")
     paths = {}
     for style, f in fonts.items():
-        set_names(f, FAMILY, style, MASTERS[style])
+        set_names(f, p.family, style, MASTERS[style])
         assign_categories(f)
-        p = OUT / f"KerfSans-{style}.ufo"
-        f.save(p, overwrite=True)
-        paths[style] = p
-    print(write_designspace(paths))
+        path = out / f"{p.file_stem}-{style}.ufo"
+        f.save(path, overwrite=True)
+        paths[style] = path
+    return write_designspace(p, out, paths)
 
 
 if __name__ == "__main__":
-    main()
+    print(build(PROFILES[sys.argv[1] if len(sys.argv) > 1 else "sans"]))

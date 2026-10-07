@@ -143,6 +143,55 @@ def reflow_composites(font, maps: dict[str, XMap], before: dict[str, tuple[float
             visit(g.name)
 
 
+def promote_alternates(fonts: dict, fea_files, features_dir: Path) -> None:
+    """Make the alternates named in Inter's feature files the default glyphs.
+
+    Each `sub a by b;` swaps a and b, so the feature now turns the default
+    back into Inter's original. Pairs are read on Regular and applied to all.
+    """
+    import re
+
+    ref = fonts["Regular"]
+    pairs = []
+    for fea in fea_files:
+        for a, b in re.findall(r"^sub (\S+) by (\S+);", (features_dir / fea).read_text(), re.M):
+            if a in ref and b in ref:
+                pairs.append((a, b))
+    for f in fonts.values():
+        for a, b in pairs:
+            swap_glyph_outlines(f, a, b)
+
+
+def respace(fonts: dict, delta: float) -> None:
+    """Add `delta` units to both sidebearings of every spacing glyph.
+
+    Outlines and anchors move right by delta and advances grow by 2 delta.
+    Composites follow their base; marks inside them move with the base.
+    """
+    if not delta:
+        return
+    for f in fonts.values():
+        widths = {g.name: g.width for g in f}
+        for g in f:
+            if widths[g.name] == 0:
+                continue
+            if g.contours:
+                for c in g.contours:
+                    for p in c.points:
+                        p.x += delta
+                for a in g.anchors:
+                    a.x += delta
+            elif g.components:
+                for comp in g.components[1:]:
+                    if widths.get(comp.baseGlyph, 1) == 0:
+                        t = list(comp.transformation)
+                        t[4] += delta
+                        comp.transformation = tuple(t)
+                for a in g.anchors:
+                    a.x += delta
+            g.width = round(g.width + 2 * delta)
+
+
 def assign_categories(font) -> None:
     """Write GDEF classes explicitly.
 
