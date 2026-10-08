@@ -5,6 +5,7 @@
     python tools/proof.py family -> build/proofs/family.png
     python tools/proof.py round  -> build/proofs/round-vs-inter.png
     python tools/proof.py text   -> build/proofs/text-vs-inter.png
+    python tools/proof.py detail -> build/proofs/detail.png (the letters under revision, large)
 """
 
 from __future__ import annotations
@@ -95,6 +96,10 @@ def main(which: str) -> None:
         rows = [("Inter 400", INTER, 400), ("Kerf Text 400", TEXT, 400), ("Kerf Sans 400", SANS, 400),
                 ("Inter 700", INTER, 700), ("Kerf Text 700", TEXT, 700)]
         sheet("text-vs-inter", [("Kerf Text vs Inter", None, rows, LINES + ["Revenue grew 12% in the third quarter."])])
+    elif which == "detail":
+        rows = [(f"{n} {w}", path, w) for w in (400, 900) for n, path in
+                (("Inter", INTER), ("Sans", SANS), ("Round", ROUND), ("Text", TEXT))]
+        sheet("detail", [("Revision letters", None, rows, ["gmbdpqyt aeg"])], width=2400, size=200, gap=1.2)
     elif which == "family":
         rows = [("Kerf Sans", SANS, 400), ("Kerf Mono", MONO, 400)]
         sheet("family", [("Kerf family", None, rows, LINES)])

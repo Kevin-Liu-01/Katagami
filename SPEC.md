@@ -75,7 +75,15 @@ Accented and composite glyphs are re-seated on their changed bases, and their ma
 
 ## Terminals
 
-The cut ends of c, e, s and a are cut again along a level line (0 degrees) through the old cut's midpoint, from Inter's 16 degrees. Each edge of the stroke is split where it crosses the new line by de Casteljau subdivision: the edge that ran past it is trimmed, the edge that stopped short is extended along its own curve, and both handles of each edge move with the split. The edges stay pieces of their original curves, so the letter is not warped. Inter's capitals and figures are already cut level. The g's tail, cut at 33 degrees in Inter, is recut level the same way. The f's crossbar, which starts inside the compact f's stem, reaches 0.4 stems past the stem's left edge. Kerf Round takes the same cuts and the same f.
+The cut ends of c, e, s and a are cut again along a level line (0 degrees) through the old cut's midpoint, from Inter's 16 degrees. Each edge of the stroke is split where it crosses the new line by de Casteljau subdivision: the edge that ran past it is trimmed, the edge that stopped short is extended along its own curve, and both handles of each edge move with the split. The edges stay pieces of their original curves, so the letter is not warped. Inter's capitals and figures are already cut level. The f's crossbar, which starts inside the compact f's stem, reaches 0.4 stems past the stem's left edge. Kerf Round takes the same cuts and the same f.
+
+Three tails are redrawn, keeping each glyph's point count so the masters stay compatible:
+
+- **g:** the tail is the right side's turn into the bottom of the hook, mirrored about the bottom's centre and cut level at Inter's terminal height. The curl has the same curve and squaring as the bowl side, the rising stroke is as wide as the stem, and the level cut is square to the stroke.
+- **y:** the tail comes down the right arm's diagonal, turns through a quarter turn and runs level to a vertical cut. The cut keeps Inter's position and length.
+- **t:** the hook runs level from its bottom to a vertical cut at Inter's terminal position.
+
+The quarter turns use the member's handle fraction: 0.60 plus 0.40 times the lowercase squaring and counter boost, so Kerf Sans turns square, Kerf Round less so, and Kerf Text round.
 
 ## Figures
 
@@ -83,7 +91,9 @@ Inter's alternate figures become the defaults: a 1 with a long flag (cv01), an o
 
 ## Joins
 
-Inter's heavy weights cut deep notches where bowls join stems, which leaves a hairline in bold a and u. Each such notch (a corner where a curve meets a stem edge that runs to the baseline or x-height: a, u, n, m, h, b, p, r) moves 45 percent of the way toward the baseline or x-height, with its step and handle. The handle stays between the corner and the far end of its curve, so the bowl flattens into the join instead of dipping below the baseline.
+Inter's heavy weights cut deep notches where bowls join stems, which leaves a hairline in bold a and u. Each such notch (a corner where a curve meets a stem edge that runs to the baseline or x-height: a, u, n, m, h, b, p, r) moves 45 percent of the way toward the baseline or x-height, with its step and handle. The handle stays between the corner and the far end of its curve, so the bowl flattens into the join instead of dipping below the baseline. The joins of b, d, p and q (and their drawn variants) move 70 percent of the way, because their full bowls leave the thinnest strokes.
+
+The dip between the arches of m, where the second arch leaves the middle stem, rises half of the way to the x-height. The curves on both sides are squashed vertically into the shorter span, so their handles keep their direction and the second arch keeps its weight where it meets the first.
 
 ## Punctuation
 
@@ -154,14 +164,20 @@ Kerf Round sits between Kerf Sans and Inter: geometric bowls that are less squar
 
 ## Kerf Text
 
-Kerf Text is the member for reading: it drops the squaring and moves Inter toward PP Mori's wider, softer proportions. It is the least technical member and the one the converter on the website uses for serif text. The parameters are the `text` profile.
+Kerf Text is the member for reading: it drops the squaring and moves Inter toward PP Mori's proportions. It is the least technical member and the one the converter on the website uses for serif text. The parameters are the `text` profile.
 
+- **Size:** every glyph, advance, anchor and kerning value is scaled by 0.96 about the origin, with the line height unchanged. The x-height becomes 0.524 em and the cap height 0.699 em (PP Mori 0.53 and 0.70, Inter 0.546 and 0.728).
 - **Curves:** a slight negative squaring (0.02), so bowls are a touch rounder than Inter's.
-- **Widths:** round letters wider (O and Q 1.05, C and G 1.04, o 1.03, e and s 1.025), a 1.10, and the narrow capitals opened (E 1.06, F 1.05, L and S 1.03).
+- **Widths:** round letters wider (O and Q 1.05, C and G 1.04, o 1.03, e and s 1.025), the narrow capitals opened (E 1.06, F 1.05, L and S 1.03), and the other capitals 3 to 4 percent wider (H 1.04), toward Mori's H of 0.768 em.
+- **a:** redrawn. The bowl's top leaves the stem as a level stroke at 0.62 of the x-height, meets the stem square, runs to the middle of the bowl and turns down into the bowl's side; the counter's top follows at the same thickness. The stem ends in a foot that runs level to a vertical cut, as t's hook does. The arch's terminal is cut level.
 - **Terminals:** c, e, s, a and g cut level, as PP Mori cuts them.
-- **Letterforms:** Kerf's long-flag 1, Inter's G with spur (cv10) and a with tail (cv16). Everything else is Inter's.
+- **Letterforms:** Kerf's long-flag 1 and Inter's G with spur (cv10). The single-storey a stays available as cv11.
 - **Weight:** the heavy weights are lighter than Inter's (700 is Inter's 640, 800 its 760), as PP Mori's are.
-- **Spacing:** sidebearings 6 units tighter, space 512 units.
+- **Spacing:** sidebearings 14 units tighter before scaling, so o's sidebearing is about 42 per 1000 (Inter 51, Mori 41); space 512 units before scaling.
+
+## Alternates and their accented forms
+
+When an alternate becomes the default, its accented forms are swapped with it (aacute with aacute.2, Gbreve with Gbreve.1). The swapped accented forms are composites of the swapped base glyphs, so their components are renamed through the same swap. The default á is then built on the new a, not on Inter's original.
 
 ## Not done yet
 

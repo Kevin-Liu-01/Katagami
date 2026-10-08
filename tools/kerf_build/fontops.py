@@ -159,9 +159,16 @@ def promote_alternates(fonts: dict, fea_files, features_dir: Path) -> None:
         for a, b in re.findall(r"^sub\s+(\S+)\s+by\s+(\S+)\s*;", (features_dir / fea).read_text(), re.M):
             if a in ref and b in ref:
                 pairs.append((a, b))
+    # A swapped composite (aacute and aacute.2) points at a swapped base (a and a.2),
+    # so its components follow the swap too: the default aacute is built on the new a.
+    swap = {a: b for a, b in pairs} | {b: a for a, b in pairs}
     for f in fonts.values():
         for a, b in pairs:
             swap_glyph_outlines(f, a, b)
+        for name in swap:
+            for comp in f[name].components:
+                if comp.baseGlyph in swap:
+                    comp.baseGlyph = swap[comp.baseGlyph]
 
 
 def respace(fonts: dict, delta: float) -> None:
