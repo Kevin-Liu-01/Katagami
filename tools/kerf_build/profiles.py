@@ -26,6 +26,7 @@ class Profile:
     space_width: int | None = None  # advance of the space; None keeps Inter's
     terminal_angle: float | None = None  # degrees from horizontal for cut terminals; None keeps Inter's
     ascender_lift: int = 0  # units the lowercase ascenders rise above the cap height
+    f_overhang: float = 0.0  # stems the f crossbar reaches past the stem's left edge
     weight_map: tuple[tuple[int, int], ...] = ((100, 100), (200, 200), (300, 300), (400, 400), (500, 500),
                                                (600, 580), (700, 670), (800, 780), (900, 900))
 
@@ -41,7 +42,8 @@ SANS = Profile(
     square_punctuation=True,
     # flat-top 3, open 4, straight-stem 6 and 9, long-flag 1, compact f
     promote=DIGITS + ("cv12-compact-f.fea",),
-    terminal_angle=0.0,  # Camber cuts c, e, s and a level
+    terminal_angle=0.0,  # Camber cuts c, e, s, a and g level
+    f_overhang=0.4,
     widths={
         "O": 0.90, "Q": 0.90, "C": 0.92, "G": 0.92, "D": 0.96,
         "o": 0.92, "c": 0.94, "e": 0.94,
@@ -68,7 +70,8 @@ ROUND = Profile(
     promote=DIGITS + ("cv10-g-spur.fea", "cv12-compact-f.fea"),
     spacing=-3,
     space_width=552,  # 270 per 1000 (Inter 281)
-    terminal_angle=0.0,  # c, e, s and a cut level, as in Kerf Sans
+    terminal_angle=0.0,  # c, e, s, a and g cut level, as in Kerf Sans
+    f_overhang=0.4,
 )
 
 PROFILES = {p.key: p for p in (SANS, ROUND)}

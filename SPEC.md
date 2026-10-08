@@ -29,9 +29,9 @@ All values are in font units at 2048 units per em, inherited from Inter.
 | x-height | 1118 | 0.546 |
 | Ascender | 1984 | 0.969 |
 | Descender | -494 | -0.241 |
-| Mono cell (advance) | 1232 | 0.602 |
+| Mono cell (advance) | 1280 | 0.625 |
 
-The mono cell is 0.6 em rounded up to a multiple of 8.
+The mono cell is 0.625 em. At that width Kerf's x-height sits at 0.87 of the cell, the proportion Berkeley Mono has at 0.6 em, so the letters read at the same width as a 0.6 em mono with a smaller x-height. The glyphs keep Kerf Sans' vertical metrics, so mono and sans mix inline.
 
 ## Curve shape
 
@@ -75,7 +75,7 @@ Accented and composite glyphs are re-seated on their changed bases, and their ma
 
 ## Terminals
 
-The cut ends of c, e, s and a are cut again along a level line (0 degrees) through the old cut's midpoint, from Inter's 16 degrees. Each edge of the stroke is split where it crosses the new line by de Casteljau subdivision: the edge that ran past it is trimmed, the edge that stopped short is extended along its own curve, and both handles of each edge move with the split. The edges stay pieces of their original curves, so the letter is not warped. Inter's capitals and figures are already cut level. The g keeps Inter's tail and its angled terminal. Kerf Round takes the same cuts.
+The cut ends of c, e, s and a are cut again along a level line (0 degrees) through the old cut's midpoint, from Inter's 16 degrees. Each edge of the stroke is split where it crosses the new line by de Casteljau subdivision: the edge that ran past it is trimmed, the edge that stopped short is extended along its own curve, and both handles of each edge move with the split. The edges stay pieces of their original curves, so the letter is not warped. Inter's capitals and figures are already cut level. The g's tail, cut at 33 degrees in Inter, is recut level the same way. The f's crossbar, which starts inside the compact f's stem, reaches 0.4 stems past the stem's left edge. Kerf Round takes the same cuts and the same f.
 
 ## Figures
 
@@ -103,11 +103,12 @@ The weight axis runs 100 to 900 in Kerf Sans and 100 to 700 in Kerf Mono. From S
 
 ### Fitting glyphs to the cell
 
-Every outline is scaled horizontally about its centre, then centred in the 1232-unit cell. The scale is decided on the Regular master and used for all masters.
+Every outline is fitted to the 1280-unit cell. Each decision is made on the Regular master and used for all masters.
 
-- **Wide glyphs** are condensed to at most 76 percent of the cell (caps, symbols) or 72 percent (lowercase).
-- **Stem compensation.** Condensing thins vertical stems. Glyphs scaled to 0.85 or more get their full stem weight back. Narrower glyphs (m, w, M, W) get back only part of it, down to 45 percent at a scale of 0.55, so their counters keep room.
-- **Narrow letters** are stretched to a minimum share of the cell: f, s, c and z to 66 percent, t and J to 62 percent, r to 60 percent, dotless j to 50 percent.
+- **Even widths.** A monospace reads evenly when its letters fill the cell evenly. Letters move toward a target ink width, keeping a quarter of their own width so the alphabet does not turn uniform: lowercase 0.69 of the cell, round lowercase (o c e b d p q g a s) 0.74, capitals 0.74, round capitals 0.79, figures 0.72. Stems are held at their true thickness.
+- **Wide letters fill the cell.** m 0.84, w 0.94, M 0.82, W 0.94, æ œ Æ Œ 0.88. Where they still condense, the stems keep only part of their weight (down to 45 percent at a scale of 0.55), which is how a monospace m finds room for its counters.
+- **Arms, around a fixed stem.** f, t, r, dotless j and J keep their stem and stretch only what lies to its left and right, so arms and crossbars reach into the cell: f 0.70, t 0.68, r 0.58, dotless j 0.54, J 0.64.
+- **Narrow by identity.** i, l, I and 1 keep their own width; their flags and slabs fill the cell.
 - Glyphs built from parts, such as the colon or t, are decomposed first and fitted as one outline. Accented letters keep their components and marks follow their base.
 
 ### Disambiguation

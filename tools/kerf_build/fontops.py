@@ -74,6 +74,8 @@ def composites_to_flatten(font) -> list[str]:
             g.contours
             or is_mark(font, g.components[0].baseGlyph)
             or any(not is_mark(font, c.baseGlyph) for c in g.components[1:])
+            # flipped or rotated parts (an arrow from another arrow, ¿ from ?)
+            or any(tuple(c.transformation)[:4] != (1, 0, 0, 1) for c in g.components)
         )
     ]
 

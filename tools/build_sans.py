@@ -211,8 +211,8 @@ def fill_notches(fonts, amount: float) -> None:
 def find_terminals(glyph, stem_w: float, lo: float = 6, hi: float = 30) -> list[tuple[int, int, int]]:
     """Straight cuts between two curves, angled lo..hi degrees from horizontal.
 
-    These are the stroke ends of c, e, s, a, C, G, S, 2, 3 and the rest.
-    Steeper cuts (the g tail) and vertical ones (the arm of r) are excluded.
+    These are the stroke ends of c, e, s, a, g and the rest. Vertical cuts
+    (the arm of r) are excluded.
     Returns (contour, first end, second end).
     """
     out = []
@@ -282,9 +282,9 @@ def level_terminals(fonts, angle: float) -> None:
     """
     ref = fonts["Regular"]
     sw = stem(ref)
-    plans = {g.name: find_terminals(g, sw) for g in ref
+    plans = {g.name: find_terminals(g, sw, hi=40 if g.name == "g" else 30) for g in ref
              if g.contours and g.width and g.unicodes and unicodedata.category(chr(g.unicodes[0]))[0] in "LN"}
-    plans = {k: v for k, v in plans.items() if v and k != "g"}
+    plans = {k: v for k, v in plans.items() if v}
     for f in fonts.values():
         for name, terms in plans.items():
             for ci, i, j in terms:
@@ -313,6 +313,42 @@ def level_terminals(fonts, angle: float) -> None:
                     pt.x, pt.y = x, y
                 for pt, (x, y) in zip(out[:3], right[:3]):
                     pt.x, pt.y = x, y
+
+
+def f_crossbar_overhang(fonts, overhang: float) -> None:
+    """Let the f's crossbar reach `overhang` stems past the stem's left edge.
+
+    The compact f's bar starts inside its stem, so nothing shows on the left.
+    The bar's left end moves out; the glyph shifts right by half the gain and
+    its advance grows by the same half, so its spacing stays balanced.
+    """
+    if not overhang:
+        return
+    for f in fonts.values():
+        g = f["f"]
+        bars = [c for c in g.contours if len(c.points) == 4]
+        if len(bars) != 1 or not g.components:
+            continue
+        part = g.components[0]
+        stem_left = f[part.baseGlyph].getBounds(f).xMin + part.transformation[4]
+        target = stem_left - overhang * stem(f)
+        bar = bars[0]
+        left = min(p.x for p in bar.points)
+        if target >= left:
+            continue
+        for p in bar.points:
+            if abs(p.x - left) < 1:
+                p.x = target
+        shift = (left - target) / 2
+        for c in g.contours:
+            for p in c.points:
+                p.x += shift
+        t = list(part.transformation)
+        t[4] += shift
+        part.transformation = tuple(t)
+        for a in g.anchors:
+            a.x += shift
+        g.width = round(g.width + shift)
 
 
 def lift_ascenders(fonts, lift: float) -> None:
@@ -412,6 +448,7 @@ def build(p: Profile) -> Path:
     shape_curves(fonts, p)
     if p.terminal_angle is not None:
         level_terminals(fonts, p.terminal_angle)
+    f_crossbar_overhang(fonts, p.f_overhang)
     if p.notch_fill:
         fill_notches(fonts, p.notch_fill)
     if p.g_tail:

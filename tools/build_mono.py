@@ -3,8 +3,9 @@
 Kerf Sans -> Kerf Mono:
   1. the disambiguation alternates become the default (serif I, tailed l, flagged 1)
   2. a Bold master is interpolated, so the mono runs Thin..Bold
-  3. every glyph is fitted into a 1232-unit cell (0.6 em): wide glyphs
-     condensed with stems partly held, narrow letters stretched, the rest centred
+  3. every glyph is fitted into a 1280-unit cell (0.625 em): letters move
+     toward even ink widths with stems held, wide ones fill most of the cell,
+     f t r j J stretch their arms around a fixed stem, the rest is centred
   4. dotless i is redrawn with a flag and a foot slab; l and dotless j get a
      flag; zero gets a centre bar
   5. box drawing and block elements are drawn on the cell grid
@@ -35,10 +36,25 @@ SANS = ROOT / "build" / "sans"
 OUT = ROOT / "build" / "mono"
 FEATURES = ROOT / "vendor" / "inter" / "src" / "features"
 
-CELL = 1232
-MAX_INK = {"upper": 0.76, "lower": 0.72, "other": 0.76}  # share of the cell
-# narrow letters stretched to at least this share of the cell
-STRETCH = {"f": 0.66, "t": 0.62, "r": 0.60, "ȷ": 0.50, "J": 0.62, "s": 0.66, "c": 0.66, "z": 0.66}
+CELL = 1280  # 0.625 em: Kerf's x-height sits at 0.87 of the cell, as Berkeley Mono's does at 0.6 em
+MAX_INK = {"upper": 0.76, "lower": 0.72, "other": 0.76}  # share of the cell, for symbols
+# A monospace reads evenly when its letters fill the cell evenly (Berkeley
+# Mono: n 0.70, o 0.75, H 0.74, O 0.79 of the cell). Letters move toward
+# these ink widths, keeping KEEP_NATURAL of their own width so the alphabet
+# does not turn uniform.
+TARGET = {"lower": 0.69, "lower_round": 0.74, "upper": 0.70, "upper_round": 0.75, "figure": 0.72}
+# no master's ink may pass these shares of the cell (Bold is wider than Regular)
+FILL_MAX = {"wide": 0.96, "other": 0.92}
+ROUND_LOWER = set("ocebdpqgas")
+ROUND_UPPER = set("OQCGDS")
+# wide letters fill most of the cell instead of being squeezed (Berkeley: m 0.84, w 0.97)
+WIDE = {"m": 0.84, "w": 0.94, "M": 0.82, "W": 0.94, "æ": 0.88, "œ": 0.88, "Æ": 0.88, "Œ": 0.88}
+KEEP_NATURAL = 0.25
+NATURAL = set("iljIJ1ıȷ")  # narrow by identity; J and dotless j get arms instead
+# f, t, r, dotless j and J keep their stem and stretch only what lies left and
+# right of it, so arms and crossbars reach into the cell like Berkeley Mono's.
+# (share of the cell, height of the stem slice as a share of x-height or cap)
+ARMS = {"f": (0.70, 0.3), "t": (0.68, 0.3), "r": (0.58, 0.3), "ȷ": (0.54, 0.5), "J": (0.64, 0.6)}
 # Wide glyphs keep only part of the stem compensation. The stems thin, which
 # is how a monospace m finds room for its counters.
 COMP_FLOOR = 0.45
@@ -113,6 +129,12 @@ def ink_width(font, name: str) -> float:
     return b.xMax - b.xMin
 
 
+def base_letter(g: Glyph) -> str:
+    if not g.unicodes:
+        return ""
+    return unicodedata.normalize("NFD", chr(g.unicodes[0]))[0]
+
+
 def plan_scales(ref) -> dict[str, float]:
     """Horizontal scale for each outline glyph, decided on Regular."""
     scales = {}
@@ -120,15 +142,81 @@ def plan_scales(ref) -> dict[str, float]:
         if not g.contours or g.components or g.width == 0:
             continue
         ink = ink_width(ref, g.name)
-        first = chr(g.unicodes[0]) if g.unicodes else ""
-        limit = MAX_INK[kind(g)] * CELL
-        scale = 1.0
-        if ink > limit:
-            scale = limit / ink
-        elif first in STRETCH and ink < STRETCH[first] * CELL:
-            scale = min(1.4, STRETCH[first] * CELL / ink)
-        scales[g.name] = scale
+        if ink <= 0:
+            continue
+        ch = base_letter(g)
+        cat = unicodedata.category(chr(g.unicodes[0])) if g.unicodes else ""
+        if ch in ARMS or ch in NATURAL:
+            target = min(ink, MAX_INK["lower"] * CELL)
+        elif ch in WIDE:
+            target = min(ink, WIDE[ch] * CELL)
+        elif cat in ("Ll", "Lu", "Nd"):
+            share = (TARGET["figure"] if cat == "Nd"
+                     else TARGET["lower_round" if ch in ROUND_LOWER else "lower"] if cat == "Ll"
+                     else TARGET["upper_round" if ch in ROUND_UPPER else "upper"])
+            target = KEEP_NATURAL * ink + (1 - KEEP_NATURAL) * share * CELL
+        else:
+            target = min(ink, MAX_INK[kind(g)] * CELL)
+        scales[g.name] = min(1.35, max(0.55, target / ink))
     return scales
+
+
+def _flatten(contour, steps: int = 16) -> list[tuple[float, float]]:
+    """The outline as a polygon, cubics sampled at `steps` points each."""
+    pts = contour.points
+    n = len(pts)
+    start = next(i for i, p in enumerate(pts) if p.type)
+    ring = pts[start:] + pts[:start]
+    out, prev, offs = [], ring[0], []
+    for k in range(1, n + 1):
+        p = ring[k % n]
+        if p.type is None:
+            offs.append(p)
+            continue
+        if len(offs) == 2:
+            a, b, c, d = prev, offs[0], offs[1], p
+            for j in range(1, steps + 1):
+                t = j / steps
+                u = 1 - t
+                out.append((u**3 * a.x + 3 * u * u * t * b.x + 3 * u * t * t * c.x + t**3 * d.x,
+                            u**3 * a.y + 3 * u * u * t * b.y + 3 * u * t * t * c.y + t**3 * d.y))
+        else:
+            out.append((p.x, p.y))
+        prev, offs = p, []
+    return out
+
+
+def stem_edges(g: Glyph, y: float):
+    """Left and right edge of the one stem crossing height y, or None."""
+    xs = []
+    for c in g.contours:
+        poly = _flatten(c)
+        for k in range(len(poly)):
+            (x0, y0), (x1, y1) = poly[k - 1], poly[k]
+            if (y0 - y) * (y1 - y) < 0:
+                xs.append(x0 + (y - y0) * (x1 - x0) / (y1 - y0))
+    xs.sort()
+    return (xs[0], xs[-1]) if len(xs) == 2 else None
+
+
+def stretch_arms(font, g: Glyph, share: float, slice_at: float) -> bool:
+    """Widen what lies left and right of the stem so the ink reaches `share` of the cell."""
+    edges = stem_edges(g, slice_at)
+    if edges is None:
+        return False
+    sl, sr = edges
+    b = g.getBounds(font)
+    left, right = sl - b.xMin, b.xMax - sr
+    if left + right <= 1:
+        return False
+    k = min(2.6, max(1.0, (share * CELL - (sr - sl)) / (left + right)))
+    remap = lambda x: sl - (sl - x) * k if x < sl else sr + (x - sr) * k if x > sr else x  # noqa: E731
+    for c in g.contours:
+        for p in c.points:
+            p.x = remap(p.x)
+    for a in g.anchors:
+        a.x = remap(a.x)
+    return True
 
 
 def compensation(scale: float) -> float:
@@ -138,14 +226,33 @@ def compensation(scale: float) -> float:
     return max(COMP_FLOOR, COMP_FLOOR + (1 - COMP_FLOOR) * (scale - 0.55) / 0.30)
 
 
-def fit_to_cell(font, g: Glyph, scale: float, stem: float) -> XMap:
+def condense(g: Glyph, font, scale: float, stem: float) -> None:
+    """Scale the outline about its ink centre, holding (part of) the stem weight."""
+    b = g.getBounds(font)
+    cx = (b.xMin + b.xMax) / 2
+    for c in g.contours:
+        for p in c.points:
+            p.x = cx + (p.x - cx) * scale
+    embolden_x(g, stem * (1 - scale) * compensation(scale))
+
+
+def fit_to_cell(font, g: Glyph, scale: float, stem: float, origin: float | None = None) -> XMap:
+    """Scale about the ink centre, then centre in the cell. `origin` is where
+    the ink centre was before any earlier change (arms), for re-seating marks."""
     b = g.getBounds(font)
     cx = (b.xMin + b.xMax) / 2
     if scale != 1.0:
-        for c in g.contours:
-            for p in c.points:
-                p.x = cx + (p.x - cx) * scale
-        embolden_x(g, stem * (1 - scale) * compensation(scale))
+        condense(g, font, scale, stem)
+    # a heavier master can come out wider than Regular planned; hold it to the cell
+    limit = FILL_MAX["wide" if base_letter(g) in WIDE else "other"] * CELL
+    for _ in range(4):  # held stem weight adds ink back, so measure again
+        bb = g.getBounds(font)
+        ink = bb.xMax - bb.xMin
+        if ink <= limit + 1:
+            break
+        extra = limit / ink
+        condense(g, font, extra, stem)
+        scale *= extra
     nb = g.getBounds(font)
     dx = CELL / 2 - (nb.xMin + nb.xMax) / 2
     for c in g.contours:
@@ -155,7 +262,27 @@ def fit_to_cell(font, g: Glyph, scale: float, stem: float) -> XMap:
     for a in g.anchors:
         a.x = xmap(a.x)
     g.width = CELL
-    return xmap
+    return xmap if origin is None else XMap(origin, CELL / 2, scale)
+
+
+def keep_marks_in_cell(font, margin: float = 12) -> None:
+    """Nudge accents that hang past the cell (over a stem near its edge) back inside.
+
+    Only the marks move; the letter keeps its place in the cell.
+    """
+    for g in font:
+        if g.contours or len(g.components) < 2 or g.width == 0:
+            continue
+        b = g.getBounds(font)
+        if b is None:
+            continue
+        shift = margin - b.xMin if b.xMin < 0 else (CELL - margin) - b.xMax if b.xMax > CELL else 0
+        if not shift:
+            continue
+        for comp in g.components[1:]:
+            t = list(comp.transformation)
+            t[4] += shift
+            comp.transformation = tuple(t)
 
 
 def polygon(pts) -> Contour:
@@ -257,10 +384,22 @@ def main() -> None:
         b = f["hyphen"].getBounds(f)
         bar = b.yMax - b.yMin
         old = snapshot(f)
-        maps = {name: fit_to_cell(f, f[name], k, stem) for name, k in scales.items()}
+        maps = {}
+        for name, k in scales.items():
+            g = f[name]
+            origin = None
+            ch = base_letter(fonts["Regular"][name])
+            if ch in ARMS and ch == chr(g.unicodes[0]):
+                share, at = ARMS[ch]
+                height = f.info.capHeight if ch.isupper() else f.info.xHeight
+                b0 = g.getBounds(f)
+                if stretch_arms(f, g, share, at * height):
+                    origin = (b0.xMin + b0.xMax) / 2
+            maps[name] = fit_to_cell(f, g, k, stem, origin)
         draw_slabs(f, stem, bar)
         bar_zero(f, stem)
         reflow_composites(f, maps, old)
+        keep_marks_in_cell(f)
         for g in f:
             g.width = 0 if g.name in zero_width else CELL
         draw_box_glyphs(f, CELL, stem, bar)
