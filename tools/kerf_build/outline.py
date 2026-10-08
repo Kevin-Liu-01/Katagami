@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from ufoLib2.objects import Contour, Glyph
+from ufoLib2.objects import Contour, Glyph, Point
 
 
 def signed_area(contour: Contour) -> float:
@@ -211,3 +211,67 @@ def scale_contours_x(glyph: Glyph, xmap: XMap) -> None:
             p.x = xmap(p.x)
     for a in glyph.anchors:
         a.x = xmap(a.x)
+
+
+# --- Rounded vertices ------------------------------------------------------
+# A sharp on-curve corner becomes a short quarter-ish arc: the corner point is
+# replaced by an entry point, two handles and an exit point. Which corners to
+# round is decided once (on Regular) so every master gains the same points.
+
+KAPPA = 0.5523
+
+
+def _unit(dx: float, dy: float):
+    d = math.hypot(dx, dy)
+    return (dx / d, dy / d) if d > 1e-6 else None
+
+
+def plan_corners(glyph: Glyph, min_turn: float = 20.0) -> list[tuple[int, list[int]]]:
+    """Per contour, the convex corners that turn by at least min_turn degrees.
+
+    Only outer vertices (stem ends, terminals, apexes) are rounded; concave
+    joins, where a crossbar or bowl meets a stem, stay crisp.
+    """
+    plan = []
+    for ci, c in enumerate(glyph.contours):
+        pts = c.points
+        n = len(pts)
+        orient = 1 if signed_area(c) >= 0 else -1
+        idx = []
+        for i, p in enumerate(pts):
+            if p.type is None or p.smooth or n < 3:
+                continue
+            a, b = pts[i - 1], pts[(i + 1) % n]
+            din, dout = _unit(p.x - a.x, p.y - a.y), _unit(b.x - p.x, b.y - p.y)
+            if din is None or dout is None:
+                continue
+            cos = max(-1.0, min(1.0, din[0] * dout[0] + din[1] * dout[1]))
+            cross = din[0] * dout[1] - din[1] * dout[0]
+            if math.degrees(math.acos(cos)) >= min_turn and cross * orient > 0:
+                idx.append(i)
+        if idx:
+            plan.append((ci, idx))
+    return plan
+
+
+def round_corners(glyph: Glyph, plan, radius: float) -> None:
+    """Replace each planned corner by an arc of `radius` units (0 keeps the shape)."""
+    for ci, idx in plan:
+        pts = glyph.contours[ci].points
+        for i in sorted(idx, reverse=True):
+            n = len(pts)
+            p, a, b = pts[i], pts[i - 1], pts[(i + 1) % n]
+            to_a, to_b = _unit(a.x - p.x, a.y - p.y), _unit(b.x - p.x, b.y - p.y)
+            if to_a is None or to_b is None:
+                to_a = to_b = (0.0, 0.0)
+            r = min(radius, 0.45 * math.hypot(a.x - p.x, a.y - p.y), 0.45 * math.hypot(b.x - p.x, b.y - p.y))
+            ax, ay = p.x + to_a[0] * r, p.y + to_a[1] * r
+            bx, by = p.x + to_b[0] * r, p.y + to_b[1] * r
+            k = 1 - KAPPA
+            new = [
+                Point(ax, ay, p.type, smooth=True),
+                Point(p.x + to_a[0] * r * k, p.y + to_a[1] * r * k, None),
+                Point(p.x + to_b[0] * r * k, p.y + to_b[1] * r * k, None),
+                Point(bx, by, "curve", smooth=True),
+            ]
+            pts[i:i + 1] = new

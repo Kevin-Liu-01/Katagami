@@ -27,6 +27,7 @@ class Profile:
     terminal_angle: float | None = None  # degrees from horizontal for cut terminals; None keeps Inter's
     ascender_lift: int = 0  # units the lowercase ascenders rise above the cap height
     f_overhang: float = 0.0  # stems the f crossbar reaches past the stem's left edge
+    corner_radius: float = 0.0  # stems; rounds every sharp vertex of the outline
     weight_map: tuple[tuple[int, int], ...] = ((100, 100), (200, 200), (300, 300), (400, 400), (500, 500),
                                                (600, 580), (700, 670), (800, 780), (900, 900))
 
@@ -55,16 +56,16 @@ SANS = Profile(
                 (600, 620), (700, 740), (800, 840), (900, 900)),
 )
 
-# Inter with Kerf's figures and f, a light squaring and a few Mori and Geist
-# touches. Kept close to Inter's proportions, spacing and terminals.
+# Inter's proportions and spacing with geometric, squared bowls, and every
+# sharp vertex rounded. Kerf's figures and f, a few Mori and Geist touches.
 # SPEC.md, Kerf Round.
 ROUND = Profile(
     key="round",
     family="Kerf Round",
     file_stem="KerfRound",
-    # a light squaring: superellipse about 2.23 from Inter's 2.15
-    square_upper=0.05,
-    square_lower=0.04,
+    # geometric bowls, softer than Kerf Sans (0.36 / 0.32)
+    square_upper=0.24,
+    square_lower=0.22,
     notch_fill=0.35,
     # Kerf's figures and compact f, and G with spur (Mori, Geist, DM Sans, Nacelle)
     promote=DIGITS + ("cv10-g-spur.fea", "cv12-compact-f.fea"),
@@ -72,6 +73,7 @@ ROUND = Profile(
     space_width=552,  # 270 per 1000 (Inter 281)
     terminal_angle=0.0,  # c, e, s, a and g cut level, as in Kerf Sans
     f_overhang=0.4,
+    corner_radius=0.22,  # round only at the vertices
 )
 
 PROFILES = {p.key: p for p in (SANS, ROUND)}

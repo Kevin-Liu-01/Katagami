@@ -12,6 +12,7 @@ Run after tools/build.sh, then commit and push Kerf-Website; Vercel deploys it.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -25,6 +26,7 @@ from fontTools.ttLib import TTFont
 
 sys.path.insert(0, str(Path(__file__).parent))
 from kerf_build.fontops import decompose  # noqa: E402
+from kerf_build.outline import round_corners  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SITE = Path(os.environ.get("KERF_SITE", ROOT.parent / "Kerf-Website"))
@@ -80,10 +82,15 @@ def metrics(font: TTFont) -> dict:
             "weights": [a.minValue for a in font["fvar"].axes] + [a.maxValue for a in font["fvar"].axes]}
 
 
-def contours(font, ch: str) -> dict:
+def contours(font, ch: str, corners=()) -> dict:
+    """A glyph's outline as [x, y, type] lists; `corners` adds zero-radius
+    rounded corners (same points as Kerf Round's, same shape)."""
     g = font[ch]
     if g.components:
         decompose(font, [ch])
+    if corners:
+        g = copy.deepcopy(g)
+        round_corners(g, [(ci, idx) for ci, idx in corners], 0.0)
     return {"adv": g.width,
             "contours": [[[round(p.x, 1), round(p.y, 1), {"curve": "c", "line": "l", None: "o"}.get(p.type, "l")]
                           for p in c.points] for c in g.contours]}
@@ -98,10 +105,17 @@ def outlines() -> dict:
         assert shape(a) == shape(b), ch
         out[ch] = {"inter": a, "kerf": b}
         if ch in HERO:
-            for key, font in (("mono", mono), ("round", rnd)):
-                o = contours(font, gname)
-                assert shape(o) == shape(b), f"{ch}: {key} and Kerf Sans outlines differ"
-                out[ch][key] = o
+            # Kerf Round rounds its vertices, which adds points. Give Sans and
+            # Mono the same corners at zero radius so all three still morph.
+            plan = rnd.lib.get("com.kerf.roundedCorners", {}).get(gname, [])
+            sans_like = contours(kerf, gname, plan)
+            mono_like = contours(mono, gname, plan)
+            rounded = contours(rnd, gname)
+            for key, o in (("mono", mono_like), ("round", rounded)):
+                assert shape(o) == shape(sans_like), f"{ch}: {key} and Kerf Sans outlines differ"
+            out[ch]["hero"] = sans_like
+            out[ch]["mono"] = mono_like
+            out[ch]["round"] = rounded
     return out
 
 

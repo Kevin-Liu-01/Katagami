@@ -25,7 +25,7 @@ from kerf_build.fontops import (  # noqa: E402
     MASTERS, ROOT, assign_categories, load_inter_masters, promote_alternates, reflow_composites, resize_glyph, respace,
     set_names, snapshot, stem, swap_glyph_outlines,
 )
-from kerf_build.outline import apply_squaring, plan_squaring  # noqa: E402
+from kerf_build.outline import apply_squaring, plan_corners, plan_squaring, round_corners  # noqa: E402
 from kerf_build.profiles import PROFILES, Profile  # noqa: E402
 
 FEATURES = ROOT / "vendor" / "inter" / "src" / "features"
@@ -407,6 +407,20 @@ def set_space(fonts, width: int | None) -> None:
                 g.width = width
 
 
+def soften_vertices(fonts, radius: float) -> dict:
+    """Round every sharp vertex by `radius` stems (decided on Regular)."""
+    if not radius:
+        return {}
+    ref = fonts["Regular"]
+    plans = {g.name: plan_corners(g) for g in ref if g.contours}
+    plans = {k: v for k, v in plans.items() if v}
+    for f in fonts.values():
+        r = radius * stem(f)
+        for name, plan in plans.items():
+            round_corners(f[name], plan, r)
+    return {k: [[ci, idx] for ci, idx in v] for k, v in plans.items()}
+
+
 def adjust_widths(fonts, widths: dict[str, float]) -> None:
     for f in fonts.values():
         old = snapshot(f)
@@ -457,6 +471,7 @@ def build(p: Profile) -> Path:
     lift_ascenders(fonts, p.ascender_lift)
     respace(fonts, p.spacing)
     set_space(fonts, p.space_width)
+    corners = soften_vertices(fonts, p.corner_radius)
 
     out = ROOT / "build" / p.key
     if out.exists():
@@ -467,6 +482,10 @@ def build(p: Profile) -> Path:
     for style, f in fonts.items():
         set_names(f, p.family, style, MASTERS[style])
         assign_categories(f)
+        if corners:
+            # which corners were rounded, so the site can give Sans and Mono the
+            # same corners at zero radius and morph between them point for point
+            f.lib["com.kerf.roundedCorners"] = corners
         path = out / f"{p.file_stem}-{style}.ufo"
         f.save(path, overwrite=True)
         paths[style] = path
