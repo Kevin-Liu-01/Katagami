@@ -35,7 +35,8 @@ OUTLINE_CHARS = {"K": "K", "e": "e", "r": "r", "f": "f", "O": "O", "o": "o"}
 INTER_UFO = ROOT / "build/ufo/Inter-Regular.ufo"
 KERF_UFO = ROOT / "build/sans/KerfSans-Regular.ufo"
 MONO_UFO = ROOT / "build/mono/KerfMono-Regular.ufo"
-HERO = "Kerf"  # morphs between Kerf Mono and Kerf Sans; the mono is fitted point for point
+ROUND_UFO = ROOT / "build/round/KerfRound-Regular.ufo"
+HERO = "Kerf"  # morphs Kerf Mono <- Kerf Sans -> Kerf Round; all three share Inter's point structure
 PAGES = {"page.html": "index.html", "map-page.html": "map.html"}  # hand-written fragment -> served page
 
 
@@ -89,7 +90,7 @@ def contours(font, ch: str) -> dict:
 
 
 def outlines() -> dict:
-    inter, kerf, mono = (ufoLib2.Font.open(p) for p in (INTER_UFO, KERF_UFO, MONO_UFO))
+    inter, kerf, mono, rnd = (ufoLib2.Font.open(p) for p in (INTER_UFO, KERF_UFO, MONO_UFO, ROUND_UFO))
     shape = lambda o: [len(c) for c in o["contours"]]  # noqa: E731
     out = {}
     for ch, gname in OUTLINE_CHARS.items():
@@ -97,9 +98,10 @@ def outlines() -> dict:
         assert shape(a) == shape(b), ch
         out[ch] = {"inter": a, "kerf": b}
         if ch in HERO:
-            m = contours(mono, gname)
-            assert shape(m) == shape(b), f"{ch}: Kerf Mono and Kerf Sans outlines differ"
-            out[ch]["mono"] = m
+            for key, font in (("mono", mono), ("round", rnd)):
+                o = contours(font, gname)
+                assert shape(o) == shape(b), f"{ch}: {key} and Kerf Sans outlines differ"
+                out[ch][key] = o
     return out
 
 
