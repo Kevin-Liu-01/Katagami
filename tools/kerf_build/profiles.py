@@ -21,8 +21,9 @@ class Profile:
     bowl_fill: float = 0.7  # the same, for the bowls of b, d, p and q
     valley_fill: float = 0.5  # share of the way the dip between m's arches rises toward the x-height
     square_punctuation: bool = False  # Inter's ss07 becomes the default
-    tails: bool = True  # g ends in a level cut on a rising stroke; y and t end in vertical cuts
-    a_bowl: float | None = None  # redraw a's bowl with a level top at this share of the x-height
+    tails: bool = True  # g's tail mirrors its bowl into a level cut; y and t end in vertical cuts
+    t_slant: float = 0.0  # stems the top-left corner of t's stem drops, cutting its top at a slant
+    xheight_scale: float = 1.0  # the lowercase from baseline to x-height scaled; ascenders move down with it
     scale: float = 1.0  # every glyph scaled about the origin; the line height stays
     promote: tuple[str, ...] = ()  # Inter feature files whose alternates become the default
     widths: dict[str, float] = field(default_factory=dict)  # horizontal ink scale per glyph
@@ -80,9 +81,10 @@ ROUND = Profile(
     corner_radius=0.22,  # round only at the vertices
 )
 
-# Inter moved toward PP Mori: smaller and rounder, wider round letters and
-# capitals, tighter, a redrawn a, no squaring. The family's level cuts and
-# bold join fill. SPEC.md, Kerf Text.
+# Inter moved toward PP Mori and away from Inter's own tells: a lower
+# x-height, smaller overall, tighter, wider capitals and round letters, a
+# compact f, an l with a tail, a t cut at a slant, no squaring. SPEC.md,
+# Kerf Text.
 TEXT = Profile(
     key="text",
     family="Kerf Text",
@@ -92,13 +94,14 @@ TEXT = Profile(
     square_lower=-0.02,
     counter_boost=1.0,
     notch_fill=0.35,
-    # Kerf's long-flag 1, G with a spur, and the a with a foot that a_bowl redraws
-    promote=("cv01-one.fea", "cv10-g-spur.fea", "cv16-a-tail.fea"),
-    a_bowl=0.62,  # level bowl top meeting the stem square, as Mori's does
-    # halfway from Inter to Mori's ink proportions (Mori O/H 1.19, H 0.768 em)
+    # Kerf's long-flag 1, G with a spur, l with a tail, compact f
+    promote=("cv01-one.fea", "cv05-l-tail.fea", "cv10-g-spur.fea", "cv12-compact-f.fea"),
+    t_slant=0.45,  # the top of t's stem cut at about 20 degrees, as Mori's is
+    xheight_scale=0.95,  # x-height 0.71 of the cap height (Inter 0.75)
+    # halfway from Inter to Mori's ink proportions (Mori O/H 1.19, H 0.768 em, a 0.581 em)
     widths={
         "O": 1.05, "Q": 1.05, "C": 1.04, "G": 1.04, "D": 1.02,
-        "o": 1.03, "c": 1.02, "e": 1.025, "s": 1.025, "a": 1.06,
+        "o": 1.03, "c": 1.02, "e": 1.025, "s": 1.025, "a": 1.03,
         "E": 1.06, "F": 1.05, "L": 1.03, "S": 1.03,
         "H": 1.04, "N": 1.03, "U": 1.03, "A": 1.03, "B": 1.03, "K": 1.03, "P": 1.03, "R": 1.03,
         "T": 1.03, "V": 1.03, "X": 1.03, "Y": 1.03, "Z": 1.03,
@@ -106,7 +109,7 @@ TEXT = Profile(
     spacing=-14,  # o sidebearing about 42 per 1000 after scaling (Inter 51, Mori 41)
     space_width=512,  # 240 per 1000 after scaling (Inter 281, Mori 225)
     terminal_angle=0.0,  # level cuts, as Mori cuts them
-    scale=0.96,  # x-height 0.524 em and caps 0.699 em (Mori 0.53 and 0.70, Inter 0.546 and 0.728)
+    scale=0.96,  # caps 0.699 em (Mori 0.70, Inter 0.728); x-height 0.498 em after the lower x-height
     # a lighter bold than Inter's, as Mori's is
     weight_map=((100, 100), (200, 200), (300, 300), (400, 400), (500, 480),
                 (600, 560), (700, 640), (800, 760), (900, 900)),

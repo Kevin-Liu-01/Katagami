@@ -26,8 +26,9 @@ def load_inter_masters() -> dict[str, ufoLib2.Font]:
 
 
 def stem(font: ufoLib2.Font) -> float:
-    """Lowercase vertical stem thickness, read from the ink width of l."""
-    b = font["l"].getBounds(font)
+    """Lowercase vertical stem thickness, read from the ink width of the dotless i,
+    which is a plain stem in every member (Kerf Text's l has a tail)."""
+    b = font["idotless" if "idotless" in font else "l"].getBounds(font)
     return b.xMax - b.xMin
 
 
@@ -279,3 +280,41 @@ def set_names(font, family: str, style: str, weight: int) -> None:
     i.versionMinor = 100
     i.openTypeNameVersion = None
     i.openTypeHeadCreated = None
+
+
+FILTERS_KEY = "com.github.googlei18n.ufo2ft.filters"
+
+
+def erase_open_corners(fonts: dict) -> int:
+    """Run Inter's eraseOpenCorners filter here, where every master agrees.
+
+    Inter's sources ask ufo2ft to erase open corners at compile time, master
+    by master. Kerf's transforms can leave a corner open in one master and
+    closed in another; erasing it in one master only breaks compatibility.
+    Here the filter runs on copies of every master, its result is kept for a
+    glyph only when all masters come out with the same structure, and the
+    compile-time filter is removed. Returns the number of glyphs erased.
+    """
+    from glyphsLib.filters.eraseOpenCorners import EraseOpenCornersFilter
+
+    results = {}
+    for style, f in fonts.items():
+        copies = {g.name: copy.deepcopy(g) for g in f}
+        modified = EraseOpenCornersFilter()(f, copies)
+        results[style] = (copies, modified)
+    shape = lambda g: [[p.type for p in c.points] for c in g.contours]  # noqa: E731
+    names = set().union(*(m for _, m in results.values()))
+    kept = 0
+    for name in names:
+        outs = [results[style][0][name] for style in fonts]
+        if any(shape(o) != shape(outs[0]) for o in outs):
+            continue
+        for (style, f), out in zip(fonts.items(), outs):
+            g = f[name]
+            g.clearContours()
+            for c in out.contours:
+                g.appendContour(copy.deepcopy(c))
+        kept += 1
+    for f in fonts.values():
+        f.lib[FILTERS_KEY] = [x for x in f.lib.get(FILTERS_KEY, []) if x.get("name") != "eraseOpenCorners"]
+    return kept

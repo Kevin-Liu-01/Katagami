@@ -133,7 +133,10 @@ def apply_squaring(glyph: Glyph, plan, s_outer: float, s_inner: float, join: flo
 # outward by strength/2 on each side; negative strength thins.
 
 
-def embolden_x(glyph: Glyph, strength: float) -> None:
+def _embolden(glyph: Glyph, strength: float, axis: int) -> None:
+    """FreeType-style emboldening along one axis (0 = x, 1 = y): every edge
+    moves outward by half the strength, so stems (x) or horizontal strokes (y)
+    gain `strength` in thickness and the outline grows by it on that axis."""
     half = strength / 2
     for contour in glyph.contours:
         pts = contour.points
@@ -142,7 +145,7 @@ def embolden_x(glyph: Glyph, strength: float) -> None:
             continue
         # UFO outlines are PostScript-oriented (outer contours counter-clockwise).
         orig = [(p.x, p.y) for p in pts]
-        new_x = []
+        new = []
         for i in range(n):
             prv, cur, nxt = orig[i - 1], orig[i], orig[(i + 1) % n]
             vin = (cur[0] - prv[0], cur[1] - prv[1])
@@ -163,7 +166,7 @@ def embolden_x(glyph: Glyph, strength: float) -> None:
                     vout = (nxt[0] - cur[0], nxt[1] - cur[1])
                     l_out = math.hypot(*vout)
                 if l_in < 1e-6 or l_out < 1e-6:
-                    new_x.append(cur[0])
+                    new.append(cur[axis])
                     continue
             ix, iy = vin[0] / l_in, vin[1] / l_in
             ox, oy = vout[0] / l_out, vout[1] / l_out
@@ -171,16 +174,28 @@ def embolden_x(glyph: Glyph, strength: float) -> None:
             shift = 0.0
             if d > -0.9375:
                 d += 1
-                sx = iy + oy  # lateral bisector, PostScript orientation
+                # lateral bisector, PostScript orientation: x outward is +(iy + oy), y outward is -(ix + ox)
+                lateral = iy + oy if axis == 0 else -(ix + ox)
                 q = ox * iy - oy * ix
                 l = min(l_in, l_out)
                 if abs(half) * q <= l * d:
-                    shift = sx * half / d
+                    shift = lateral * half / d
                 else:
-                    shift = sx * l / q * (1 if half >= 0 else -1)
-            new_x.append(cur[0] + shift)
-        for p, x in zip(pts, new_x):
-            p.x = x
+                    shift = lateral * l / q * (1 if half >= 0 else -1)
+            new.append(cur[axis] + shift)
+        for p, v in zip(pts, new):
+            if axis == 0:
+                p.x = v
+            else:
+                p.y = v
+
+
+def embolden_x(glyph: Glyph, strength: float) -> None:
+    _embolden(glyph, strength, 0)
+
+
+def embolden_y(glyph: Glyph, strength: float) -> None:
+    _embolden(glyph, strength, 1)
 
 
 # --- Horizontal remapping ------------------------------------------------

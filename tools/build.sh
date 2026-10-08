@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build Kerf from Inter's sources. Usage: tools/build.sh [sans|mono|round|text|all]
+# Build Kerf from Inter's sources. Usage: tools/build.sh [sans|mono|round|text|cjk|all]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PY=.venv/bin/python
@@ -12,6 +12,24 @@ if [[ ! -d vendor/inter ]]; then
   git -C vendor/inter checkout "$INTER_COMMIT"
 fi
 
+# Noto Sans for the scripts Kerf does not draw (SIL OFL 1.1, google/fonts)
+NOTO=(devanagari/NotoSansDevanagari arabic/NotoSansArabic bengali/NotoSansBengali gurmukhi/NotoSansGurmukhi
+      gujarati/NotoSansGujarati oriya/NotoSansOriya tamil/NotoSansTamil telugu/NotoSansTelugu kannada/NotoSansKannada
+      malayalam/NotoSansMalayalam sinhala/NotoSansSinhala thai/NotoSansThai lao/NotoSansLao myanmar/NotoSansMyanmar
+      ethiopic/NotoSansEthiopic hebrew/NotoSansHebrew armenian/NotoSansArmenian georgian/NotoSansGeorgian khmer/NotoSansKhmer)
+mkdir -p vendor/noto
+for entry in "${NOTO[@]}"; do
+  dir="notosans${entry%%/*}"; file="${entry##*/}[wdth,wght].ttf"
+  url=$(printf %s "$file" | sed 's/\[/%5B/; s/\]/%5D/; s/,/%2C/')
+  [[ -f "vendor/noto/$file" ]] || curl -sfL -o "vendor/noto/$file" "https://raw.githubusercontent.com/google/fonts/main/ofl/$dir/$url"
+done
+for cjk in SC JP KR; do
+  file="NotoSans$cjk[wght].ttf"
+  dir="notosans$(printf %s "$cjk" | tr '[:upper:]' '[:lower:]')"
+  [[ -f "vendor/noto/$file" ]] || curl -sfL -o "vendor/noto/$file" \
+    "https://raw.githubusercontent.com/google/fonts/main/ofl/$dir/NotoSans$cjk%5Bwght%5D.ttf"
+done
+
 if [[ ! -d build/ufo ]]; then
   .venv/bin/glyphs2ufo vendor/inter/src/Inter-Roman.glyphspackage -m build/ufo --minimal
 fi
@@ -20,7 +38,12 @@ if [[ "$which" == sans || "$which" == all ]]; then
   $PY tools/build_sans.py sans
   mkdir -p fonts/sans
   .venv/bin/fontmake -m build/sans/KerfSans.designspace -o variable \
-    --output-path 'fonts/sans/KerfSans[wght].ttf' --flatten-components
+    --output-path 'build/sans/KerfSans-core[wght].ttf' --flatten-components
+  $PY tools/build_world.py sans
+fi
+
+if [[ "$which" == cjk || "$which" == all ]]; then
+  $PY tools/build_cjk.py
 fi
 
 if [[ "$which" == mono || "$which" == all ]]; then
@@ -28,18 +51,21 @@ if [[ "$which" == mono || "$which" == all ]]; then
   mkdir -p fonts/mono
   .venv/bin/fontmake -m build/mono/KerfMono.designspace -o variable \
     --output-path 'fonts/mono/KerfMono[wght].ttf' --flatten-components
+  $PY tools/build_mono.py --finish 'fonts/mono/KerfMono[wght].ttf'
 fi
 
 if [[ "$which" == round || "$which" == all ]]; then
   $PY tools/build_sans.py round
   mkdir -p fonts/round
   .venv/bin/fontmake -m build/round/KerfRound.designspace -o variable \
-    --output-path 'fonts/round/KerfRound[wght].ttf' --flatten-components
+    --output-path 'build/round/KerfRound-core[wght].ttf' --flatten-components
+  $PY tools/build_world.py round
 fi
 
 if [[ "$which" == text || "$which" == all ]]; then
   $PY tools/build_sans.py text
   mkdir -p fonts/text
   .venv/bin/fontmake -m build/text/KerfText.designspace -o variable \
-    --output-path 'fonts/text/KerfText[wght].ttf' --flatten-components
+    --output-path 'build/text/KerfText-core[wght].ttf' --flatten-components
+  $PY tools/build_world.py text
 fi

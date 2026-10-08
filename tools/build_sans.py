@@ -12,6 +12,7 @@ Inter -> profile, in order (each step only where the profile asks for it):
 
 from __future__ import annotations
 
+import copy
 import math
 import shutil
 import sys
@@ -22,14 +23,18 @@ from fontTools.designspaceLib import AxisDescriptor, DesignSpaceDocument, Instan
 
 sys.path.insert(0, str(Path(__file__).parent))
 from kerf_build.fontops import (  # noqa: E402
-    MASTERS, ROOT, assign_categories, load_inter_masters, promote_alternates, reflow_composites, resize_glyph, respace,
+    MASTERS, ROOT, assign_categories, erase_open_corners, load_inter_masters, promote_alternates, reflow_composites, resize_glyph, respace,
     set_names, snapshot, stem, swap_glyph_outlines,
 )
-from kerf_build.outline import apply_squaring, plan_corners, plan_squaring, round_corners  # noqa: E402
+from kerf_build.outline import apply_squaring, embolden_x, embolden_y, plan_corners, plan_squaring, round_corners  # noqa: E402
 from kerf_build.profiles import PROFILES, Profile  # noqa: E402
 
 FEATURES = ROOT / "vendor" / "inter" / "src" / "features"
 KEEP_ROUND = ("circle", "circled", "ring", "degree", "bullet", "dotted")
+# Share of each join fill a master gets. Inter's Thin joins barely notch, so
+# moving their corners leaves a lump where the curve meets the stem; the fill
+# grows from nothing at Thin to its full share at Regular and Black.
+JOIN_BY_MASTER = {"Thin": 0.0, "Regular": 1.0, "Black": 1.0}
 TIGHT_RADIUS = 1.6  # in stems: arcs tighter than this square in proportion to their radius
 
 # After an alternate becomes the default, its feature switches back to
@@ -43,6 +48,8 @@ SWAPPED_LABELS = {
     "cv10-g-spur.fea": ("Capital G with spur", "Capital G without spur"),
     "cv12-compact-f.fea": ("Compact f", "Wide f"),
     "cv16-a-tail.fea": ("Lower-case a with tail", "Lower-case a without tail"),
+    "cv05-l-tail.fea": ("Lower-case L with tail", "Lower-case L without tail"),
+    "cv08-i-serif.fea": ("Upper-case i with serif", "Upper-case i without serif"),
 }
 DIGIT_FILES = {"cv02-four.fea", "cv03-six.fea", "cv04-nine.fea", "cv09-three.fea"}
 
@@ -119,7 +126,7 @@ def _thirds(pts, a: int, c1: int, c2: int, b: int) -> None:
 
 
 def redraw_tails(fonts, p: Profile) -> None:
-    """Redraw the ends of g, y and t. Point counts never change.
+    """Redraw the ends of g, y and t (and a's foot where it has one). Point counts never change.
 
     g: the tail is the right side's turn into the bottom, mirrored about the
     bottom's centre and cut level at Inter's terminal height. The curl
@@ -216,51 +223,158 @@ def redraw_tails(fonts, p: Profile) -> None:
             _thirds(pts, (e + 1) % n, (e + 2) % n, (e + 3) % n, (e + 4) % n)
 
 
-def open_bowl_a(fonts, height: float | None, p: Profile) -> None:
-    """Redraw the bowl of a with a level top that meets the stem square.
+def lowercase_names(font) -> set[str]:
+    """Lowercase letters and the unencoded parts only lowercase letters are built from."""
+    cat = lambda g: unicodedata.category(chr(g.unicodes[0])) if g.unicodes else ""  # noqa: E731
+    lower = {g.name for g in font if g.contours and cat(g) == "Ll"}
+    used_by = {}
+    for g in font:
+        for c in g.components:
+            used_by.setdefault(c.baseGlyph, set()).add(cat(g))
+    return lower | {name for name, cats in used_by.items()
+                    if cats - {"", "Co"} == {"Ll"} and not font[name].unicodes and font[name].contours}
 
-    The bowl's top edge leaves the stem's left edge as a level stroke at
-    `height` times the x-height, runs to the middle of the bowl and turns
-    down through one quarter turn into the bowl's left side. The counter's
-    top follows at the same stroke thickness. The bowl's sides, bottom and
-    its join at the foot of the stem stay.
+
+def lower_xheight(fonts, k: float) -> None:
+    """Scale the lowercase between the baseline and the x-height by k.
+
+    Everything above the x-height (ascenders, dots, overshoots) moves down by
+    the same amount, so curves that cross the x-height stay whole; descenders
+    stay. Accents on a lowered letter move down with its top anchor.
     """
-    if height is None:
+    if k == 1:
         return
-    k = _turn_fraction(p)
     ref = fonts["Regular"]
-    outer = ref["a"].contours[0].points
-    n = len(outer)
-    # the stem's left edge: a smooth line point just below the arch's inner end, then the bowl's top curve
-    j = next(i for i, q in enumerate(outer) if q.type == "line" and q.smooth and outer[i - 1].type == "curve"
-             and outer[(i + 1) % n].type is None and 0.5 * ref.info.xHeight < q.y < 0.8 * ref.info.xHeight
-             and outer[(i + 3) % n].y < q.y)  # the bowl's top runs down from it; the arch's runs up
+    lower = lowercase_names(ref)
     for f in fonts.values():
-        g = f["a"]
-        pts = g.contours[0].points
-        P = lambda i: pts[i % n]  # noqa: E731
-        stem_x, left = P(j).x, P(j + 6)
-        counter = g.contours[1].points
-        # the counter's corner at the stem and its top and left points
-        cj = max((i for i, q in enumerate(counter) if q.type == "curve" and not q.smooth), key=lambda i: counter[i].x)
-        ctop, cleft = counter[cj - 3], counter[cj - 6]
-        cstem = counter[cj].x
-        thick = P(j + 3).y - ctop.y
-        y_top = height * f.info.xHeight
-        y_in = y_top - thick
-        mid = (stem_x + left.x) / 2
-        P(j).y = y_top
-        P(j).smooth = False
-        _set(P(j + 3), (mid, y_top))
-        _thirds(pts, j % n, (j + 1) % n, (j + 2) % n, (j + 3) % n)
-        _set(P(j + 4), (mid - k * (mid - left.x), y_top))
-        _set(P(j + 5), (left.x, left.y + k * (y_top - left.y)))
-        cm = (cstem + cleft.x) / 2
-        _set(ctop, (cm, y_in))
-        _set(counter[cj], (cstem, y_in))
-        _thirds(counter, cj - 3, cj - 2, cj - 1, cj)
-        _set(counter[cj - 4], (cm - k * (cm - cleft.x), y_in))
-        _set(counter[cj - 5], (cleft.x, cleft.y + k * (y_in - cleft.y)))
+        xh = f.info.xHeight
+        drop = (1 - k) * xh
+        y_of = lambda y: y * k if 0 <= y <= xh else (y - drop if y > xh else y)  # noqa: E731
+        moved: dict[str, float] = {}
+        for name in lower:
+            g = f[name]
+            for c in g.contours:
+                for pt in c.points:
+                    pt.y = y_of(pt.y)
+            for a in g.anchors:
+                old = a.y
+                a.y = y_of(a.y)
+                if a.name == "top":
+                    moved[name] = a.y - old
+        for g in f:
+            if not g.components or g.contours or g.components[0].baseGlyph not in moved:
+                continue
+            for comp in g.components[1:]:
+                t = list(comp.transformation)
+                if f[comp.baseGlyph].width == 0 and t[5] >= 0:
+                    t[5] += moved[g.components[0].baseGlyph]
+                    comp.transformation = tuple(t)
+        f.info.xHeight = round(xh * k)
+
+
+def slant_t(fonts, share: float) -> None:
+    """Cut the top of t's stem at a slant: its left corner drops `share` stems."""
+    if not share:
+        return
+    ref = fonts["Regular"]
+    base = next(c.baseGlyph for c in ref["t"].components) if ref["t"].components else "t"
+    pts = ref[base].contours[0].points
+    top = max(p.y for p in pts)
+    i = min((k for k, p in enumerate(pts) if p.type and abs(p.y - top) < 1), key=lambda k: pts[k].x)
+    for f in fonts.values():
+        f[base].contours[0].points[i].y -= share * stem(f)
+
+
+SMALL_CAP_TRACK = 0.03  # of the em, added around each small capital
+
+
+def small_caps(fonts) -> None:
+    """Small capitals for every lowercase letter with a capital, as smcp and c2sc.
+
+    Inter has none (its 13 .sc glyphs are phonetic letters). Each small cap is
+    its capital scaled to the x-height, emboldened back to the lowercase stem
+    (and 0.4 of that on horizontal strokes), and tracked a little wider.
+    Accented small caps are built like the accented lowercase: the small-cap
+    base with the same marks, moved by the difference in top anchors.
+    """
+    ref = fonts["Regular"]
+    cmap = {u: g.name for g in ref for u in g.unicodes}
+    pairs = {}
+    for g in ref:
+        if not g.unicodes or unicodedata.category(chr(g.unicodes[0])) != "Ll":
+            continue
+        up = chr(g.unicodes[0]).upper()
+        if len(up) == 1 and ord(up) in cmap and cmap[ord(up)] != g.name:
+            pairs[g.name] = cmap[ord(up)]
+    drawn = [lc for lc, uc in pairs.items() if ref[uc].contours and not ref[uc].components]
+    built = [lc for lc in pairs if lc not in drawn and ref[lc].components and ref[lc].components[0].baseGlyph in drawn
+             and all(not ref[c.baseGlyph].width for c in ref[lc].components[1:])]
+    anchor = lambda g, name: next(((a.x, a.y) for a in g.anchors if a.name == name), None)  # noqa: E731
+    for f in fonts.values():
+        upm, xh, cap = f.info.unitsPerEm, f.info.xHeight, f.info.capHeight
+        lc_stem = stem(f)
+        b = f["I"].getBounds(f)
+        uc_stem = b.xMax - b.xMin
+        dx = lc_stem - uc_stem * xh / cap
+        dy = 0.4 * dx  # less on horizontals, or Black's bars close the counters of E and S
+        k = (xh - dy) / cap
+        track = SMALL_CAP_TRACK * upm
+        for lc in drawn:
+            src = f[pairs[lc]]
+            g = f.newGlyph(f"{lc}.smcp")
+            for c in src.contours:
+                g.appendContour(copy.deepcopy(c))
+            for c in g.contours:
+                for pt in c.points:
+                    pt.x, pt.y = pt.x * k, pt.y * k
+            embolden_x(g, dx)
+            embolden_y(g, dy)
+            for c in g.contours:
+                for pt in c.points:
+                    pt.x, pt.y = pt.x + dx / 2 + track / 2, pt.y + dy / 2
+            for a in src.anchors:
+                g.appendAnchor({"name": a.name, "x": a.x * k + dx / 2 + track / 2, "y": a.y * k + dy / 2})
+            g.width = round(src.width * k + dx + track)
+        for lc in built:
+            src = f[lc]
+            base = src.components[0].baseGlyph
+            g = f.newGlyph(f"{lc}.smcp")
+            g.width = f[f"{base}.smcp"].width
+            old, new = anchor(f[base], "top"), anchor(f[f"{base}.smcp"], "top")
+            shift = (new[0] - old[0]) if old and new else (g.width - f[base].width) / 2
+            for i, c in enumerate(src.components):
+                comp = copy.deepcopy(c)
+                if i == 0:
+                    comp.baseGlyph = f"{base}.smcp"
+                else:
+                    t = list(comp.transformation)
+                    t[4] += shift
+                    comp.transformation = tuple(t)
+                g.components.append(comp)
+    made = drawn + built
+    lc_names = " ".join(made)
+    sc_names = " ".join(f"{lc}.smcp" for lc in made)
+    # one small cap per capital: dotless i, long s and final sigma share theirs with i, s and sigma
+    upper = {}
+    for lc in made:
+        upper.setdefault(pairs[lc], f"{lc}.smcp")
+    uc_names = " ".join(upper)
+    uc_sc_names = " ".join(upper.values())
+    for f in fonts.values():
+        f.features.text += f"""
+
+# Small capitals, generated by tools/build_sans.py
+@kerfLowerSC = [{lc_names}];
+@kerfSmallCaps = [{sc_names}];
+@kerfUpperSC = [{uc_names}];
+@kerfUpperSmallCaps = [{uc_sc_names}];
+feature smcp {{
+  sub @kerfLowerSC by @kerfSmallCaps;
+}} smcp;
+feature c2sc {{
+  sub @kerfUpperSC by @kerfUpperSmallCaps;
+}} c2sc;
+"""
 
 
 def scale_outlines(fonts, k: float) -> None:
@@ -322,14 +436,14 @@ def fill_valleys(fonts, amount: float) -> None:
     plans = {g.name: find_valleys(g, ref.info.xHeight) for g in ref
              if g.contours and g.unicodes and unicodedata.category(chr(g.unicodes[0])) == "Ll"}
     plans = {k: v for k, v in plans.items() if v}
-    for f in fonts.values():
+    for style, f in fonts.items():
         xh = f.info.xHeight
         for name, valleys in plans.items():
             for ci, a, b in valleys:
                 pts = f[name].contours[ci].points
                 n = len(pts)
                 old = pts[a].y
-                new = old + (xh - old) * amount
+                new = old + (xh - old) * amount * JOIN_BY_MASTER[style]
                 for corner, handle, far in ((a, (a - 1) % n, (a - 3) % n), (b, (b + 1) % n, (b + 3) % n)):
                     top = pts[far].y
                     h = pts[handle]
@@ -402,10 +516,10 @@ def fill_notches(fonts, amount: float, bowl_amount: float | None = None) -> None
     plans = {g.name: find_notches(g, ref.info.xHeight) for g in ref
              if g.contours and g.unicodes and unicodedata.category(chr(g.unicodes[0])) == "Ll"}
     bowls = {name for name in plans if is_bowl_letter(fonts["Regular"][name])}
-    for f in fonts.values():
+    for style, f in fonts.items():
         for name, notches in plans.items():
             g = f[name]
-            share = bowl_amount if bowl_amount is not None and name in bowls else amount
+            share = (bowl_amount if bowl_amount is not None and name in bowls else amount) * JOIN_BY_MASTER[style]
             for ci, corner, moving, ref, far in notches:
                 pts = g.contours[ci].points
                 dy = (ref - pts[corner].y) * share
@@ -677,13 +791,16 @@ def build(p: Profile) -> Path:
     fill_valleys(fonts, p.valley_fill)
     if p.tails:
         redraw_tails(fonts, p)
-    open_bowl_a(fonts, p.a_bowl, p)
+    slant_t(fonts, p.t_slant)
     adjust_widths(fonts, p.widths)
     lift_ascenders(fonts, p.ascender_lift)
+    lower_xheight(fonts, p.xheight_scale)
+    small_caps(fonts)
     respace(fonts, p.spacing)
     set_space(fonts, p.space_width)
     scale_outlines(fonts, p.scale)
     corners = soften_vertices(fonts, p.corner_radius)
+    erase_open_corners(fonts)
 
     out = ROOT / "build" / p.key
     if out.exists():

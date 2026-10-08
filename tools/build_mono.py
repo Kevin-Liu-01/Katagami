@@ -10,11 +10,18 @@ Kerf Sans -> Kerf Mono:
      flag; zero gets a centre bar
   5. box drawing and block elements are drawn on the cell grid
   6. composites re-seated; kerning dropped
+  7. Kerf Sans's OpenType features (all of Inter's, plus small capitals) with
+     capital spacing left out, and code ligatures as an opt-in dlig: each
+     character keeps its cell and the last one draws the symbol across them
+After fontmake, `python tools/build_mono.py --finish <ttf>` empties the
+lookups that would set two characters as one glyph (Inter's arrows), so
+every character stays one cell wide.
 Every fitting decision is made once, on the Regular master.
 """
 
 from __future__ import annotations
 
+import copy
 import re
 import shutil
 import subprocess
@@ -28,8 +35,10 @@ from ufoLib2.objects import Contour, Glyph, Point
 
 sys.path.insert(0, str(Path(__file__).parent))
 from kerf_build.boxdraw import draw_box_glyphs  # noqa: E402
-from kerf_build.fontops import ROOT, assign_categories, composites_to_flatten, decompose, reflow_composites, set_names, snapshot, swap_glyph_outlines  # noqa: E402
+from kerf_build.fontops import FILTERS_KEY, ROOT, assign_categories, composites_to_flatten, decompose, reflow_composites, set_names, snapshot, swap_glyph_outlines  # noqa: E402
 from kerf_build.outline import XMap, embolden_x  # noqa: E402
+from build_sans import relabel_features  # noqa: E402
+from fontTools.pens.recordingPen import DecomposingRecordingPen  # noqa: E402
 
 FAMILY = "Kerf Mono"
 SANS = ROOT / "build" / "sans"
@@ -65,21 +74,19 @@ INSTANCES = ["Thin", "ExtraLight", "Light", "Regular", "Medium", "SemiBold", "Bo
 WEIGHT_MAP = [(100, 100), (200, 200), (300, 300), (400, 400), (500, 500), (600, 620), (700, 740)]
 
 # v0.1 coverage: Latin, punctuation, currency, arrows, maths, technical, box drawing, shapes.
-RANGES = [(0x20, 0x7E), (0xA0, 0x17F), (0x18F, 0x18F), (0x192, 0x192), (0x1A0, 0x1B0),
-          (0x1CD, 0x1DC), (0x218, 0x21B), (0x237, 0x237), (0x259, 0x259),
-          (0x2BB, 0x2BC), (0x2C6, 0x2DD), (0x300, 0x328), (0x1E00, 0x1EFF),
-          (0x2010, 0x205E), (0x20AC, 0x20BF), (0x2100, 0x215F), (0x2190, 0x21FF),
-          (0x2200, 0x22FF), (0x2300, 0x23FF), (0x2500, 0x259F), (0x25A0, 0x25FF)]
-
-MONO_FEATURES = """\
-languagesystem DFLT dflt;
-languagesystem latn dflt;
-
-# Slashed zero in place of the default centre-bar zero
-feature zero {
-  sub zero by zero.slash;
-} zero;
-"""
+# (characters, the symbol drawn across their cells, how it is stretched)
+LIGATURES = [
+    (("equal", "equal", "equal"), "equal", "bars"),
+    (("exclam", "equal", "equal"), "notequal", "bars"),
+    (("hyphen", "greater"), "rightArrow", "right"),
+    (("less", "hyphen"), "leftArrow", "left"),
+    (("equal", "greater"), "rightDoubleArrow", "right"),
+    (("exclam", "equal"), "notequal", "bars"),
+    (("equal", "equal"), "equal", "bars"),
+    (("greater", "equal"), "greaterequal", "centre"),
+    (("less", "equal"), "lessequal", "centre"),
+]
+SPACER = "kerf.spacer"
 
 
 def interpolate_bold() -> Path:
@@ -105,17 +112,92 @@ def promote_alternates(fonts) -> None:
             swap_glyph_outlines(f, a, b)
 
 
-def coverage(font) -> set[str]:
-    names = {g.name for g in font if any(lo <= u <= hi for u in g.unicodes for lo, hi in RANGES)}
-    names |= {"idotless", "jdotless", "zero.slash"}
-    out, todo = set(), list(names)
-    while todo:
-        n = todo.pop()
-        if n in out or n not in font:
+def mono_features(sans_features: str, glyphs) -> str:
+    """Kerf Sans's features for the mono: capital spacing out, code ligatures in.
+
+    Inter's calt turns = after ! into its case form, so each character in a
+    rule also matches its .case glyph.
+    """
+    text = re.sub(r"feature cpsp \{.*?\} cpsp;", "", sans_features, flags=re.S)
+    forms = lambda c: f"[{c} {c}.case]" if f"{c}.case" in glyphs else c  # noqa: E731
+    rules, finals = [], []
+    for chars, _, _ in LIGATURES:
+        name = "_".join(chars)
+        finals.append(f"lookup kerfCode_{name} {{\n  sub {forms(chars[-1])} by {name}.code;\n}} kerfCode_{name};")
+        marked = " ".join(f"{forms(c)}' lookup kerfSpacer" for c in chars[:-1])
+        rules.append(f"    sub {marked} {forms(chars[-1])}' lookup kerfCode_{name};")
+    firsts = sorted({g for chars, _, _ in LIGATURES for c in chars[:-1] for g in (c, f"{c}.case") if g in glyphs})
+    return text + f"""
+
+# Code ligatures (opt in with dlig). Every character keeps its cell: the
+# leading ones become an empty cell and the last draws the symbol across all
+# of them, so columns stay aligned. Longer sequences are tried first.
+lookup kerfSpacer {{
+  sub [{" ".join(firsts)}] by {SPACER};
+}} kerfSpacer;
+{chr(10).join(finals)}
+feature dlig {{
+  lookup kerfCode {{
+{chr(10).join(rules)}
+  }} kerfCode;
+}} dlig;
+"""
+
+
+def code_ligatures(font) -> None:
+    """Draw each ligature from the mono's own symbol, across its cells.
+
+    The glyph sits in the last cell and reaches left over the others: arrows
+    keep their head and stretch the shaft, = and ≠ stretch their bars (the
+    slash of ≠ stays), ≤ and ≥ are centred on the run.
+    """
+    spacer = font.newGlyph(SPACER)
+    spacer.width = CELL
+    for chars, symbol, how in LIGATURES:
+        extra = (len(chars) - 1) * CELL
+        g = font.newGlyph("_".join(chars) + ".code")
+        g.width = CELL
+        pen = DecomposingRecordingPen(font)
+        font[symbol].draw(pen)
+        pen.replay(g.getPen())
+        b = g.getBounds(font)
+        span = b.xMax - b.xMin
+        for c in g.contours:
+            cb = c.getBounds()
+            bar = (cb.yMax - cb.yMin) < 0.45 * (cb.xMax - cb.xMin)
+            for pt in c.points:
+                if how == "right" and pt.x < b.xMin + 0.2 * span:
+                    pt.x -= extra
+                elif how == "left":
+                    pt.x -= extra
+                    if pt.x > b.xMax - extra - 0.2 * span:
+                        pt.x += extra
+                elif how == "bars":
+                    pt.x -= extra / 2
+                    if bar:
+                        pt.x += -extra / 2 if pt.x < CELL / 2 - extra / 2 else extra / 2
+                elif how == "centre":
+                    pt.x -= extra / 2
+
+
+def strip_ligatures(path: Path) -> None:
+    """Empty every ligature lookup outside ccmp, so no run of characters becomes one glyph."""
+    from fontTools.ttLib import TTFont
+
+    font = TTFont(path)
+    gsub = font["GSUB"].table
+    ccmp = {i for fr in gsub.FeatureList.FeatureRecord if fr.FeatureTag == "ccmp" for i in fr.Feature.LookupListIndex}
+    emptied = 0
+    for i, lookup in enumerate(gsub.LookupList.Lookup):
+        if i in ccmp:
             continue
-        out.add(n)
-        todo.extend(c.baseGlyph for c in font[n].components)
-    return out
+        for st in lookup.SubTable:
+            st = st.ExtSubTable if lookup.LookupType == 7 else st
+            if getattr(st, "LookupType", None) == 4 and st.ligatures:
+                st.ligatures = {}
+                emptied += 1
+    font.save(path)
+    print(f"{path.name}: {emptied} ligature subtables emptied")
 
 
 def kind(g: Glyph) -> str:
@@ -367,19 +449,17 @@ def main() -> None:
         "Bold": ufoLib2.Font.open(bold, lazy=False),
     }
     promote_alternates(fonts)
-    keep = coverage(fonts["Regular"])
+    features = mono_features(fonts["Regular"].features.text, set(fonts["Regular"].keys()))
     flatten = composites_to_flatten(fonts["Regular"])
     for f in fonts.values():
         decompose(f, flatten)
-        for name in [g.name for g in f if g.name not in keep]:
-            del f[name]
     scales = plan_scales(fonts["Regular"])
     zero_width = {g.name for g in fonts["Regular"] if g.width == 0}
 
     for style, f in fonts.items():
         f.kerning.clear()
         f.groups.clear()
-        f.features.text = MONO_FEATURES
+        f.features.text = features
         stem = ink_width(f, "idotless")
         b = f["hyphen"].getBounds(f)
         bar = b.yMax - b.yMin
@@ -403,11 +483,15 @@ def main() -> None:
         for g in f:
             g.width = 0 if g.name in zero_width else CELL
         draw_box_glyphs(f, CELL, stem, bar)
+        code_ligatures(f)
         f.info.postscriptIsFixedPitch = True
         f.info.openTypeOS2Panose = [2, 11, 5, 9, 2, 2, 3, 2, 2, 4]
         set_names(f, FAMILY, style, MASTER_STYLES[style][0])
+        f.lib[FILTERS_KEY] = []  # Kerf Sans's corners are already erased where every master agrees
         assign_categories(f)
 
+    relabel_features(fonts, PROMOTE)
+    shutil.copytree(FEATURES, OUT / "features")
     paths = {}
     for style, f in fonts.items():
         p = OUT / f"KerfMono-{style}.ufo"
@@ -417,4 +501,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    if sys.argv[1:2] == ["--finish"]:
+        strip_ligatures(Path(sys.argv[2]))
+    else:
+        main()

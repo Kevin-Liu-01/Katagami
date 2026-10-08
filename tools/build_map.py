@@ -10,9 +10,14 @@ writes into Kerf-Website/map/:
     map.json      units, glyph sets, languages, per-family coverage and stats
     LICENSE.txt   the data notices (CLDR, Natural Earth, GHS-POP)
 
-A glyph set counts as covered by a family when the family's font has at
+A glyph set counts as covered by a family when the family's fonts have at
 least 90 percent of its letters; the map then draws only the letters the
-font has. Population shares weight every land cell by its people (GHS-POP
+fonts have. Han, kana and Hangul sets sample a few dozen characters from
+scripts that need thousands, so for those the family must also have the
+whole national standard: GB 2312's hanzi for Simplified Chinese, Big5's
+level-1 hanzi for Traditional, JIS X 0208's level-1 kanji and the kana for
+Japanese, KS X 1001's Hangul for Korean. The proportional members count
+the Kerf CJK companions as theirs; the website sets them in one family. Population shares weight every land cell by its people (GHS-POP
 density times cell area) and give the cell to its largest language.
 """
 
@@ -35,13 +40,52 @@ OUT = SITE / "map"
 LEVELS = (1, 0.5, 0.25)
 STATS_LEVEL = 0.5
 COVERED = 0.9
+CJK = [ROOT / f"fonts/cjk/KerfCJK{r}[wght].ttf" for r in ("SC", "JP", "KR")]
 FONTS = {
-    "round": ROOT / "fonts/round/KerfRound[wght].ttf",
-    "sans": ROOT / "fonts/sans/KerfSans[wght].ttf",
-    "text": ROOT / "fonts/text/KerfText[wght].ttf",
-    "mono": ROOT / "fonts/mono/KerfMono[wght].ttf",
+    "round": [ROOT / "fonts/round/KerfRound[wght].ttf", *CJK],
+    "sans": [ROOT / "fonts/sans/KerfSans[wght].ttf", *CJK],
+    "text": [ROOT / "fonts/text/KerfText[wght].ttf", *CJK],
+    "mono": [ROOT / "fonts/mono/KerfMono[wght].ttf"],
 }
 DENSITY_LOG_MIN, DENSITY_STEPS = -3, 32
+
+
+def euc(codec: str, rows: range) -> set[int]:
+    """Characters of a two-byte EUC code set in the given lead-byte rows."""
+    out = set()
+    for hi in rows:
+        for lo in range(0xA1, 0xFF):
+            try:
+                ch = bytes([hi, lo]).decode(codec)
+            except UnicodeDecodeError:
+                continue
+            if len(ch) == 1:
+                out.add(ord(ch))
+    return out
+
+
+def big5_level1() -> set[int]:
+    out = set()
+    for hi in range(0xA4, 0xC7):
+        for lo in list(range(0x40, 0x7F)) + list(range(0xA1, 0xFF)):
+            try:
+                ch = bytes([hi, lo]).decode("big5")
+            except UnicodeDecodeError:
+                continue
+            if len(ch) == 1 and 0x4E00 <= ord(ch) <= 0x9FFF:
+                out.add(ord(ch))
+    return out
+
+
+def standards() -> dict[str, set[int]]:
+    """The full character standard each Han, kana or Hangul script must meet."""
+    kana = set(range(0x3041, 0x3097)) | set(range(0x30A1, 0x30FB))
+    return {
+        "Hans": {u for u in euc("gb2312", range(0xB0, 0xF8)) if u >= 0x4E00},
+        "Hant": big5_level1(),
+        "Jpan": {u for u in euc("euc_jp", range(0xB0, 0xD0)) if u >= 0x4E00} | kana,
+        "Kore": {u for u in euc("euc_kr", range(0xB0, 0xC9)) if 0xAC00 <= u <= 0xD7A3},
+    }
 
 
 def level_name(res: float) -> str:
@@ -80,13 +124,17 @@ def main() -> None:
     shutil.copyfile(WORLD / "LICENSE.txt", OUT / "LICENSE.txt")
 
     # which letters each family has
-    cmaps = {fam: set(TTFont(path).getBestCmap()) for fam, path in FONTS.items()}
+    cmaps = {fam: set().union(*(TTFont(path).getBestCmap() for path in paths if path.exists()))
+             for fam, paths in FONTS.items()}
+    full = standards()
     coverage, charsets = {}, {}
     for fam, cmap in cmaps.items():
         keys, chars = [], set()
         for key, s in sets.items():
             letters = s["glyphs"].split()
             have = [ch for ch in letters if all(ord(c) in cmap for c in ch)]
+            if s["script"] in full and not full[s["script"]] <= cmap:
+                continue
             if letters and len(have) / len(letters) >= COVERED:
                 keys.append(key)
                 chars.update(have)

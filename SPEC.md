@@ -83,7 +83,7 @@ Three tails are redrawn, keeping each glyph's point count so the masters stay co
 - **y:** the tail comes down the right arm's diagonal, turns through a quarter turn and runs level to a vertical cut. The cut keeps Inter's position and length.
 - **t:** the hook runs level from its bottom to a vertical cut at Inter's terminal position.
 
-The quarter turns use the member's handle fraction: 0.60 plus 0.40 times the lowercase squaring and counter boost, so Kerf Sans turns square, Kerf Round less so, and Kerf Text round.
+The y's quarter turns use the member's handle fraction: 0.60 plus 0.40 times the lowercase squaring and counter boost, so Kerf Sans turns square, Kerf Round less so, and Kerf Text round.
 
 ## Figures
 
@@ -91,9 +91,9 @@ Inter's alternate figures become the defaults: a 1 with a long flag (cv01), an o
 
 ## Joins
 
-Inter's heavy weights cut deep notches where bowls join stems, which leaves a hairline in bold a and u. Each such notch (a corner where a curve meets a stem edge that runs to the baseline or x-height: a, u, n, m, h, b, p, r) moves 45 percent of the way toward the baseline or x-height, with its step and handle. The handle stays between the corner and the far end of its curve, so the bowl flattens into the join instead of dipping below the baseline. The joins of b, d, p and q (and their drawn variants) move 70 percent of the way, because their full bowls leave the thinnest strokes.
+Inter's heavy weights cut deep notches where bowls join stems, which leaves a hairline in bold a and u. Each such notch (a corner where a curve meets a stem edge that runs to the baseline or x-height: a, u, n, m, h, b, p, r) moves 45 percent of the way toward the baseline or x-height, with its step and handle. The handle stays between the corner and the far end of its curve, so the bowl flattens into the join instead of dipping below the baseline. The joins of b, d, p and q (and their drawn variants) move 70 percent of the way, because their full bowls leave the thinnest strokes. The fill is scaled by weight: none in the Thin master and the full share in Regular and Black, so the light weights in between get part of it. Inter's Thin joins barely notch, and moving their corners left a lump where the curve meets the stem.
 
-The dip between the arches of m, where the second arch leaves the middle stem, rises half of the way to the x-height. The curves on both sides are squashed vertically into the shorter span, so their handles keep their direction and the second arch keeps its weight where it meets the first.
+The dip between the arches of m, where the second arch leaves the middle stem, rises half of the way to the x-height (scaled by weight the same way). The curves on both sides are squashed vertically into the shorter span, so their handles keep their direction and the second arch keeps its weight where it meets the first.
 
 ## Punctuation
 
@@ -145,11 +145,14 @@ U+2500 to U+259F are drawn by `tools/kerf_build/boxdraw.py`, not taken from Inte
 
 ## Coverage in v0.1
 
-| | Kerf Sans | Kerf Mono |
+| | Kerf Sans, Round, Text | Kerf Mono |
 |---|---|---|
-| Glyphs | Inter's full set | about 1,140 |
-| Scripts | Latin, Greek, Cyrillic (from Inter) | Latin |
-| Features | Inter's full feature set | mark positioning, `zero` |
+| Glyphs | about 11,240, of which about 3,340 are drawn by Kerf | about 3,500, all fitted to the cell |
+| Scripts | Latin, Greek and Cyrillic drawn; 19 more merged from Noto Sans; Chinese, Japanese and Korean through Kerf CJK | Latin, Greek, Cyrillic |
+| Features | Inter's full set plus small capitals | Inter's set without capital spacing or n:1 ligatures, plus small capitals and code ligatures |
+| People covered (map) | 99.6 percent, 222 of 234 languages | 44.5 percent, 172 of 234 |
+
+The map counts a language as covered when the family has at least 90 percent of the letters it draws for it, and for Chinese, Japanese and Korean the whole national standard. Traditional Chinese (Taiwan, Hong Kong) is the largest gap: the companions have 4,920 of Big5's 5,401 level-1 hanzi.
 
 ## Kerf Round
 
@@ -164,14 +167,14 @@ Kerf Round sits between Kerf Sans and Inter: geometric bowls that are less squar
 
 ## Kerf Text
 
-Kerf Text is the member for reading: it drops the squaring and moves Inter toward PP Mori's proportions. It is the least technical member and the one the converter on the website uses for serif text. The parameters are the `text` profile.
+Kerf Text is the member for reading. It moves Inter toward PP Mori's proportions and away from Inter's own tells, the tall x-height first. It is the least technical member and the one the converter on the website uses for serif text. The parameters are the `text` profile.
 
-- **Size:** every glyph, advance, anchor and kerning value is scaled by 0.96 about the origin, with the line height unchanged. The x-height becomes 0.524 em and the cap height 0.699 em (PP Mori 0.53 and 0.70, Inter 0.546 and 0.728).
+- **x-height:** the lowercase from the baseline to the x-height is scaled by 0.95. Ascenders, dots and accents move down with it and descenders stay, so the x-height is 0.71 of the cap height (Inter 0.75).
+- **Size:** every glyph, advance, anchor and kerning value is then scaled by 0.96 about the origin, with the line height unchanged: caps 0.699 em (PP Mori 0.70, Inter 0.728), x-height 0.498 em.
 - **Curves:** a slight negative squaring (0.02), so bowls are a touch rounder than Inter's.
-- **Widths:** round letters wider (O and Q 1.05, C and G 1.04, o 1.03, e and s 1.025), the narrow capitals opened (E 1.06, F 1.05, L and S 1.03), and the other capitals 3 to 4 percent wider (H 1.04), toward Mori's H of 0.768 em.
-- **a:** redrawn. The bowl's top leaves the stem as a level stroke at 0.62 of the x-height, meets the stem square, runs to the middle of the bowl and turns down into the bowl's side; the counter's top follows at the same thickness. The stem ends in a foot that runs level to a vertical cut, as t's hook does. The arch's terminal is cut level.
+- **Widths:** round letters wider (O and Q 1.05, C and G 1.04, o 1.03, e and s 1.025, a 1.03), the narrow capitals opened (E 1.06, F 1.05, L and S 1.03), and the other capitals 3 to 4 percent wider (H 1.04), toward Mori's H of 0.768 em.
+- **Letterforms:** a plain double-storey a with a straight stem and its arch cut level; Inter's compact f (cv12) and l with a tail (cv05); a t whose stem top is cut at a slant, its left corner 0.45 stems lower than its right; Kerf's long-flag 1; G with a spur (cv10).
 - **Terminals:** c, e, s, a and g cut level, as PP Mori cuts them.
-- **Letterforms:** Kerf's long-flag 1 and Inter's G with spur (cv10). The single-storey a stays available as cv11.
 - **Weight:** the heavy weights are lighter than Inter's (700 is Inter's 640, 800 its 760), as PP Mori's are.
 - **Spacing:** sidebearings 14 units tighter before scaling, so o's sidebearing is about 42 per 1000 (Inter 51, Mori 41); space 512 units before scaling.
 
@@ -179,10 +182,30 @@ Kerf Text is the member for reading: it drops the squaring and moves Inter towar
 
 When an alternate becomes the default, its accented forms are swapped with it (aacute with aacute.2, Gbreve with Gbreve.1). The swapped accented forms are composites of the swapped base glyphs, so their components are renamed through the same swap. The default á is then built on the new a, not on Inter's original.
 
+## OpenType features
+
+Kerf Sans, Round and Text compile Inter's own feature files, so every feature Inter documents works: contextual alternates (`calt`, which raises hyphens and arrows between capitals and turns `->` into an arrow), case-sensitive forms (`case`), capital spacing (`cpsp`), slashed zero (`zero`), tabular and proportional figures (`tnum`, `pnum`), fractions, numerators and denominators (`frac`, `numr`, `dnom`), superscripts, subscripts and scientific inferiors (`sups`, `subs`, `sinf`), ordinals (`ordn`), discretionary ligatures (`dlig`), the character variants `cv01` to `cv16` and the stylistic sets `ss01` to `ss08`. Where Kerf made an Inter alternate its default, the feature switches back to Inter's form and its label says so.
+
+Kerf adds small capitals, which Inter does not have (its 13 `.sc` glyphs are phonetic letters):
+
+- **`smcp` and `c2sc`:** 320 small capitals for Latin, Greek and Cyrillic, accented letters included. Each is its capital scaled to the x-height and emboldened back to the lowercase stem (and 0.85 of that on horizontal strokes), then tracked 0.03 em wider. Accented small capitals reuse the lowercase marks, moved by the difference in top anchors.
+
+Kerf Mono keeps every glyph of Kerf Sans, fitted to the cell, so it has the same features, with two exceptions. Capital spacing is left out, and after compiling, the lookups that set two or more characters as one glyph (Inter's `->` arrows) are emptied, so every character stays one cell wide. In their place Kerf Mono has code ligatures as an opt-in `dlig`: `->`, `<-`, `=>`, `!=`, `==`, `===`, `!==`, `>=` and `<=`. Every character keeps its cell; the leading ones become an empty cell and the last one draws the symbol across all of them. Arrows keep their head and stretch the shaft, = and ≠ stretch their bars, and ≤ and ≥ are centred on the run.
+
+## Other scripts
+
+Kerf draws Latin, Greek and Cyrillic. Kerf Sans, Round and Text also set 19 more scripts with the outlines and OpenType layout of Google's Noto Sans fonts (SIL OFL 1.1), merged in by `tools/build_world.py` the way Pretendard joins Inter and Source Han Sans: Devanagari, Arabic, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala, Thai, Lao, Myanmar, Ethiopic, Hebrew, Armenian, Georgian and Khmer.
+
+- Each Noto font is subset to its script's Unicode blocks with its layout closure, so it brings no Latin, digits or punctuation of its own.
+- It is instanced at Kerf's master weights (100, 400, 900) and scaled from Noto's 1000-unit em to 2048 times Kerf's x-height over Noto Sans's (536 per 1000), so its letters sit at the member's size.
+- Each Kerf master is merged with the scripts at its weight, and the three merged masters are built back into one variable font with the member's weight axis, named instances and line spacing. The Windows clipping box grows to the tallest script.
+- These glyphs are Noto's design at Kerf's size and weight; they are not redrawn in Kerf's style.
+
+Chinese, Japanese and Korean would pass the 65,535-glyph limit, so they are companion files, Kerf CJK SC, JP and KR (`tools/build_cjk.py`), as Pretendard JP is. Each is Noto Sans SC, JP or KR subset to a national standard (GB 2312's 6,763 hanzi; JIS X 0208's 6,355 kanji with the kana; all 11,172 Hangul syllables), scaled to 2048 units and given Kerf's line metrics. The website sets them in the same CSS family as each proportional member with unicode-range.
+
 ## Not done yet
 
 - Hand corrections. Every glyph is the output of a transform; none has been redrawn by eye.
 - Italics.
-- Code ligatures for the mono, as an opt-in stylistic set.
 - Hinting, and fontbakery checks.
 - A flat-topped t and the straight Q tail measured on Camber.
