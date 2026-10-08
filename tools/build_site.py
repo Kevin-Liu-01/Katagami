@@ -96,6 +96,46 @@ def contours(font, ch: str, corners=()) -> dict:
                           for p in c.points] for c in g.contours]}
 
 
+TYPES = {"curve": "c", "line": "l", None: "o"}
+
+
+def flatten(font, gname: str, xf=(1, 0, 0, 1, 0, 0)) -> list:
+    """A glyph's contours with its components drawn in, in order, without
+    changing the font: own contours first, then each component's."""
+    g = font[gname]
+    a, b, c, d, e, f = xf
+    out = [[[round(a * p.x + c * p.y + e, 1), round(b * p.x + d * p.y + f, 1), TYPES.get(p.type, "l")]
+             for p in cont.points] for cont in g.contours]
+    for comp in g.components:
+        A, B, C, D, E, F = comp.transformation
+        out += flatten(font, comp.baseGlyph,
+                       (a * A + c * B, b * A + d * B, a * C + c * D, b * C + d * D, a * E + c * F + e, b * E + d * F + f))
+    return out
+
+
+def flat_plan(font, gname: str, offset: int = 0) -> list:
+    """Kerf Round's rounded corners for the flattened glyph, contour indices shifted to match."""
+    plans = font.lib.get("com.kerf.roundedCorners", {})
+    g = font[gname]
+    out = [(ci + offset, idx) for ci, idx in plans.get(gname, [])]
+    n = offset + len(g.contours)
+    for comp in g.components:
+        out += flat_plan(font, comp.baseGlyph, n)
+        n += len(flatten(font, comp.baseGlyph))
+    return out
+
+
+def expand(contours: list, plan: list) -> list:
+    """Split each planned corner into the four coincident points Kerf Round has there."""
+    out = [list(c) for c in contours]
+    for ci, idx in plan:
+        c = out[ci]
+        for i in sorted(idx, reverse=True):
+            x, y, t = c[i]
+            c[i:i + 1] = [[x, y, t], [x, y, "o"], [x, y, "o"], [x, y, "c"]]
+    return out
+
+
 def outlines() -> dict:
     inter, kerf, mono, rnd = (ufoLib2.Font.open(p) for p in (INTER_UFO, KERF_UFO, MONO_UFO, ROUND_UFO))
     shape = lambda o: [len(c) for c in o["contours"]]  # noqa: E731
@@ -107,10 +147,10 @@ def outlines() -> dict:
         if ch in HERO:
             # Kerf Round rounds its vertices, which adds points. Give Sans and
             # Mono the same corners at zero radius so all three still morph.
-            plan = rnd.lib.get("com.kerf.roundedCorners", {}).get(gname, [])
-            sans_like = contours(kerf, gname, plan)
-            mono_like = contours(mono, gname, plan)
-            rounded = contours(rnd, gname)
+            plan = flat_plan(rnd, gname)
+            sans_like = {"adv": kerf[gname].width, "contours": expand(flatten(kerf, gname), plan)}
+            mono_like = {"adv": mono[gname].width, "contours": expand(flatten(mono, gname), plan)}
+            rounded = {"adv": rnd[gname].width, "contours": flatten(rnd, gname)}
             for key, o in (("mono", mono_like), ("round", rounded)):
                 assert shape(o) == shape(sans_like), f"{ch}: {key} and Kerf Sans outlines differ"
             out[ch]["hero"] = sans_like
