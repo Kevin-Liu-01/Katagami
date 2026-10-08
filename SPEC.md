@@ -1,20 +1,20 @@
-# Kerf design spec
+# Katagami design spec
 
-Kerf is a type family with three members built from one source:
+Katagami is a type family with three members built from one source:
 
-- **Kerf Sans**, a squared proportional sans serif for interfaces and display.
-- **Kerf Round**, a rounder, universal sans serif for interfaces and text.
-- **Kerf Mono**, a monospace for code, terminals and tables, fitted from Kerf Sans.
+- **Katagami Sans**, a squared proportional sans serif for interfaces and display.
+- **Katagami Round**, a rounder, universal sans serif for interfaces and text.
+- **Katagami Mono**, a monospace for code, terminals and tables, fitted from Katagami Sans.
 
-Kerf Sans starts from the outlines of [Inter](https://github.com/rsms/inter) (SIL OFL 1.1) and moves them toward the squared geometry of Camber (Eduardo Manso, Emtype Foundry). Kerf Mono is built from Kerf Sans and takes its approach to the monospace cell from the machine-readable faces of the 1970s, the same tradition Berkeley Mono (US Graphics) draws on.
+Katagami Sans starts from the outlines of [Inter](https://github.com/rsms/inter) (SIL OFL 1.1) and moves them toward the squared geometry of Camber (Eduardo Manso, Emtype Foundry). Katagami Mono is built from Katagami Sans and takes its approach to the monospace cell from the machine-readable faces of the 1970s, the same tradition Berkeley Mono (US Graphics) draws on.
 
-Camber and Berkeley Mono are commercial fonts. Kerf contains none of their outlines. They were measured as references: Camber from the webfont on its foundry's specimen page, Berkeley Mono from a licensed copy. Every outline in Kerf is either a transformed Inter outline or drawn by the build scripts in `tools/`.
+Camber and Berkeley Mono are commercial fonts. Katagami contains none of their outlines. They were measured as references: Camber from the webfont on its foundry's specimen page, Berkeley Mono from a licensed copy. Every outline in Katagami is either a transformed Inter outline or drawn by the build scripts in `tools/`.
 
 ## Principles
 
-1. **One skeleton.** Both members share units per em, vertical metrics, curve shape, terminals and punctuation. Text set in Kerf Sans with code in Kerf Mono must look like one family.
+1. **One skeleton.** Both members share units per em, vertical metrics, curve shape, terminals and punctuation. Text set in Katagami Sans with code in Katagami Mono must look like one family.
 2. **Square curves, straight cuts.** Bowls are superellipses, not circles. Terminals are cut horizontally. Dots and punctuation are square.
-3. **Round letters as wide as straight ones.** In Inter, O is wider than H. In Kerf, rounds are condensed so O, H, o and n read as the same width.
+3. **Round letters as wide as straight ones.** In Inter, O is wider than H. In Katagami, rounds are condensed so O, H, o and n read as the same width.
 4. **Every glyph distinct in code.** In the mono, i, l, 1, I and | are distinguished by shape, not only by position. 0 and O differ by a centre bar in 0.
 5. **Reproducible.** The fonts are generated from Inter's pinned sources by deterministic scripts. Every number below is a constant in the build code.
 
@@ -31,7 +31,7 @@ All values are in font units at 2048 units per em, inherited from Inter.
 | Descender | -494 | -0.241 |
 | Mono cell (advance) | 1280 | 0.625 |
 
-The mono cell is 0.625 em. At that width Kerf's x-height sits at 0.87 of the cell, the proportion Berkeley Mono has at 0.6 em, so the letters read at the same width as a 0.6 em mono with a smaller x-height. The glyphs keep Kerf Sans' vertical metrics, so mono and sans mix inline.
+The mono cell is 0.625 em. At that width Katagami's x-height sits at 0.87 of the cell, the proportion Berkeley Mono has at 0.6 em, so the letters read at the same width as a 0.6 em mono with a smaller x-height. The glyphs keep Katagami Sans' vertical metrics, so mono and sans mix inline.
 
 ## Curve shape
 
@@ -57,7 +57,7 @@ Which arcs to square is decided on the Regular master and applied to every maste
 
 ## Widths
 
-Horizontal ink scale per glyph in Kerf Sans. Sidebearings are kept, and vertical stems are restored to their original thickness after scaling.
+Horizontal ink scale per glyph in Katagami Sans. Sidebearings are kept, and vertical stems are restored to their original thickness after scaling.
 
 | Glyphs | Scale |
 |---|---|
@@ -75,7 +75,7 @@ Accented and composite glyphs are re-seated on their changed bases, and their ma
 
 ## Terminals
 
-The cut ends of c, e, s and a are cut again along a level line (0 degrees) through the old cut's midpoint, from Inter's 16 degrees. Each edge of the stroke is split where it crosses the new line by de Casteljau subdivision: the edge that ran past it is trimmed, the edge that stopped short is extended along its own curve, and both handles of each edge move with the split. The edges stay pieces of their original curves, so the letter is not warped. Inter's capitals and figures are already cut level. The f's crossbar, which starts inside the compact f's stem, reaches 0.4 stems past the stem's left edge. Kerf Round takes the same cuts and the same f.
+The cut ends of c, e, s and a are cut again along a level line (0 degrees) through the old cut's midpoint, from Inter's 16 degrees. Each edge of the stroke is split where it crosses the new line by de Casteljau subdivision: the edge that ran past it is trimmed, the edge that stopped short is extended along its own curve, and both handles of each edge move with the split. The edges stay pieces of their original curves, so the letter is not warped. Inter's capitals and figures are already cut level. The f's crossbar, which starts inside the compact f's stem, reaches 0.4 stems past the stem's left edge. Katagami Round takes the same cuts and the same f.
 
 Three tails are redrawn, keeping each glyph's point count so the masters stay compatible:
 
@@ -83,7 +83,7 @@ Three tails are redrawn, keeping each glyph's point count so the masters stay co
 - **y:** the tail comes down the right arm's diagonal, turns through a quarter turn and runs level to a vertical cut. The cut keeps Inter's position and length.
 - **t:** the hook runs level from its bottom to a vertical cut at Inter's terminal position.
 
-The y's quarter turns use the member's handle fraction: 0.60 plus 0.40 times the lowercase squaring and counter boost, so Kerf Sans turns square, Kerf Round less so, and Kerf Text round.
+The y's quarter turns use the member's handle fraction: 0.60 plus 0.40 times the lowercase squaring and counter boost, so Katagami Sans turns square, Katagami Round less so, and Katagami Text round.
 
 ## Figures
 
@@ -97,19 +97,19 @@ The dip between the arches of m, where the second arch leaves the middle stem, r
 
 ## Punctuation
 
-Inter's square punctuation (its `ss07` set) is Kerf's default. Inter's round punctuation is available under `ss07`.
+Inter's square punctuation (its `ss07` set) is Katagami's default. Inter's round punctuation is available under `ss07`.
 
 ## Weight
 
-The weight axis runs 100 to 900 in Kerf Sans and 100 to 700 in Kerf Mono. From SemiBold up, Kerf is heavier than Inter at the same weight value, because Camber's Bold is about 20 percent heavier than Inter's:
+The weight axis runs 100 to 900 in Katagami Sans and 100 to 700 in Katagami Mono. From SemiBold up, Katagami is heavier than Inter at the same weight value, because Camber's Bold is about 20 percent heavier than Inter's:
 
-| Weight | Inter master value | Kerf master value |
+| Weight | Inter master value | Katagami master value |
 |---|---|---|
 | 600 SemiBold | 580 | 620 |
 | 700 Bold | 670 | 740 |
 | 800 ExtraBold | 780 | 840 |
 
-## Kerf Mono
+## Katagami Mono
 
 ### Fitting glyphs to the cell
 
@@ -129,7 +129,7 @@ Every outline is fitted to the 1280-unit cell. Each decision is made on the Regu
 | l | flag at the top left, tail to the right |
 | j | flag at the top left |
 | I | serifs top and bottom |
-| 1 | long flag, from Kerf Sans |
+| 1 | long flag, from Katagami Sans |
 | 0 | vertical bar in the centre of the counter; slashed zero under `zero` |
 
 Flags are 20 percent of the cell long and as thick as the hyphen.
@@ -145,35 +145,35 @@ U+2500 to U+259F are drawn by `tools/kerf_build/boxdraw.py`, not taken from Inte
 
 ## Coverage in v0.1
 
-| | Kerf Sans, Round, Text | Kerf Mono |
+| | Katagami Sans, Round, Text | Katagami Mono |
 |---|---|---|
-| Glyphs | about 11,240, of which about 3,340 are drawn by Kerf | about 3,500, all fitted to the cell |
-| Scripts | Latin, Greek and Cyrillic drawn; 19 more merged from Noto Sans; Chinese, Japanese and Korean through Kerf CJK | Latin, Greek, Cyrillic |
+| Glyphs | about 11,240, of which about 3,340 are drawn by Katagami | about 3,500, all fitted to the cell |
+| Scripts | Latin, Greek and Cyrillic drawn; 19 more merged from Noto Sans; Chinese, Japanese and Korean through Katagami CJK | Latin, Greek, Cyrillic |
 | Features | Inter's full set plus small capitals | Inter's set without capital spacing or n:1 ligatures, plus small capitals and code ligatures |
 | People covered (map) | 99.6 percent, 222 of 234 languages | 44.5 percent, 172 of 234 |
 
 The map counts a language as covered when the family has at least 90 percent of the letters it draws for it, and for Chinese, Japanese and Korean the whole national standard. Traditional Chinese (Taiwan, Hong Kong) is the largest gap: the companions have 4,920 of Big5's 5,401 level-1 hanzi.
 
-## Kerf Round
+## Katagami Round
 
-Kerf Round sits between Kerf Sans and Inter: geometric bowls that are less square than Kerf Sans, with every sharp vertex rounded. It started from Inter, PP Mori (Pangram Pangram) and Geist (Vercel), measured from their webfonts with DM Sans and Nacelle as secondary references; none of their outlines is used. The parameters live in `tools/kerf_build/profiles.py` as the `round` profile.
+Katagami Round sits between Katagami Sans and Inter: geometric bowls that are less square than Katagami Sans, with every sharp vertex rounded. It started from Inter, PP Mori (Pangram Pangram) and Geist (Vercel), measured from their webfonts with DM Sans and Nacelle as secondary references; none of their outlines is used. The parameters live in `tools/kerf_build/profiles.py` as the `round` profile.
 
-- **Curves:** squared at 0.24 (caps) and 0.22 (lowercase), with the tight-curve rule, so bowls read as geometric without Kerf Sans's flat sides.
+- **Curves:** squared at 0.24 (caps) and 0.22 (lowercase), with the tight-curve rule, so bowls read as geometric without Katagami Sans's flat sides.
 - **Vertices:** every convex corner sharper than 20 degrees is rounded with a radius of 0.22 stems (kappa 0.5523 handles). The corners are chosen on Regular and rounded in every master, so the masters stay compatible. Curves are not rounded further.
-- **Terminals:** c, e, s, a and g cut level, as in Kerf Sans. The f crossbar overhangs the stem by 0.4 stems.
-- **Letterforms:** Kerf's figures and compact f, and Inter's G with spur (cv10).
+- **Terminals:** c, e, s, a and g cut level, as in Katagami Sans. The f crossbar overhangs the stem by 0.4 stems.
+- **Letterforms:** Katagami's figures and compact f, and Inter's G with spur (cv10).
 - **Joins:** bowl-to-stem notches fill 35 percent of the way.
 - **Spacing:** sidebearings 3 units tighter than Inter, space 552 units.
 
-## Kerf Text
+## Katagami Text
 
-Kerf Text is the member for reading. It moves Inter toward PP Mori's proportions and away from Inter's own tells, the tall x-height first. It is the least technical member and the one the converter on the website uses for serif text. The parameters are the `text` profile.
+Katagami Text is the member for reading. It moves Inter toward PP Mori's proportions and away from Inter's own tells, the tall x-height first. It is the least technical member and the one the converter on the website uses for serif text. The parameters are the `text` profile.
 
 - **x-height:** the lowercase from the baseline to the x-height is scaled by 0.95. Ascenders, dots and accents move down with it and descenders stay, so the x-height is 0.71 of the cap height (Inter 0.75).
 - **Size:** every glyph, advance, anchor and kerning value is then scaled by 0.96 about the origin, with the line height unchanged: caps 0.699 em (PP Mori 0.70, Inter 0.728), x-height 0.498 em.
 - **Curves:** a slight negative squaring (0.02), so bowls are a touch rounder than Inter's.
 - **Widths:** round letters wider (O and Q 1.05, C and G 1.04, o 1.03, e and s 1.025, a 1.03), the narrow capitals opened (E 1.06, F 1.05, L and S 1.03), and the other capitals 3 to 4 percent wider (H 1.04), toward Mori's H of 0.768 em.
-- **Letterforms:** a plain double-storey a with a straight stem and its arch cut level; Inter's compact f (cv12) and l with a tail (cv05); a t whose stem top is cut at a slant, its left corner 0.45 stems lower than its right; Kerf's long-flag 1; G with a spur (cv10).
+- **Letterforms:** a plain double-storey a with a straight stem and its arch cut level; Inter's compact f (cv12) and l with a tail (cv05); a t whose stem top is cut at a slant, its left corner 0.45 stems lower than its right; Katagami's long-flag 1; G with a spur (cv10).
 - **Terminals:** c, e, s, a and g cut level, as PP Mori cuts them.
 - **Weight:** the heavy weights are lighter than Inter's (700 is Inter's 640, 800 its 760), as PP Mori's are.
 - **Spacing:** sidebearings 14 units tighter before scaling, so o's sidebearing is about 42 per 1000 (Inter 51, Mori 41); space 512 units before scaling.
@@ -184,24 +184,24 @@ When an alternate becomes the default, its accented forms are swapped with it (a
 
 ## OpenType features
 
-Kerf Sans, Round and Text compile Inter's own feature files, so every feature Inter documents works: contextual alternates (`calt`, which raises hyphens and arrows between capitals and turns `->` into an arrow), case-sensitive forms (`case`), capital spacing (`cpsp`), slashed zero (`zero`), tabular and proportional figures (`tnum`, `pnum`), fractions, numerators and denominators (`frac`, `numr`, `dnom`), superscripts, subscripts and scientific inferiors (`sups`, `subs`, `sinf`), ordinals (`ordn`), discretionary ligatures (`dlig`), the character variants `cv01` to `cv16` and the stylistic sets `ss01` to `ss08`. Where Kerf made an Inter alternate its default, the feature switches back to Inter's form and its label says so.
+Katagami Sans, Round and Text compile Inter's own feature files, so every feature Inter documents works: contextual alternates (`calt`, which raises hyphens and arrows between capitals and turns `->` into an arrow), case-sensitive forms (`case`), capital spacing (`cpsp`), slashed zero (`zero`), tabular and proportional figures (`tnum`, `pnum`), fractions, numerators and denominators (`frac`, `numr`, `dnom`), superscripts, subscripts and scientific inferiors (`sups`, `subs`, `sinf`), ordinals (`ordn`), discretionary ligatures (`dlig`), the character variants `cv01` to `cv16` and the stylistic sets `ss01` to `ss08`. Where Katagami made an Inter alternate its default, the feature switches back to Inter's form and its label says so.
 
-Kerf adds small capitals, which Inter does not have (its 13 `.sc` glyphs are phonetic letters):
+Katagami adds small capitals, which Inter does not have (its 13 `.sc` glyphs are phonetic letters):
 
 - **`smcp` and `c2sc`:** 320 small capitals for Latin, Greek and Cyrillic, accented letters included. Each is its capital scaled to the x-height and emboldened back to the lowercase stem (and 0.85 of that on horizontal strokes), then tracked 0.03 em wider. Accented small capitals reuse the lowercase marks, moved by the difference in top anchors.
 
-Kerf Mono keeps every glyph of Kerf Sans, fitted to the cell, so it has the same features, with two exceptions. Capital spacing is left out, and after compiling, the lookups that set two or more characters as one glyph (Inter's `->` arrows) are emptied, so every character stays one cell wide. In their place Kerf Mono has code ligatures as an opt-in `dlig`: `->`, `<-`, `=>`, `!=`, `==`, `===`, `!==`, `>=` and `<=`. Every character keeps its cell; the leading ones become an empty cell and the last one draws the symbol across all of them. Arrows keep their head and stretch the shaft, = and ≠ stretch their bars, and ≤ and ≥ are centred on the run.
+Katagami Mono keeps every glyph of Katagami Sans, fitted to the cell, so it has the same features, with two exceptions. Capital spacing is left out, and after compiling, the lookups that set two or more characters as one glyph (Inter's `->` arrows) are emptied, so every character stays one cell wide. In their place Katagami Mono has code ligatures as an opt-in `dlig`: `->`, `<-`, `=>`, `!=`, `==`, `===`, `!==`, `>=` and `<=`. Every character keeps its cell; the leading ones become an empty cell and the last one draws the symbol across all of them. Arrows keep their head and stretch the shaft, = and ≠ stretch their bars, and ≤ and ≥ are centred on the run.
 
 ## Other scripts
 
-Kerf draws Latin, Greek and Cyrillic. Kerf Sans, Round and Text also set 19 more scripts with the outlines and OpenType layout of Google's Noto Sans fonts (SIL OFL 1.1), merged in by `tools/build_world.py` the way Pretendard joins Inter and Source Han Sans: Devanagari, Arabic, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala, Thai, Lao, Myanmar, Ethiopic, Hebrew, Armenian, Georgian and Khmer.
+Katagami draws Latin, Greek and Cyrillic. Katagami Sans, Round and Text also set 19 more scripts with the outlines and OpenType layout of Google's Noto Sans fonts (SIL OFL 1.1), merged in by `tools/build_world.py` the way Pretendard joins Inter and Source Han Sans: Devanagari, Arabic, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala, Thai, Lao, Myanmar, Ethiopic, Hebrew, Armenian, Georgian and Khmer.
 
 - Each Noto font is subset to its script's Unicode blocks with its layout closure, so it brings no Latin, digits or punctuation of its own.
-- It is instanced at Kerf's master weights (100, 400, 900) and scaled from Noto's 1000-unit em to 2048 times Kerf's x-height over Noto Sans's (536 per 1000), so its letters sit at the member's size.
-- Each Kerf master is merged with the scripts at its weight, and the three merged masters are built back into one variable font with the member's weight axis, named instances and line spacing. The Windows clipping box grows to the tallest script.
-- These glyphs are Noto's design at Kerf's size and weight; they are not redrawn in Kerf's style.
+- It is instanced at Katagami's master weights (100, 400, 900) and scaled from Noto's 1000-unit em to 2048 times Katagami's x-height over Noto Sans's (536 per 1000), so its letters sit at the member's size.
+- Each Katagami master is merged with the scripts at its weight, and the three merged masters are built back into one variable font with the member's weight axis, named instances and line spacing. The Windows clipping box grows to the tallest script.
+- These glyphs are Noto's design at Katagami's size and weight; they are not redrawn in Katagami's style.
 
-Chinese, Japanese and Korean would pass the 65,535-glyph limit, so they are companion files, Kerf CJK SC, JP and KR (`tools/build_cjk.py`), as Pretendard JP is. Each is Noto Sans SC, JP or KR subset to a national standard (GB 2312's 6,763 hanzi; JIS X 0208's 6,355 kanji with the kana; all 11,172 Hangul syllables), scaled to 2048 units and given Kerf's line metrics. The website sets them in the same CSS family as each proportional member with unicode-range.
+Chinese, Japanese and Korean would pass the 65,535-glyph limit, so they are companion files, Katagami CJK SC, JP and KR (`tools/build_cjk.py`), as Pretendard JP is. Each is Noto Sans SC, JP or KR subset to a national standard (GB 2312's 6,763 hanzi; JIS X 0208's 6,355 kanji with the kana; all 11,172 Hangul syllables), scaled to 2048 units and given Katagami's line metrics. The website sets them in the same CSS family as each proportional member with unicode-range.
 
 ## Not done yet
 

@@ -1,6 +1,6 @@
-"""Build Kerf Mono masters from the Kerf Sans masters.
+"""Build Katagami Mono masters from the Katagami Sans masters.
 
-Kerf Sans -> Kerf Mono:
+Katagami Sans -> Katagami Mono:
   1. the disambiguation alternates become the default (serif I, tailed l, flagged 1)
   2. a Bold master is interpolated, so the mono runs Thin..Bold
   3. every glyph is fitted into a 1280-unit cell (0.625 em): letters move
@@ -10,7 +10,7 @@ Kerf Sans -> Kerf Mono:
      flag; zero gets a centre bar
   5. box drawing and block elements are drawn on the cell grid
   6. composites re-seated; kerning dropped
-  7. Kerf Sans's OpenType features (all of Inter's, plus small capitals) with
+  7. Katagami Sans's OpenType features (all of Inter's, plus small capitals) with
      capital spacing left out, and code ligatures as an opt-in dlig: each
      character keeps its cell and the last one draws the symbol across them
 After fontmake, `python tools/build_mono.py --finish <ttf>` empties the
@@ -40,12 +40,12 @@ from kerf_build.outline import XMap, embolden_x  # noqa: E402
 from build_sans import relabel_features  # noqa: E402
 from fontTools.pens.recordingPen import DecomposingRecordingPen  # noqa: E402
 
-FAMILY = "Kerf Mono"
+FAMILY = "Katagami Mono"
 SANS = ROOT / "build" / "sans"
 OUT = ROOT / "build" / "mono"
 FEATURES = ROOT / "vendor" / "inter" / "src" / "features"
 
-CELL = 1280  # 0.625 em: Kerf's x-height sits at 0.87 of the cell, as Berkeley Mono's does at 0.6 em
+CELL = 1280  # 0.625 em: Katagami's x-height sits at 0.87 of the cell, as Berkeley Mono's does at 0.6 em
 MAX_INK = {"upper": 0.76, "lower": 0.72, "other": 0.76}  # share of the cell, for symbols
 # A monospace reads evenly when its letters fill the cell evenly (Berkeley
 # Mono: n 0.70, o 0.75, H 0.74, O 0.79 of the cell). Letters move toward
@@ -68,7 +68,7 @@ ARMS = {"f": (0.70, 0.3), "t": (0.68, 0.3), "r": (0.58, 0.3), "ȷ": (0.54, 0.5),
 # is how a monospace m finds room for its counters.
 COMP_FLOOR = 0.45
 
-PROMOTE = ["cv05-l-tail.fea", "cv08-i-serif.fea"]  # the long-flag 1 already comes from Kerf Sans
+PROMOTE = ["cv05-l-tail.fea", "cv08-i-serif.fea"]  # the long-flag 1 already comes from Katagami Sans
 MASTER_STYLES = {"Thin": (100, 100), "Regular": (400, 400), "Bold": (700, 740)}
 INSTANCES = ["Thin", "ExtraLight", "Light", "Regular", "Medium", "SemiBold", "Bold"]
 WEIGHT_MAP = [(100, 100), (200, 200), (300, 300), (400, 400), (500, 500), (600, 620), (700, 740)]
@@ -90,11 +90,11 @@ SPACER = "kerf.spacer"
 
 
 def interpolate_bold() -> Path:
-    """Kerf Sans at design weight 740, as a UFO with the masters' point structure."""
+    """Katagami Sans at design weight 740, as a UFO with the masters' point structure."""
     out = OUT / "instances"
     subprocess.run(
-        [sys.executable, "-m", "fontmake", "-m", str(SANS / "KerfSans.designspace"),
-         "-i", "Kerf Sans Bold", "-o", "ufo", "--output-dir", str(out)],
+        [sys.executable, "-m", "fontmake", "-m", str(SANS / "KatagamiSans.designspace"),
+         "-i", "Katagami Sans Bold", "-o", "ufo", "--output-dir", str(out)],
         check=True, capture_output=True,
     )
     return next(out.glob("*Bold.ufo"))
@@ -113,7 +113,7 @@ def promote_alternates(fonts) -> None:
 
 
 def mono_features(sans_features: str, glyphs) -> str:
-    """Kerf Sans's features for the mono: capital spacing out, code ligatures in.
+    """Katagami Sans's features for the mono: capital spacing out, code ligatures in.
 
     Inter's calt turns = after ! into its case form, so each character in a
     rule also matches its .case glyph.
@@ -433,7 +433,7 @@ def write_designspace(paths) -> Path:
         inst.familyName, inst.styleName = FAMILY, style
         inst.location = {"Weight": dict(WEIGHT_MAP)[(i + 1) * 100]}
         ds.addInstance(inst)
-    out = OUT / "KerfMono.designspace"
+    out = OUT / "KatagamiMono.designspace"
     ds.write(out)
     return out
 
@@ -444,8 +444,8 @@ def main() -> None:
     OUT.mkdir(parents=True)
     bold = interpolate_bold()
     fonts = {
-        "Thin": ufoLib2.Font.open(SANS / "KerfSans-Thin.ufo", lazy=False),
-        "Regular": ufoLib2.Font.open(SANS / "KerfSans-Regular.ufo", lazy=False),
+        "Thin": ufoLib2.Font.open(SANS / "KatagamiSans-Thin.ufo", lazy=False),
+        "Regular": ufoLib2.Font.open(SANS / "KatagamiSans-Regular.ufo", lazy=False),
         "Bold": ufoLib2.Font.open(bold, lazy=False),
     }
     promote_alternates(fonts)
@@ -487,14 +487,14 @@ def main() -> None:
         f.info.postscriptIsFixedPitch = True
         f.info.openTypeOS2Panose = [2, 11, 5, 9, 2, 2, 3, 2, 2, 4]
         set_names(f, FAMILY, style, MASTER_STYLES[style][0])
-        f.lib[FILTERS_KEY] = []  # Kerf Sans's corners are already erased where every master agrees
+        f.lib[FILTERS_KEY] = []  # Katagami Sans's corners are already erased where every master agrees
         assign_categories(f)
 
     relabel_features(fonts, PROMOTE)
     shutil.copytree(FEATURES, OUT / "features")
     paths = {}
     for style, f in fonts.items():
-        p = OUT / f"KerfMono-{style}.ufo"
+        p = OUT / f"KatagamiMono-{style}.ufo"
         f.save(p, overwrite=True)
         paths[style] = p
     print(write_designspace(paths))

@@ -1,9 +1,9 @@
-Copyright 2026 The Kerf Project Authors (https://github.com/Kevin-Liu-01/Kerf)
+Copyright 2026 The Katagami Project Authors (https://github.com/Kevin-Liu-01/Kerf)
 Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)
 Copyright 2022 The Noto Project Authors (https://github.com/notofonts), for the
-scripts merged into Kerf Sans, Kerf Round and Kerf Text from Noto Sans
+scripts merged into Katagami Sans, Katagami Round and Katagami Text from Noto Sans
 Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name
-'Source', for Kerf CJK SC, JP and KR, from Noto Sans CJK
+'Source', for Katagami CJK SC, JP and KR, from Noto Sans CJK
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
 http://scripts.sil.org/OFL

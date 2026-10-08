@@ -1,25 +1,25 @@
-"""Merge other scripts into a Kerf member, the way Pretendard joins Inter
+"""Merge other scripts into a Katagami member, the way Pretendard joins Inter
 and Source Han Sans.
 
     python tools/build_world.py sans|round|text [--only Devanagari,Thai]
 
-Kerf draws Latin, Greek and Cyrillic. For 19 more scripts this takes the
+Katagami draws Latin, Greek and Cyrillic. For 19 more scripts this takes the
 outlines and OpenType layout of Google's Noto Sans fonts (SIL OFL 1.1,
-vendor/noto, fetched by tools/build.sh), so one Kerf file sets them all:
+vendor/noto, fetched by tools/build.sh), so one Katagami file sets them all:
 
   1. Each Noto font is subset to its script's Unicode blocks with its layout
      closure, so it adds no Latin, digits or punctuation of its own.
-  2. It is instanced at Kerf's three master weights (100, 400, 900) and
-     scaled from Noto's 1000-unit em to Kerf's 2048, times Kerf's x-height
-     over Noto Sans's (536), so its letters sit at Kerf's size.
-  3. Each Kerf master (instanced from fontmake's variable font) is merged
+  2. It is instanced at Katagami's three master weights (100, 400, 900) and
+     scaled from Noto's 1000-unit em to Katagami's 2048, times Katagami's x-height
+     over Noto Sans's (536), so its letters sit at Katagami's size.
+  3. Each Katagami master (instanced from fontmake's variable font) is merged
      with the scripts at the same weight.
   4. The three merged masters are built back into one variable font with
-     Kerf's weight axis and named instances.
+     Katagami's weight axis and named instances.
 
-Kerf's own line spacing is kept; the Windows clipping box grows to the
-tallest script. The glyphs added here are Noto's design at Kerf's size and
-weight, not redrawn in Kerf's style.
+Katagami's own line spacing is kept; the Windows clipping box grows to the
+tallest script. The glyphs added here are Noto's design at Katagami's size and
+weight, not redrawn in Katagami's style.
 """
 
 from __future__ import annotations
@@ -77,7 +77,7 @@ def noto_file(script: str) -> Path:
 
 
 def script_masters(script: str, factor: float, have: set[int], work: Path) -> dict[str, Path]:
-    """Noto's script at Kerf's three master weights, at Kerf's units and size."""
+    """Noto's script at Katagami's three master weights, at Katagami's units and size."""
     font = TTFont(noto_file(script))
     cmap = font.getBestCmap()
     unicodes = [u for lo, hi in SCRIPTS[script] for u in range(lo, hi + 1) if u in cmap and u not in have]
@@ -88,7 +88,7 @@ def script_masters(script: str, factor: float, have: set[int], work: Path) -> di
     opts.name_IDs = ["*"]
     opts.notdef_outline = False
     opts.hinting = False
-    # vertical metrics (Ethiopic has them), hinting and metadata: Kerf has none of these
+    # vertical metrics (Ethiopic has them), hinting and metadata: Katagami has none of these
     opts.drop_tables += ["STAT", "vhea", "vmtx", "VVAR", "gasp", "prep", "meta"]
     sub = subset.Subsetter(opts)
     sub.populate(unicodes=unicodes)

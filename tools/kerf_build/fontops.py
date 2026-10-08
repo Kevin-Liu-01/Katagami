@@ -27,7 +27,7 @@ def load_inter_masters() -> dict[str, ufoLib2.Font]:
 
 def stem(font: ufoLib2.Font) -> float:
     """Lowercase vertical stem thickness, read from the ink width of the dotless i,
-    which is a plain stem in every member (Kerf Text's l has a tail)."""
+    which is a plain stem in every member (Katagami Text's l has a tail)."""
     b = font["idotless" if "idotless" in font else "l"].getBounds(font)
     return b.xMax - b.xMin
 
@@ -261,13 +261,13 @@ def set_names(font, family: str, style: str, weight: int) -> None:
     i.openTypeOS2WeightClass = weight
     i.openTypeOS2VendorID = "KERF"
     i.copyright = (
-        "Copyright 2026 The Kerf Project Authors (https://github.com/Kevin-Liu-01/Kerf). "
+        "Copyright 2026 The Katagami Project Authors (https://github.com/Kevin-Liu-01/Kerf). "
         "Derived from Inter, Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)."
     )
     i.trademark = None
     i.openTypeNameDesigner = "Kevin Liu"
     i.openTypeNameDesignerURL = "https://github.com/Kevin-Liu-01"
-    i.openTypeNameManufacturer = "The Kerf Project Authors"
+    i.openTypeNameManufacturer = "The Katagami Project Authors"
     i.openTypeNameManufacturerURL = "https://github.com/Kevin-Liu-01/Kerf"
     i.openTypeNameLicense = (
         "This Font Software is licensed under the SIL Open Font License, Version 1.1. "
@@ -289,7 +289,7 @@ def erase_open_corners(fonts: dict) -> int:
     """Run Inter's eraseOpenCorners filter here, where every master agrees.
 
     Inter's sources ask ufo2ft to erase open corners at compile time, master
-    by master. Kerf's transforms can leave a corner open in one master and
+    by master. Katagami's transforms can leave a corner open in one master and
     closed in another; erasing it in one master only breaks compatibility.
     Here the filter runs on copies of every master, its result is kept for a
     glyph only when all masters come out with the same structure, and the

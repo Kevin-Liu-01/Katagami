@@ -1,5 +1,5 @@
-"""Build the data for the Kerf map page from General Translation's world
-language map data and the built Kerf fonts.
+"""Build the data for the Katagami map page from General Translation's world
+language map data and the built Katagami fonts.
 
     python tools/build_map.py
 
@@ -17,7 +17,7 @@ scripts that need thousands, so for those the family must also have the
 whole national standard: GB 2312's hanzi for Simplified Chinese, Big5's
 level-1 hanzi for Traditional, JIS X 0208's level-1 kanji and the kana for
 Japanese, KS X 1001's Hangul for Korean. The proportional members count
-the Kerf CJK companions as theirs; the website sets them in one family. Population shares weight every land cell by its people (GHS-POP
+the Katagami CJK companions as theirs; the website sets them in one family. Population shares weight every land cell by its people (GHS-POP
 density times cell area) and give the cell to its largest language.
 """
 
@@ -40,12 +40,12 @@ OUT = SITE / "map"
 LEVELS = (1, 0.5, 0.25)
 STATS_LEVEL = 0.5
 COVERED = 0.9
-CJK = [ROOT / f"fonts/cjk/KerfCJK{r}[wght].ttf" for r in ("SC", "JP", "KR")]
+CJK = [ROOT / f"fonts/cjk/KatagamiCJK{r}[wght].ttf" for r in ("SC", "JP", "KR")]
 FONTS = {
-    "round": [ROOT / "fonts/round/KerfRound[wght].ttf", *CJK],
-    "sans": [ROOT / "fonts/sans/KerfSans[wght].ttf", *CJK],
-    "text": [ROOT / "fonts/text/KerfText[wght].ttf", *CJK],
-    "mono": [ROOT / "fonts/mono/KerfMono[wght].ttf"],
+    "round": [ROOT / "fonts/round/KatagamiRound[wght].ttf", *CJK],
+    "sans": [ROOT / "fonts/sans/KatagamiSans[wght].ttf", *CJK],
+    "text": [ROOT / "fonts/text/KatagamiText[wght].ttf", *CJK],
+    "mono": [ROOT / "fonts/mono/KatagamiMono[wght].ttf"],
 }
 DENSITY_LOG_MIN, DENSITY_STEPS = -3, 32
 

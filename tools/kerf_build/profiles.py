@@ -1,4 +1,4 @@
-"""Design profiles: each proportional Kerf member is Inter run through the same
+"""Design profiles: each proportional Katagami member is Inter run through the same
 transforms with its own parameters. Every number here is explained in SPEC.md."""
 
 from __future__ import annotations
@@ -41,8 +41,8 @@ DIGITS = ("cv01-one.fea", "cv02-four.fea", "cv03-six.fea", "cv04-nine.fea", "cv0
 
 SANS = Profile(
     key="sans",
-    family="Kerf Sans",
-    file_stem="KerfSans",
+    family="Katagami Sans",
+    file_stem="KatagamiSans",
     square_upper=0.36,
     square_lower=0.32,
     square_punctuation=True,
@@ -62,21 +62,21 @@ SANS = Profile(
 )
 
 # Inter's proportions and spacing with geometric, squared bowls, and every
-# sharp vertex rounded. Kerf's figures and f, a few Mori and Geist touches.
-# SPEC.md, Kerf Round.
+# sharp vertex rounded. Katagami's figures and f, a few Mori and Geist touches.
+# SPEC.md, Katagami Round.
 ROUND = Profile(
     key="round",
-    family="Kerf Round",
-    file_stem="KerfRound",
-    # geometric bowls, softer than Kerf Sans (0.36 / 0.32)
+    family="Katagami Round",
+    file_stem="KatagamiRound",
+    # geometric bowls, softer than Katagami Sans (0.36 / 0.32)
     square_upper=0.24,
     square_lower=0.22,
     notch_fill=0.35,
-    # Kerf's figures and compact f, and G with spur (Mori, Geist, DM Sans, Nacelle)
+    # Katagami's figures and compact f, and G with spur (Mori, Geist, DM Sans, Nacelle)
     promote=DIGITS + ("cv10-g-spur.fea", "cv12-compact-f.fea"),
     spacing=-3,
     space_width=552,  # 270 per 1000 (Inter 281)
-    terminal_angle=0.0,  # c, e, s, a and g cut level, as in Kerf Sans
+    terminal_angle=0.0,  # c, e, s, a and g cut level, as in Katagami Sans
     f_overhang=0.4,
     corner_radius=0.22,  # round only at the vertices
 )
@@ -84,17 +84,17 @@ ROUND = Profile(
 # Inter moved toward PP Mori and away from Inter's own tells: a lower
 # x-height, smaller overall, tighter, wider capitals and round letters, a
 # compact f, an l with a tail, a t cut at a slant, no squaring. SPEC.md,
-# Kerf Text.
+# Katagami Text.
 TEXT = Profile(
     key="text",
-    family="Kerf Text",
-    file_stem="KerfText",
+    family="Katagami Text",
+    file_stem="KatagamiText",
     # superellipse about 2.13 (Mori 2.12) from Inter's 2.15
     square_upper=-0.02,
     square_lower=-0.02,
     counter_boost=1.0,
     notch_fill=0.35,
-    # Kerf's long-flag 1, G with a spur, l with a tail, compact f
+    # Katagami's long-flag 1, G with a spur, l with a tail, compact f
     promote=("cv01-one.fea", "cv05-l-tail.fea", "cv10-g-spur.fea", "cv12-compact-f.fea"),
     t_slant=0.45,  # the top of t's stem cut at about 20 degrees, as Mori's is
     xheight_scale=0.95,  # x-height 0.71 of the cap height (Inter 0.75)

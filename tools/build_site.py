@@ -3,15 +3,15 @@
 The site lives in its own repo, Kerf-Website, checked out next to this one
 (or wherever KERF_SITE points). This writes into it:
 
-    fonts/KerfSans.woff2 ...        each member's Latin, Greek and Cyrillic core
-    fonts/KerfSans-thai.woff2 ...   one file per merged script, per member
-    fonts/KerfCJK{SC,JP,KR}.woff2   the CJK companions
-    fonts/kerf.css                  @font-face rules: each member is one family whose
+    fonts/KatagamiSans.woff2 ...        each member's Latin, Greek and Cyrillic core
+    fonts/KatagamiSans-thai.woff2 ...   one file per merged script, per member
+    fonts/KatagamiCJK{SC,JP,KR}.woff2   the CJK companions
+    fonts/katagami.css                  @font-face rules: each member is one family whose
                                     faces split by unicode-range, so a page downloads
                                     only the scripts it shows
     data.js     window.KERF: metrics, character tables, features, outlines
     index.html  page.html wrapped in a document, asset URLs stamped with hashes
-    kerf-apply.js  its face table, between the generated-faces markers
+    katagami-apply.js  its face table, between the generated-faces markers
 
 Run after tools/build.sh, then commit and push Kerf-Website; Vercel deploys it.
 """
@@ -38,24 +38,24 @@ from build_world import SCRIPTS  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SITE = Path(os.environ.get("KERF_SITE", ROOT.parent / "Kerf-Website"))
-FONTS = {"sans": ROOT / "fonts/sans/KerfSans[wght].ttf", "round": ROOT / "fonts/round/KerfRound[wght].ttf",
-         "text": ROOT / "fonts/text/KerfText[wght].ttf", "mono": ROOT / "fonts/mono/KerfMono[wght].ttf"}
-WOFF2 = {"sans": "KerfSans.woff2", "round": "KerfRound.woff2", "text": "KerfText.woff2", "mono": "KerfMono.woff2"}
-OUTLINE_CHARS = {"K": "K", "e": "e", "r": "r", "f": "f", "O": "O", "o": "o"}
+FONTS = {"sans": ROOT / "fonts/sans/KatagamiSans[wght].ttf", "round": ROOT / "fonts/round/KatagamiRound[wght].ttf",
+         "text": ROOT / "fonts/text/KatagamiText[wght].ttf", "mono": ROOT / "fonts/mono/KatagamiMono[wght].ttf"}
+WOFF2 = {"sans": "KatagamiSans.woff2", "round": "KatagamiRound.woff2", "text": "KatagamiText.woff2", "mono": "KatagamiMono.woff2"}
+OUTLINE_CHARS = {"K": "K", "a": "a", "t": "t", "g": "g", "m": "m", "i": "i", "O": "O", "o": "o"}
 INTER_UFO = ROOT / "build/ufo/Inter-Regular.ufo"
-KERF_UFO = ROOT / "build/sans/KerfSans-Regular.ufo"
-MONO_UFO = ROOT / "build/mono/KerfMono-Regular.ufo"
-ROUND_UFO = ROOT / "build/round/KerfRound-Regular.ufo"
-FAMILY = {"sans": "Kerf Sans", "round": "Kerf Round", "text": "Kerf Text", "mono": "Kerf Mono"}
+KERF_UFO = ROOT / "build/sans/KatagamiSans-Regular.ufo"
+MONO_UFO = ROOT / "build/mono/KatagamiMono-Regular.ufo"
+ROUND_UFO = ROOT / "build/round/KatagamiRound-Regular.ufo"
+FAMILY = {"sans": "Katagami Sans", "round": "Katagami Round", "text": "Katagami Text", "mono": "Katagami Mono"}
 WEIGHTS = {"sans": "100 900", "round": "100 900", "text": "100 900", "mono": "100 700"}
 CJK = {  # companion file -> the ranges it serves in every proportional family
-    "KerfCJKSC": [(0x2E80, 0x2FDF), (0x3000, 0x303F), (0x3200, 0x33FF), (0x3400, 0x4DBF), (0x4E00, 0x9FFF),
+    "KatagamiCJKSC": [(0x2E80, 0x2FDF), (0x3000, 0x303F), (0x3200, 0x33FF), (0x3400, 0x4DBF), (0x4E00, 0x9FFF),
                   (0xF900, 0xFAFF), (0xFF00, 0xFF60), (0xFFE0, 0xFFEF)],
-    "KerfCJKJP": [(0x3040, 0x30FF), (0x31F0, 0x31FF), (0xFF61, 0xFF9F)],
-    "KerfCJKKR": [(0x1100, 0x11FF), (0x3130, 0x318F), (0xA960, 0xA97F), (0xAC00, 0xD7FF), (0xFFA0, 0xFFDC)],
+    "KatagamiCJKJP": [(0x3040, 0x30FF), (0x31F0, 0x31FF), (0xFF61, 0xFF9F)],
+    "KatagamiCJKKR": [(0x1100, 0x11FF), (0x3130, 0x318F), (0xA960, 0xA97F), (0xAC00, 0xD7FF), (0xFFA0, 0xFFDC)],
 }
 FONT_URL = "https://kerf.kevinliu.studio/fonts/"
-HERO = "Kerf"  # morphs Kerf Mono <- Kerf Sans -> Kerf Round; all three share Inter's point structure
+HERO = "Katagami"  # morphs Katagami Mono <- Katagami Sans -> Katagami Round; all three share Inter's point structure
 PAGES = {"page.html": "index.html", "map-page.html": "map.html", "convert-page.html": "convert.html"}  # hand-written fragment -> served page
 
 
@@ -106,7 +106,7 @@ def metrics(font: TTFont) -> dict:
 
 def contours(font, ch: str, corners=()) -> dict:
     """A glyph's outline as [x, y, type] lists; `corners` adds zero-radius
-    rounded corners (same points as Kerf Round's, same shape)."""
+    rounded corners (same points as Katagami Round's, same shape)."""
     g = font[ch]
     if g.components:
         decompose(font, [ch])
@@ -136,7 +136,7 @@ def flatten(font, gname: str, xf=(1, 0, 0, 1, 0, 0)) -> list:
 
 
 def flat_plan(font, gname: str, offset: int = 0) -> list:
-    """Kerf Round's rounded corners for the flattened glyph, contour indices shifted to match."""
+    """Katagami Round's rounded corners for the flattened glyph, contour indices shifted to match."""
     plans = font.lib.get("com.kerf.roundedCorners", {})
     g = font[gname]
     out = [(ci + offset, idx) for ci, idx in plans.get(gname, [])]
@@ -148,7 +148,7 @@ def flat_plan(font, gname: str, offset: int = 0) -> list:
 
 
 def expand(contours: list, plan: list) -> list:
-    """Split each planned corner into the four coincident points Kerf Round has there."""
+    """Split each planned corner into the four coincident points Katagami Round has there."""
     out = [list(c) for c in contours]
     for ci, idx in plan:
         c = out[ci]
@@ -167,14 +167,17 @@ def outlines() -> dict:
         assert shape(a) == shape(b), ch
         out[ch] = {"inter": a, "kerf": b}
         if ch in HERO:
-            # Kerf Round rounds its vertices, which adds points. Give Sans and
+            # Katagami Round rounds its vertices, which adds points. Give Sans and
             # Mono the same corners at zero radius so all three still morph.
             plan = flat_plan(rnd, gname)
             sans_like = {"adv": kerf[gname].width, "contours": expand(flatten(kerf, gname), plan)}
             mono_like = {"adv": mono[gname].width, "contours": expand(flatten(mono, gname), plan)}
             rounded = {"adv": rnd[gname].width, "contours": flatten(rnd, gname)}
-            for key, o in (("mono", mono_like), ("round", rounded)):
-                assert shape(o) == shape(sans_like), f"{ch}: {key} and Kerf Sans outlines differ"
+            # Mono's i is redrawn with a flag and a foot slab, so it cannot morph point
+            # for point; that letter stays on the Sans outline toward the Mono end
+            if shape(mono_like) != shape(sans_like):
+                mono_like = sans_like
+            assert shape(rounded) == shape(sans_like), f"{ch}: round and Katagami Sans outlines differ"
             out[ch]["hero"] = sans_like
             out[ch]["mono"] = mono_like
             out[ch]["round"] = rounded
@@ -194,7 +197,14 @@ def unicode_range(unicodes, avoid=frozenset()) -> str:
     return ",".join(f"U+{a:X}" if a == b else f"U+{a:X}-{b:X}" for a, b in runs)
 
 
+def fresh(src: Path, out: Path) -> bool:
+    """True when `out` was written after `src`, so a rerun can keep it."""
+    return out.exists() and out.stat().st_mtime > src.stat().st_mtime
+
+
 def woff2_slice(src: Path, unicodes, out: Path) -> None:
+    if fresh(src, out):
+        return
     opts = subset.Options()
     opts.flavor = "woff2"
     opts.layout_features = ["*"]
@@ -238,9 +248,10 @@ def web_fonts() -> list[list]:
         src = ROOT / "fonts" / "cjk" / f"{name}[wght].ttf"
         if not src.exists():
             continue
-        font = TTFont(src)
-        font.flavor = "woff2"
-        font.save(SITE / "fonts" / f"{name}.woff2")
+        if not fresh(src, SITE / "fonts" / f"{name}.woff2"):
+            font = TTFont(src)
+            font.flavor = "woff2"
+            font.save(SITE / "fonts" / f"{name}.woff2")
         css = ",".join(f"U+{a:X}-{b:X}" for a, b in ranges)
         for key in ("sans", "round", "text"):
             faces.append([FAMILY[key], stamp(f"fonts/{name}.woff2").removeprefix("fonts/"), "100 900", css])
@@ -250,9 +261,9 @@ def web_fonts() -> list[list]:
 def write_faces(faces: list[list]) -> None:
     rule = lambda fam, file, w, ur, base: (f'@font-face{{font-family:"{fam}";src:url("{base}{file}") format("woff2");'  # noqa: E731
                                            f"font-weight:{w};font-display:swap;unicode-range:{ur}}}")
-    (SITE / "fonts" / "kerf.css").write_text("/* Kerf web fonts, generated by tools/build_site.py in the Kerf repo */\n"
+    (SITE / "fonts" / "katagami.css").write_text("/* Katagami web fonts, generated by tools/build_site.py in the Katagami repo */\n"
                                               + "\n".join(rule(*f, "") for f in faces) + "\n")
-    apply = SITE / "kerf-apply.js"
+    apply = SITE / "katagami-apply.js"
     text = apply.read_text()
     start, end = "/* generated faces: start */", "/* generated faces: end */"
     if start in text:
@@ -277,7 +288,7 @@ def main() -> None:
     # Each hand-written page fragment is wrapped in a document. Asset URLs are
     # stamped with a content hash, so a changed file gets a new URL and the
     # cache headers in vercel.json never pair a new page with old data.
-    assets = ["data.js", "kerf-apply.js", "map/map.json", "fonts/kerf.css", *(f"fonts/{name}" for name in WOFF2.values())]
+    assets = ["data.js", "katagami-apply.js", "map/map.json", "fonts/katagami.css", *(f"fonts/{name}" for name in WOFF2.values())]
     stamps = {rel: hashlib.sha256((SITE / rel).read_bytes()).hexdigest()[:10]
               for rel in assets if (SITE / rel).exists()}
     for source, target in PAGES.items():

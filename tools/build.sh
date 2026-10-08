@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build Kerf from Inter's sources. Usage: tools/build.sh [sans|mono|round|text|cjk|all]
+# Build Katagami from Inter's sources. Usage: tools/build.sh [sans|mono|round|text|cjk|all]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PY=.venv/bin/python
@@ -12,7 +12,7 @@ if [[ ! -d vendor/inter ]]; then
   git -C vendor/inter checkout "$INTER_COMMIT"
 fi
 
-# Noto Sans for the scripts Kerf does not draw (SIL OFL 1.1, google/fonts)
+# Noto Sans for the scripts Katagami does not draw (SIL OFL 1.1, google/fonts)
 NOTO=(devanagari/NotoSansDevanagari arabic/NotoSansArabic bengali/NotoSansBengali gurmukhi/NotoSansGurmukhi
       gujarati/NotoSansGujarati oriya/NotoSansOriya tamil/NotoSansTamil telugu/NotoSansTelugu kannada/NotoSansKannada
       malayalam/NotoSansMalayalam sinhala/NotoSansSinhala thai/NotoSansThai lao/NotoSansLao myanmar/NotoSansMyanmar
@@ -37,8 +37,8 @@ fi
 if [[ "$which" == sans || "$which" == all ]]; then
   $PY tools/build_sans.py sans
   mkdir -p fonts/sans
-  .venv/bin/fontmake -m build/sans/KerfSans.designspace -o variable \
-    --output-path 'build/sans/KerfSans-core[wght].ttf' --flatten-components
+  .venv/bin/fontmake -m build/sans/KatagamiSans.designspace -o variable \
+    --output-path 'build/sans/KatagamiSans-core[wght].ttf' --flatten-components
   $PY tools/build_world.py sans
 fi
 
@@ -49,23 +49,23 @@ fi
 if [[ "$which" == mono || "$which" == all ]]; then
   $PY tools/build_mono.py
   mkdir -p fonts/mono
-  .venv/bin/fontmake -m build/mono/KerfMono.designspace -o variable \
-    --output-path 'fonts/mono/KerfMono[wght].ttf' --flatten-components
-  $PY tools/build_mono.py --finish 'fonts/mono/KerfMono[wght].ttf'
+  .venv/bin/fontmake -m build/mono/KatagamiMono.designspace -o variable \
+    --output-path 'fonts/mono/KatagamiMono[wght].ttf' --flatten-components
+  $PY tools/build_mono.py --finish 'fonts/mono/KatagamiMono[wght].ttf'
 fi
 
 if [[ "$which" == round || "$which" == all ]]; then
   $PY tools/build_sans.py round
   mkdir -p fonts/round
-  .venv/bin/fontmake -m build/round/KerfRound.designspace -o variable \
-    --output-path 'build/round/KerfRound-core[wght].ttf' --flatten-components
+  .venv/bin/fontmake -m build/round/KatagamiRound.designspace -o variable \
+    --output-path 'build/round/KatagamiRound-core[wght].ttf' --flatten-components
   $PY tools/build_world.py round
 fi
 
 if [[ "$which" == text || "$which" == all ]]; then
   $PY tools/build_sans.py text
   mkdir -p fonts/text
-  .venv/bin/fontmake -m build/text/KerfText.designspace -o variable \
-    --output-path 'build/text/KerfText-core[wght].ttf' --flatten-components
+  .venv/bin/fontmake -m build/text/KatagamiText.designspace -o variable \
+    --output-path 'build/text/KatagamiText-core[wght].ttf' --flatten-components
   $PY tools/build_world.py text
 fi

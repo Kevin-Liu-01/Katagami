@@ -1,4 +1,4 @@
-"""Build a proportional Kerf member from Inter's Thin, Regular and Black masters.
+"""Build a proportional Katagami member from Inter's Thin, Regular and Black masters.
 
     python tools/build_sans.py [sans|round]
 

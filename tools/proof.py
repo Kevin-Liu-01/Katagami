@@ -17,10 +17,10 @@ from drawbot_skia.drawing import Drawing
 
 ROOT = Path(__file__).resolve().parents[1]
 INTER = ROOT / "build/ref/InterVariable.ttf"
-SANS = ROOT / "fonts/sans/KerfSans[wght].ttf"
-MONO = ROOT / "fonts/mono/KerfMono[wght].ttf"
-ROUND = ROOT / "fonts/round/KerfRound[wght].ttf"
-TEXT = ROOT / "fonts/text/KerfText[wght].ttf"
+SANS = ROOT / "fonts/sans/KatagamiSans[wght].ttf"
+MONO = ROOT / "fonts/mono/KatagamiMono[wght].ttf"
+ROUND = ROOT / "fonts/round/KatagamiRound[wght].ttf"
+TEXT = ROOT / "fonts/text/KatagamiText[wght].ttf"
 BERKELEY = Path.home() / "Library/Fonts/BerkeleyMono-Regular.ttf"
 OUT = ROOT / "build/proofs"  # local only: sheets may show licensed reference fonts
 
@@ -81,28 +81,28 @@ def sheet(name, blocks, width=2600, size=96, gap=1.35):
 
 def main(which: str) -> None:
     if which == "sans":
-        rows = [("Inter 400", INTER, 400), ("Kerf Sans 400", SANS, 400),
-                ("Inter 700", INTER, 700), ("Kerf Sans 700", SANS, 700)]
-        sheet("sans-vs-inter", [("Kerf Sans vs Inter", None, rows, LINES)])
+        rows = [("Inter 400", INTER, 400), ("Katagami Sans 400", SANS, 400),
+                ("Inter 700", INTER, 700), ("Katagami Sans 700", SANS, 700)]
+        sheet("sans-vs-inter", [("Katagami Sans vs Inter", None, rows, LINES)])
     elif which == "mono":
-        rows = [("Kerf Mono 400", MONO, 400), ("Berkeley Mono", BERKELEY, None),
-                ("Kerf Mono 700", MONO, 700)]
-        sheet("mono", [("Kerf Mono", None, rows, LINES + CODE)], size=72)
+        rows = [("Katagami Mono 400", MONO, 400), ("Berkeley Mono", BERKELEY, None),
+                ("Katagami Mono 700", MONO, 700)]
+        sheet("mono", [("Katagami Mono", None, rows, LINES + CODE)], size=72)
     elif which == "round":
-        rows = [("Inter 400", INTER, 400), ("Kerf Round 400", ROUND, 400),
-                ("Inter 700", INTER, 700), ("Kerf Round 700", ROUND, 700)]
-        sheet("round-vs-inter", [("Kerf Round vs Inter", None, rows, LINES + ["Revenue grew 12% in the third quarter."])])
+        rows = [("Inter 400", INTER, 400), ("Katagami Round 400", ROUND, 400),
+                ("Inter 700", INTER, 700), ("Katagami Round 700", ROUND, 700)]
+        sheet("round-vs-inter", [("Katagami Round vs Inter", None, rows, LINES + ["Revenue grew 12% in the third quarter."])])
     elif which == "text":
-        rows = [("Inter 400", INTER, 400), ("Kerf Text 400", TEXT, 400), ("Kerf Sans 400", SANS, 400),
-                ("Inter 700", INTER, 700), ("Kerf Text 700", TEXT, 700)]
-        sheet("text-vs-inter", [("Kerf Text vs Inter", None, rows, LINES + ["Revenue grew 12% in the third quarter."])])
+        rows = [("Inter 400", INTER, 400), ("Katagami Text 400", TEXT, 400), ("Katagami Sans 400", SANS, 400),
+                ("Inter 700", INTER, 700), ("Katagami Text 700", TEXT, 700)]
+        sheet("text-vs-inter", [("Katagami Text vs Inter", None, rows, LINES + ["Revenue grew 12% in the third quarter."])])
     elif which == "detail":
         rows = [(f"{n} {w}", path, w) for w in (400, 900) for n, path in
                 (("Inter", INTER), ("Sans", SANS), ("Round", ROUND), ("Text", TEXT))]
         sheet("detail", [("Revision letters", None, rows, ["gmbdpqyt aeg"])], width=2400, size=200, gap=1.2)
     elif which == "family":
-        rows = [("Kerf Sans", SANS, 400), ("Kerf Mono", MONO, 400)]
-        sheet("family", [("Kerf family", None, rows, LINES)])
+        rows = [("Katagami Sans", SANS, 400), ("Katagami Mono", MONO, 400)]
+        sheet("family", [("Katagami family", None, rows, LINES)])
 
 
 if __name__ == "__main__":

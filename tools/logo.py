@@ -1,4 +1,4 @@
-"""Draw the Kerf logo: a square of material with three cuts, and the K that is left.
+"""Draw the Katagami logo: a square of material with three cuts, and the K that is left.
 
     python tools/logo.py
 
@@ -7,9 +7,9 @@ square. One vertical kerf separates the stem; two straight cuts run from the
 stem's edge to the right side and the wedge between them falls away as the
 offcut. What remains reads as a K. Writes:
 
-    docs/logo/kerf-mark.svg        the mark, ink
-    docs/logo/kerf-mark-cut.svg    the mark with the cut lines in red, as on the specimen
-    docs/logo/kerf-logo.svg        the mark and the word Kerf set in Kerf Sans SemiBold
+    docs/logo/katagami-mark.svg        the mark, ink
+    docs/logo/katagami-mark-cut.svg    the mark with the cut lines in red, as on the specimen
+    docs/logo/katagami-logo.svg        the mark and the word Katagami set in Katagami Sans SemiBold
     Kerf-Website/favicon.svg       the mark, following the browser's light or dark theme
     Kerf-Website/favicon.png, apple-touch-icon.png   the mark on the paper colour
 """
@@ -67,8 +67,8 @@ def mark_svg(fill: str = INK, cut_lines: bool = False, size: int = 100, theme: b
 
 
 def word_paths(text: str, weight: int, height: float, x0: float) -> tuple[str, float]:
-    """The word set in Kerf Sans at `weight`, scaled so its cap height is `height`."""
-    vf = TTFont(ROOT / "fonts" / "sans" / "KerfSans[wght].ttf")
+    """The word set in Katagami Sans at `weight`, scaled so its cap height is `height`."""
+    vf = TTFont(ROOT / "fonts" / "sans" / "KatagamiSans[wght].ttf")
     font = instantiateVariableFont(vf, {"wght": weight})
     gs, cmap = font.getGlyphSet(), font.getBestCmap()
     cap = font["OS/2"].sCapHeight
@@ -86,7 +86,7 @@ def word_paths(text: str, weight: int, height: float, x0: float) -> tuple[str, f
 
 def logo_svg() -> str:
     gap = 30
-    word, end = word_paths("Kerf", 600, 100, 100 + gap)
+    word, end = word_paths("Katagami", 600, 100, 100 + gap)
     body = "".join(f'<path d="{path(p)}"/>' for p in pieces()) + f'<path d="{word}"/>'
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {end:.0f} 100" height="100" fill="{INK}">'
             f"{body}</svg>\n")
@@ -117,9 +117,9 @@ def png(path: Path, size: int, inset: float) -> None:
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "kerf-mark.svg").write_text(mark_svg())
-    (OUT / "kerf-mark-cut.svg").write_text(mark_svg(cut_lines=True))
-    (OUT / "kerf-logo.svg").write_text(logo_svg())
+    (OUT / "katagami-mark.svg").write_text(mark_svg())
+    (OUT / "katagami-mark-cut.svg").write_text(mark_svg(cut_lines=True))
+    (OUT / "katagami-logo.svg").write_text(logo_svg())
     (SITE / "favicon.svg").write_text(mark_svg(theme=True, size=32))
     png(SITE / "favicon.png", 64, 0.08)
     png(SITE / "apple-touch-icon.png", 180, 0.2)

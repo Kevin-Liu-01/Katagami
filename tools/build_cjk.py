@@ -1,9 +1,9 @@
-"""Build Kerf CJK SC, JP and KR: Chinese, Japanese and Korean companions to
-the Kerf members, from Google's Noto Sans SC, JP and KR (SIL OFL 1.1).
+"""Build Katagami CJK SC, JP and KR: Chinese, Japanese and Korean companions to
+the Katagami members, from Google's Noto Sans SC, JP and KR (SIL OFL 1.1).
 
     python tools/build_cjk.py
 
-A CJK font with Kerf's Latin in it would pass the 65,535-glyph limit and be
+A CJK font with Katagami's Latin in it would pass the 65,535-glyph limit and be
 too heavy for the web, so these stay separate files, as Pretendard JP does.
 Each is Noto's variable font subset to a national character standard:
 
@@ -12,9 +12,9 @@ Each is Noto's variable font subset to a national character standard:
     KR  all 11,172 Hangul syllables and the jamo
 
 plus CJK punctuation and the full-width forms. Latin, Greek and Cyrillic
-are left out so a page sets them in Kerf. Each file is scaled to Kerf's
-2048-unit em and takes Kerf's line metrics, so it can sit in the same CSS
-family as a Kerf member (the website does this with unicode-range).
+are left out so a page sets them in Katagami. Each file is scaled to Katagami's
+2048-unit em and takes Katagami's line metrics, so it can sit in the same CSS
+family as a Katagami member (the website does this with unicode-range).
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from fontTools.ttLib.scaleUpem import scale_upem
 ROOT = Path(__file__).resolve().parents[1]
 NOTO = ROOT / "vendor" / "noto"
 OUT = ROOT / "fonts" / "cjk"
-KERF_LINE = {"ascender": 1984, "descender": -494, "lineGap": 0}  # Kerf Sans's hhea and typo metrics
+KERF_LINE = {"ascender": 1984, "descender": -494, "lineGap": 0}  # Katagami Sans's hhea and typo metrics
 SHARED = [(0x3000, 0x303F), (0xFF00, 0xFFEF), (0x3200, 0x32FF), (0x3300, 0x33FF)]  # punctuation, full width, enclosed
 
 
@@ -74,7 +74,7 @@ def rename(font: TTFont, family: str) -> None:
             rec.string = ps
     for rec in name.names:
         if rec.nameID == 0:
-            rec.string = rec.toUnicode() + " Kerf CJK: subset and rescaled from Noto Sans CJK."
+            rec.string = rec.toUnicode() + " Katagami CJK: subset and rescaled from Noto Sans CJK."
 
 
 def build(region: str) -> Path:
@@ -94,10 +94,10 @@ def build(region: str) -> Path:
     hhea, os2 = font["hhea"], font["OS/2"]
     hhea.ascent, hhea.descent, hhea.lineGap = KERF_LINE["ascender"], KERF_LINE["descender"], KERF_LINE["lineGap"]
     os2.sTypoAscender, os2.sTypoDescender, os2.sTypoLineGap = hhea.ascent, hhea.descent, hhea.lineGap
-    os2.fsSelection |= 1 << 7  # use the typo metrics, as Kerf does
-    rename(font, f"Kerf CJK {region}")
+    os2.fsSelection |= 1 << 7  # use the typo metrics, as Katagami does
+    rename(font, f"Katagami CJK {region}")
     OUT.mkdir(parents=True, exist_ok=True)
-    path = OUT / f"KerfCJK{region}[wght].ttf"
+    path = OUT / f"KatagamiCJK{region}[wght].ttf"
     font.save(path)
     font = TTFont(path)
     head = font["head"]
