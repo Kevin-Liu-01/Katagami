@@ -4,6 +4,7 @@
     python tools/proof.py mono   -> build/proofs/mono.png
     python tools/proof.py family -> build/proofs/family.png
     python tools/proof.py round  -> build/proofs/round-vs-inter.png
+    python tools/proof.py text   -> build/proofs/text-vs-inter.png
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ INTER = ROOT / "build/ref/InterVariable.ttf"
 SANS = ROOT / "fonts/sans/KerfSans[wght].ttf"
 MONO = ROOT / "fonts/mono/KerfMono[wght].ttf"
 ROUND = ROOT / "fonts/round/KerfRound[wght].ttf"
+TEXT = ROOT / "fonts/text/KerfText[wght].ttf"
 BERKELEY = Path.home() / "Library/Fonts/BerkeleyMono-Regular.ttf"
 OUT = ROOT / "build/proofs"  # local only: sheets may show licensed reference fonts
 
@@ -89,6 +91,10 @@ def main(which: str) -> None:
         rows = [("Inter 400", INTER, 400), ("Kerf Round 400", ROUND, 400),
                 ("Inter 700", INTER, 700), ("Kerf Round 700", ROUND, 700)]
         sheet("round-vs-inter", [("Kerf Round vs Inter", None, rows, LINES + ["Revenue grew 12% in the third quarter."])])
+    elif which == "text":
+        rows = [("Inter 400", INTER, 400), ("Kerf Text 400", TEXT, 400), ("Kerf Sans 400", SANS, 400),
+                ("Inter 700", INTER, 700), ("Kerf Text 700", TEXT, 700)]
+        sheet("text-vs-inter", [("Kerf Text vs Inter", None, rows, LINES + ["Revenue grew 12% in the third quarter."])])
     elif which == "family":
         rows = [("Kerf Sans", SANS, 400), ("Kerf Mono", MONO, 400)]
         sheet("family", [("Kerf family", None, rows, LINES)])

@@ -31,15 +31,15 @@ from kerf_build.outline import round_corners  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 SITE = Path(os.environ.get("KERF_SITE", ROOT.parent / "Kerf-Website"))
 FONTS = {"sans": ROOT / "fonts/sans/KerfSans[wght].ttf", "round": ROOT / "fonts/round/KerfRound[wght].ttf",
-         "mono": ROOT / "fonts/mono/KerfMono[wght].ttf"}
-WOFF2 = {"sans": "KerfSans.woff2", "round": "KerfRound.woff2", "mono": "KerfMono.woff2"}
+         "text": ROOT / "fonts/text/KerfText[wght].ttf", "mono": ROOT / "fonts/mono/KerfMono[wght].ttf"}
+WOFF2 = {"sans": "KerfSans.woff2", "round": "KerfRound.woff2", "text": "KerfText.woff2", "mono": "KerfMono.woff2"}
 OUTLINE_CHARS = {"K": "K", "e": "e", "r": "r", "f": "f", "O": "O", "o": "o"}
 INTER_UFO = ROOT / "build/ufo/Inter-Regular.ufo"
 KERF_UFO = ROOT / "build/sans/KerfSans-Regular.ufo"
 MONO_UFO = ROOT / "build/mono/KerfMono-Regular.ufo"
 ROUND_UFO = ROOT / "build/round/KerfRound-Regular.ufo"
 HERO = "Kerf"  # morphs Kerf Mono <- Kerf Sans -> Kerf Round; all three share Inter's point structure
-PAGES = {"page.html": "index.html", "map-page.html": "map.html"}  # hand-written fragment -> served page
+PAGES = {"page.html": "index.html", "map-page.html": "map.html", "convert-page.html": "convert.html"}  # hand-written fragment -> served page
 
 
 def group(cp: int) -> str:
@@ -176,7 +176,7 @@ def main() -> None:
     # Each hand-written page fragment is wrapped in a document. Asset URLs are
     # stamped with a content hash, so a changed file gets a new URL and the
     # cache headers in vercel.json never pair a new page with old data.
-    assets = ["data.js", "map/map.json", *(f"fonts/{name}" for name in WOFF2.values())]
+    assets = ["data.js", "kerf-apply.js", "map/map.json", *(f"fonts/{name}" for name in WOFF2.values())]
     stamps = {rel: hashlib.sha256((SITE / rel).read_bytes()).hexdigest()[:10]
               for rel in assets if (SITE / rel).exists()}
     for source, target in PAGES.items():

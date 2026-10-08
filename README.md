@@ -1,9 +1,10 @@
 # Kerf
 
-Kerf is an open source type family with three members:
+Kerf is an open source type family with four members:
 
 - **Kerf Sans**: a sans serif with squared curves, horizontal cuts and square punctuation. Variable weight from 100 to 900.
-- **Kerf Round**: the universal member, close to Inter, with Kerf's figures and f and a light squaring. Variable weight from 100 to 900.
+- **Kerf Round**: geometric bowls with every vertex rounded, between Kerf Sans and Inter. Variable weight from 100 to 900.
+- **Kerf Text**: the reading member, Inter moved toward PP Mori's wider, softer proportions, with level cuts and no squaring. Variable weight from 100 to 900.
 - **Kerf Mono**: the same letters fitted to a 0.625 em cell at even widths, with flagged i, l and j, a serif I, a long-flag 1, a centre-bar zero and generated box drawing. Variable weight from 100 to 700.
 
 Kerf Sans is derived from [Inter](https://github.com/rsms/inter) by Rasmus Andersson. It moves Inter toward the geometry of Camber by Eduardo Manso. Kerf Mono follows the monospace tradition that Berkeley Mono also comes from. Neither Camber nor Berkeley Mono contributed any outlines: both were measured as references only. See [SPEC.md](SPEC.md) for every design decision and the numbers behind it.
@@ -19,6 +20,7 @@ Kerf Sans is derived from [Inter](https://github.com/rsms/inter) by Rasmus Ander
 ```
 fonts/sans/KerfSans[wght].ttf
 fonts/round/KerfRound[wght].ttf
+fonts/text/KerfText[wght].ttf
 fonts/mono/KerfMono[wght].ttf
 ```
 
@@ -31,21 +33,22 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 tools/build.sh          # all members
 tools/build.sh round    # Kerf Round only
+tools/build.sh text     # Kerf Text only
 tools/build.sh sans     # one member
 ```
 
 The build fetches Inter's sources at a pinned commit into `vendor/inter`, converts them to UFO, applies the Kerf transforms and compiles variable TrueType fonts with fontmake. A full build takes about ten minutes.
 
-`tools/proof.py sans|mono|family` renders proof sheets to `build/proofs/`.
+`tools/proof.py sans|mono|round|text|family` renders proof sheets to `build/proofs/`.
 
-The specimen site at [kerf.kevinliu.studio](https://kerf.kevinliu.studio), with its [map of where Kerf writes](https://kerf.kevinliu.studio/map), lives in [Kerf-Website](https://github.com/Kevin-Liu-01/Kerf-Website). Check it out next to this repo, then `tools/build_site.py` writes the web fonts, `data.js` and `index.html` into it (set `KERF_SITE` to use another path). Pushing Kerf-Website deploys the site.
+The specimen site at [kerf.kevinliu.studio](https://kerf.kevinliu.studio), with its [map of where Kerf writes](https://kerf.kevinliu.studio/map) and a [converter that shows any site in Kerf](https://kerf.kevinliu.studio/convert), lives in [Kerf-Website](https://github.com/Kevin-Liu-01/Kerf-Website). Check it out next to this repo, then `tools/build_site.py` writes the web fonts, `data.js` and `index.html` into it (set `KERF_SITE` to use another path). Pushing Kerf-Website deploys the site.
 
 ## Layout
 
 | Path | Contents |
 |---|---|
-| `tools/kerf_build/profiles.py` | the parameters of Kerf Sans and Kerf Round |
-| `tools/build_sans.py` | Inter masters to a proportional member's masters (`sans` or `round`) |
+| `tools/kerf_build/profiles.py` | the parameters of Kerf Sans, Kerf Round and Kerf Text |
+| `tools/build_sans.py` | Inter masters to a proportional member's masters (`sans`, `round` or `text`) |
 | `tools/build_mono.py` | Kerf Sans masters to Kerf Mono masters |
 | `tools/kerf_build/outline.py` | point-preserving transforms: curve squaring, horizontal emboldening |
 | `tools/kerf_build/fontops.py` | glyph swaps, resizing, composite re-seating, naming |

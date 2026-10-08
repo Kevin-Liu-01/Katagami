@@ -76,4 +76,31 @@ ROUND = Profile(
     corner_radius=0.22,  # round only at the vertices
 )
 
-PROFILES = {p.key: p for p in (SANS, ROUND)}
+# Inter moved toward PP Mori: rounder and wider, tighter, softer letterforms,
+# no squaring. The family's level cuts and bold join fill. SPEC.md, Kerf Text.
+TEXT = Profile(
+    key="text",
+    family="Kerf Text",
+    file_stem="KerfText",
+    # superellipse about 2.13 (Mori 2.12) from Inter's 2.15
+    square_upper=-0.02,
+    square_lower=-0.02,
+    counter_boost=1.0,
+    notch_fill=0.35,
+    # Mori's long-flag 1, its a with a foot spur and G with a spur; Inter's own f and figures
+    promote=("cv01-one.fea", "cv10-g-spur.fea", "cv16-a-tail.fea"),
+    # halfway from Inter to Mori's ink proportions (Mori O/H 1.19, a 0.95 of its height)
+    widths={
+        "O": 1.05, "Q": 1.05, "C": 1.04, "G": 1.04, "D": 1.02,
+        "o": 1.03, "c": 1.02, "e": 1.025, "s": 1.025, "a": 1.10,
+        "E": 1.06, "F": 1.05, "L": 1.03, "S": 1.03,
+    },
+    spacing=-6,  # o sidebearing about 48 per 1000 (Inter 51, Mori 41)
+    space_width=512,  # 250 per 1000 (Inter 281, Mori 225)
+    terminal_angle=0.0,  # level cuts, as Mori cuts them
+    # a lighter bold than Inter's, as Mori's is
+    weight_map=((100, 100), (200, 200), (300, 300), (400, 400), (500, 480),
+                (600, 560), (700, 640), (800, 760), (900, 900)),
+)
+
+PROFILES = {p.key: p for p in (SANS, ROUND, TEXT)}

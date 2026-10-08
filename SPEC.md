@@ -143,20 +143,25 @@ U+2500 to U+259F are drawn by `tools/kerf_build/boxdraw.py`, not taken from Inte
 
 ## Kerf Round
 
-Kerf Round is the universal member, kept close to Inter. It started as a fusion of Inter, PP Mori (Pangram Pangram) and Geist (Vercel), measured from their webfonts with DM Sans and Nacelle as secondary references (none of their outlines is used), and was then brought back toward Inter's proportions. The parameters live in `tools/kerf_build/profiles.py` as the `round` profile.
+Kerf Round sits between Kerf Sans and Inter: geometric bowls that are less square than Kerf Sans, with every sharp vertex rounded. It started from Inter, PP Mori (Pangram Pangram) and Geist (Vercel), measured from their webfonts with DM Sans and Nacelle as secondary references; none of their outlines is used. The parameters live in `tools/kerf_build/profiles.py` as the `round` profile.
 
-| Measure (per 1000 em, Regular) | Inter | Kerf Round | Kerf Sans |
-|---|---|---|---|
-| Superellipse, o | 2.15 | 2.21 | 2.68 |
-| Terminal angle, c e s a | 16° | 0° | 0° |
-| o sidebearing | 51 | 49 | 51 |
-| Space | 281 | 270 | 281 |
-
-- **Curves:** squared at 0.05 (caps) and 0.04 (lowercase), with the tight-curve rule.
-- **Widths and weights:** Inter's. **Terminals:** c, e, s and a cut level, as in Kerf Sans.
-- **Letterforms:** Kerf's figures and compact f, and Inter's G with spur (cv10), which PP Mori, Geist, DM Sans and Nacelle all have. Dots and punctuation stay round.
+- **Curves:** squared at 0.24 (caps) and 0.22 (lowercase), with the tight-curve rule, so bowls read as geometric without Kerf Sans's flat sides.
+- **Vertices:** every convex corner sharper than 20 degrees is rounded with a radius of 0.22 stems (kappa 0.5523 handles). The corners are chosen on Regular and rounded in every master, so the masters stay compatible. Curves are not rounded further.
+- **Terminals:** c, e, s, a and g cut level, as in Kerf Sans. The f crossbar overhangs the stem by 0.4 stems.
+- **Letterforms:** Kerf's figures and compact f, and Inter's G with spur (cv10).
 - **Joins:** bowl-to-stem notches fill 35 percent of the way.
 - **Spacing:** sidebearings 3 units tighter than Inter, space 552 units.
+
+## Kerf Text
+
+Kerf Text is the member for reading: it drops the squaring and moves Inter toward PP Mori's wider, softer proportions. It is the least technical member and the one the converter on the website uses for serif text. The parameters are the `text` profile.
+
+- **Curves:** a slight negative squaring (0.02), so bowls are a touch rounder than Inter's.
+- **Widths:** round letters wider (O and Q 1.05, C and G 1.04, o 1.03, e and s 1.025), a 1.10, and the narrow capitals opened (E 1.06, F 1.05, L and S 1.03).
+- **Terminals:** c, e, s, a and g cut level, as PP Mori cuts them.
+- **Letterforms:** Kerf's long-flag 1, Inter's G with spur (cv10) and a with tail (cv16). Everything else is Inter's.
+- **Weight:** the heavy weights are lighter than Inter's (700 is Inter's 640, 800 its 760), as PP Mori's are.
+- **Spacing:** sidebearings 6 units tighter, space 512 units.
 
 ## Not done yet
 

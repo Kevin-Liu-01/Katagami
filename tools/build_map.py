@@ -38,6 +38,7 @@ COVERED = 0.9
 FONTS = {
     "round": ROOT / "fonts/round/KerfRound[wght].ttf",
     "sans": ROOT / "fonts/sans/KerfSans[wght].ttf",
+    "text": ROOT / "fonts/text/KerfText[wght].ttf",
     "mono": ROOT / "fonts/mono/KerfMono[wght].ttf",
 }
 DENSITY_LOG_MIN, DENSITY_STEPS = -3, 32
