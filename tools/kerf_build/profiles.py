@@ -68,6 +68,7 @@ ROUND = Profile(
     promote=DIGITS + ("cv10-g-spur.fea", "cv12-compact-f.fea"),
     spacing=-3,
     space_width=552,  # 270 per 1000 (Inter 281)
+    terminal_angle=0.0,  # c, e, s and a cut level, as in Kerf Sans
 )
 
 PROFILES = {p.key: p for p in (SANS, ROUND)}

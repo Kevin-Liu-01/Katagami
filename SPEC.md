@@ -75,7 +75,7 @@ Accented and composite glyphs are re-seated on their changed bases, and their ma
 
 ## Terminals
 
-The cut ends of c, e, s and a are turned level (0 degrees) from Inter's 16 degrees. Both ends of each cut slide along their own curve's tangent with their handle, so the stroke keeps its curve. Inter's capitals and figures are already cut level. The g keeps Inter's tail and its angled terminal.
+The cut ends of c, e, s and a are cut again along a level line (0 degrees) through the old cut's midpoint, from Inter's 16 degrees. Each edge of the stroke is split where it crosses the new line by de Casteljau subdivision: the edge that ran past it is trimmed, the edge that stopped short is extended along its own curve, and both handles of each edge move with the split. The edges stay pieces of their original curves, so the letter is not warped. Inter's capitals and figures are already cut level. The g keeps Inter's tail and its angled terminal. Kerf Round takes the same cuts.
 
 ## Figures
 
@@ -147,12 +147,12 @@ Kerf Round is the universal member, kept close to Inter. It started as a fusion 
 | Measure (per 1000 em, Regular) | Inter | Kerf Round | Kerf Sans |
 |---|---|---|---|
 | Superellipse, o | 2.15 | 2.21 | 2.68 |
-| Terminal angle, c e s a | 16° | 16° | 0° |
+| Terminal angle, c e s a | 16° | 0° | 0° |
 | o sidebearing | 51 | 49 | 51 |
 | Space | 281 | 270 | 281 |
 
 - **Curves:** squared at 0.05 (caps) and 0.04 (lowercase), with the tight-curve rule.
-- **Widths, terminals and weights:** Inter's.
+- **Widths and weights:** Inter's. **Terminals:** c, e, s and a cut level, as in Kerf Sans.
 - **Letterforms:** Kerf's figures and compact f, and Inter's G with spur (cv10), which PP Mori, Geist, DM Sans and Nacelle all have. Dots and punctuation stay round.
 - **Joins:** bowl-to-stem notches fill 35 percent of the way.
 - **Spacing:** sidebearings 3 units tighter than Inter, space 552 units.

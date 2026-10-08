@@ -36,6 +36,7 @@ INTER_UFO = ROOT / "build/ufo/Inter-Regular.ufo"
 KERF_UFO = ROOT / "build/sans/KerfSans-Regular.ufo"
 MONO_UFO = ROOT / "build/mono/KerfMono-Regular.ufo"
 HERO = "Kerf"  # morphs between Kerf Mono and Kerf Sans; the mono is fitted point for point
+PAGES = {"page.html": "index.html", "map-page.html": "map.html"}  # hand-written fragment -> served page
 
 
 def group(cp: int) -> str:
@@ -116,17 +117,23 @@ def main() -> None:
     data["outlines"] = outlines()
     (SITE / "data.js").write_text("window.KERF = " + json.dumps(data, separators=(",", ":")) + ";\n")
 
-    page = (SITE / "page.html").read_text()
-    # stamp asset URLs with a content hash, so a changed file gets a new URL
-    # and the cache headers in vercel.json can never pair a new page with old data
-    for rel in ["data.js", *(f"fonts/{name}" for name in WOFF2.values())]:
-        digest = hashlib.sha256((SITE / rel).read_bytes()).hexdigest()[:10]
-        page = page.replace(f'"{rel}"', f'"{rel}?v={digest}"')
-    (SITE / "index.html").write_text(
-        '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
-        '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
-        "</head>\n<body>\n" + page + "\n</body>\n</html>\n"
-    )
+    # Each hand-written page fragment is wrapped in a document. Asset URLs are
+    # stamped with a content hash, so a changed file gets a new URL and the
+    # cache headers in vercel.json never pair a new page with old data.
+    assets = ["data.js", "map/map.json", *(f"fonts/{name}" for name in WOFF2.values())]
+    stamps = {rel: hashlib.sha256((SITE / rel).read_bytes()).hexdigest()[:10]
+              for rel in assets if (SITE / rel).exists()}
+    for source, target in PAGES.items():
+        if not (SITE / source).exists():
+            continue
+        page = (SITE / source).read_text()
+        for rel, digest in stamps.items():
+            page = page.replace(f'"{rel}"', f'"{rel}?v={digest}"')
+        (SITE / target).write_text(
+            '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+            '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
+            "</head>\n<body>\n" + page + "\n</body>\n</html>\n"
+        )
     for p in sorted(SITE.rglob("*")):
         rel = p.relative_to(SITE)
         if p.is_file() and not any(part.startswith(".") for part in rel.parts):

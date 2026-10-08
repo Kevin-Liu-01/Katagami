@@ -232,35 +232,87 @@ def find_terminals(glyph, stem_w: float, lo: float = 6, hi: float = 30) -> list[
     return out
 
 
-def level_terminals(fonts, angle: float) -> None:
-    """Turn each cut terminal to `angle` degrees, keeping its slope's direction.
+def _point(c, t):
+    """A cubic at t (t may run past 0 or 1: the curve's own continuation)."""
+    u = 1 - t
+    return (u**3 * c[0][0] + 3 * u * u * t * c[1][0] + 3 * u * t * t * c[2][0] + t**3 * c[3][0],
+            u**3 * c[0][1] + 3 * u * u * t * c[1][1] + 3 * u * t * t * c[2][1] + t**3 * c[3][1])
 
-    Both ends slide along their own curve's tangent, with their handle, to
-    heights centred on the cut's old midpoint, so the stroke keeps its curve.
-    An end whose tangent is too flat to slide on is left where it is.
+
+def _split(c, t):
+    """de Casteljau: the cubic's control points before and after t."""
+    lerp = lambda a, b: (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)  # noqa: E731
+    p01, p12, p23 = lerp(c[0], c[1]), lerp(c[1], c[2]), lerp(c[2], c[3])
+    p012, p123 = lerp(p01, p12), lerp(p12, p23)
+    m = lerp(p012, p123)
+    return (c[0], p01, p012, m), (m, p123, p23, c[3])
+
+
+def _crossing(c, side, near: float, lo: float, hi: float):
+    """The parameter nearest `near` in lo..hi where the cubic crosses the line."""
+    steps = 80
+    ts = [lo + (hi - lo) * k / steps for k in range(steps + 1)]
+    vals = [side(_point(c, t)) for t in ts]
+    best = None
+    for k in range(steps):
+        if vals[k] == 0 or vals[k] * vals[k + 1] < 0:
+            a, b = ts[k], ts[k + 1]
+            for _ in range(50):
+                mid = (a + b) / 2
+                if side(_point(c, a)) * side(_point(c, mid)) <= 0:
+                    b = mid
+                else:
+                    a = mid
+            t = (a + b) / 2
+            if best is None or abs(t - near) < abs(best - near):
+                best = t
+    return best
+
+
+def level_terminals(fonts, angle: float) -> None:
+    """Cut each angled terminal again, along a line at `angle` degrees.
+
+    The new cut line passes through the old cut's midpoint, tilted the same
+    way as the old cut. Each edge of the stroke is split where it crosses the
+    line (de Casteljau): the edge that runs past it is trimmed, the edge that
+    stops short is extended along its own curve. Both handles of each edge
+    move with the split, so the edges stay pieces of their original curves
+    and the stroke is not warped. An end whose curve never crosses the line
+    near the old cut is left as it was.
     """
     ref = fonts["Regular"]
     sw = stem(ref)
     plans = {g.name: find_terminals(g, sw) for g in ref
              if g.contours and g.width and g.unicodes and unicodedata.category(chr(g.unicodes[0]))[0] in "LN"}
     plans = {k: v for k, v in plans.items() if v and k != "g"}
-    tan = math.tan(math.radians(angle))
     for f in fonts.values():
         for name, terms in plans.items():
             for ci, i, j in terms:
                 pts = f[name].contours[ci].points
                 n = len(pts)
-                p, q = pts[i], pts[j]
-                mid = (p.y + q.y) / 2
-                dy = math.copysign(abs(q.x - p.x) * tan, q.y - p.y)
-                for end, handle, y in ((p, pts[(i - 1) % n], mid - dy / 2), (q, pts[(j + 1) % n], mid + dy / 2)):
-                    ty, tx = end.y - handle.y, end.x - handle.x
-                    if abs(ty) < 0.2 * abs(tx):
-                        continue
-                    t = (y - end.y) / ty
-                    for pt in (end, handle):
-                        pt.x += tx * t
-                        pt.y += ty * t
+                P = lambda k: pts[k % n]  # noqa: E731
+                if P(i - 3).type is None or P(j + 2).type is not None or P(j + 3).type != "curve":
+                    continue
+                p, q = P(i), P(j)
+                mid = ((p.x + q.x) / 2, (p.y + q.y) / 2)
+                dx, dy = q.x - p.x, q.y - p.y
+                a = math.radians(angle) * (1 if dx * dy >= 0 else -1)
+                direction = (math.cos(a), math.sin(a))
+                side = lambda pt: (pt[0] - mid[0]) * direction[1] - (pt[1] - mid[1]) * direction[0]  # noqa: E731
+                into = [P(i - 3), P(i - 2), P(i - 1), p]  # the edge arriving at the cut
+                out = [q, P(j + 1), P(j + 2), P(j + 3)]  # the edge leaving it
+                ca = [(pt.x, pt.y) for pt in into]
+                cb = [(pt.x, pt.y) for pt in out]
+                ta = _crossing(ca, side, 1.0, 0.6, 1.4)
+                tb = _crossing(cb, side, 0.0, -0.4, 0.4)
+                if ta is None or tb is None:
+                    continue
+                left, _ = _split(ca, ta)
+                _, right = _split(cb, tb)
+                for pt, (x, y) in zip(into[1:], left[1:]):
+                    pt.x, pt.y = x, y
+                for pt, (x, y) in zip(out[:3], right[:3]):
+                    pt.x, pt.y = x, y
 
 
 def lift_ascenders(fonts, lift: float) -> None:

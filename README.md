@@ -38,7 +38,7 @@ The build fetches Inter's sources at a pinned commit into `vendor/inter`, conver
 
 `tools/proof.py sans|mono|family` renders proof sheets to `build/proofs/`.
 
-The specimen site at [kerf.kevinliu.studio](https://kerf.kevinliu.studio) lives in [Kerf-Website](https://github.com/Kevin-Liu-01/Kerf-Website). Check it out next to this repo, then `tools/build_site.py` writes the web fonts, `data.js` and `index.html` into it (set `KERF_SITE` to use another path). Pushing Kerf-Website deploys the site.
+The specimen site at [kerf.kevinliu.studio](https://kerf.kevinliu.studio), with its [map of where Kerf writes](https://kerf.kevinliu.studio/map), lives in [Kerf-Website](https://github.com/Kevin-Liu-01/Kerf-Website). Check it out next to this repo, then `tools/build_site.py` writes the web fonts, `data.js` and `index.html` into it (set `KERF_SITE` to use another path). Pushing Kerf-Website deploys the site.
 
 ## Layout
 
@@ -51,6 +51,7 @@ The specimen site at [kerf.kevinliu.studio](https://kerf.kevinliu.studio) lives 
 | `tools/kerf_build/fontops.py` | glyph swaps, resizing, composite re-seating, naming |
 | `tools/kerf_build/boxdraw.py` | box drawing and block elements |
 | `tools/build_site.py` | specimen site assets, written into Kerf-Website |
+| `tools/build_map.py` | map data and coverage figures from General Translation's world language map data |
 
 ## License
 
