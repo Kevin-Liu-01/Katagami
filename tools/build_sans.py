@@ -169,6 +169,7 @@ def redraw_tails(fonts, p: Profile) -> None:
         pts = f["g"].contours[0].points
         P = lambda i: pts[i % n]  # noqa: E731
         y = (P(cut - 1).y + P(cut).y) / 2
+        y += p.g_rise * (P(cut + 6).y - y)  # toward the top of the curl
         # outer edge: the right side's turn into the bottom, mirrored about the bottom's centre
         # and cut where it reaches the terminal height
         bottom = P(cut + 3)
@@ -657,6 +658,48 @@ def level_terminals(fonts, angle: float) -> None:
                     pt.x, pt.y = x, y
 
 
+def close_c(fonts, share: float) -> None:
+    """Bring c's two terminals toward each other by `share` of the gap between
+    them, half each. Each cut moves along the stroke, parallel to itself (Thin
+    keeps Inter's angled cuts; the other masters are level): both edges are
+    extended along their own curves to the moved line, as level_terminals
+    extends them, so the curves stay whole."""
+    for f in fonts.values():
+        pts = f["c"].contours[0].points
+        n = len(pts)
+        P = lambda k: pts[k % n]  # noqa: E731
+        cuts = [((j - 1) % n, j) for j in range(n)
+                if P(j).type == "line" and P(j - 1).type == "curve" and not P(j - 1).smooth and not P(j).smooth]
+        if len(cuts) != 2:
+            continue
+        mids = [((P(i).x + P(j).x) / 2, (P(i).y + P(j).y) / 2) for i, j in cuts]
+        lo, hi = min(m[1] for m in mids), max(m[1] for m in mids)
+        for (i, j), (mx, my) in zip(cuts, mids):
+            my += share * (hi - lo) / 2 * (1 if my == lo else -1)
+            length = math.hypot(P(j).x - P(i).x, P(j).y - P(i).y)
+            dx, dy = (P(j).x - P(i).x) / length, (P(j).y - P(i).y) / length
+            side = lambda q, mx=mx, my=my, dx=dx, dy=dy: (q[0] - mx) * dy - (q[1] - my) * dx  # noqa: E731
+            into = [P(i - 3), P(i - 2), P(i - 1), P(i)]
+            out = [P(j), P(j + 1), P(j + 2), P(j + 3)]
+            ca, cb = [(q.x, q.y) for q in into], [(q.x, q.y) for q in out]
+            ta = _crossing(ca, side, 1.0, 0.6, 1.4)
+            tb = _crossing(cb, side, 0.0, -0.4, 0.4)
+            if ta is None or tb is None:
+                # A curve that reaches its end steeply on a short handle (Inter's
+                # Thin c) bends back when extended; move its end and last handle
+                # instead, so the cut moves the same distance with its angle kept.
+                dy = my - (P(i).y + P(j).y) / 2
+                for q in (into[2], into[3], out[0], out[1]):
+                    q.y += dy
+                continue
+            left, _ = _split(ca, ta)
+            _, right = _split(cb, tb)
+            for q, xy in zip(into[1:], left[1:]):
+                _set(q, xy)
+            for q, xy in zip(out[:3], right[:3]):
+                _set(q, xy)
+
+
 def f_crossbar_overhang(fonts, overhang: float) -> None:
     """Let the f's crossbar reach `overhang` stems past the stem's left edge.
 
@@ -763,11 +806,36 @@ def soften_vertices(fonts, radius: float) -> dict:
     return {k: [[ci, idx] for ci, idx in v] for k, v in plans.items()}
 
 
-def adjust_widths(fonts, widths: dict[str, float]) -> None:
+def letters_and_figures(font) -> set[str]:
+    """Drawn letters and figures, their unencoded alternates (a.1, g.cv10)
+    and the unencoded parts only they are built from."""
+    # Lm, modifier letters, are left out: marks such as commasuprevcomb are built from them
+    cat = lambda g: unicodedata.category(chr(g.unicodes[0])) if g.unicodes else ""  # noqa: E731
+    letter = lambda c: c[:1] in ("L", "N") and c != "Lm"  # noqa: E731
+    encoded = {g.name for g in font if g.contours and g.width and letter(cat(g))}
+    used_by = {}  # base parts only: the marks on accented letters keep their widths
+    for g in font:
+        if g.components:
+            used_by.setdefault(g.components[0].baseGlyph, set()).add(cat(g))
+    alternates = {g.name for g in font if g.contours and g.width and not g.unicodes and g.name.split(".")[0] in encoded}
+    parts = {name for name, cats in used_by.items()
+             if cats - {""} and all(letter(c) for c in cats - {""})
+             and not font[name].unicodes and font[name].contours and font[name].width}
+    return encoded | alternates | parts
+
+
+def adjust_widths(fonts, widths: dict[str, float], condense: float = 1.0) -> None:
+    """Scale glyphs' ink horizontally, stems kept: each glyph in `widths` by
+    its factor, and every letter and figure by `condense` as well."""
+    scales = dict(widths)
+    if condense != 1:
+        for name in letters_and_figures(fonts["Regular"]):
+            scales[name] = scales.get(name, 1.0) * condense
     for f in fonts.values():
         old = snapshot(f)
         sw = stem(f)
-        maps = {name: resize_glyph(f, name, k, sw) for name, k in widths.items()}
+        maps = {name: resize_glyph(f, name, k, sw) for name, k in scales.items()
+                if name in f and k != 1 and all(m[name].width > 0 for m in fonts.values())}
         reflow_composites(f, maps, old)
 
 
@@ -804,6 +872,8 @@ def build(p: Profile) -> Path:
     shape_curves(fonts, p)
     if p.terminal_angle is not None:
         level_terminals(fonts, p.terminal_angle)
+    if p.c_close:
+        close_c(fonts, p.c_close)
     f_crossbar_overhang(fonts, p.f_overhang)
     if p.notch_fill:
         fill_notches(fonts, p.notch_fill, p.bowl_fill)
@@ -811,7 +881,7 @@ def build(p: Profile) -> Path:
     if p.tails:
         redraw_tails(fonts, p)
     slant_t(fonts, p.t_slant)
-    adjust_widths(fonts, p.widths)
+    adjust_widths(fonts, p.widths, p.condense)
     lift_ascenders(fonts, p.ascender_lift)
     lower_xheight(fonts, p.xheight_scale)
     small_caps(fonts)

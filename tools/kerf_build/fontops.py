@@ -137,7 +137,8 @@ def reflow_composites(font, maps: dict[str, XMap], before: dict[str, tuple[float
             comp.transformation = tuple(t)
         for a in g.anchors:
             a.x = round(m(a.x))
-        g.width = round(g.width + font[base.baseGlyph].width - before[base.baseGlyph][0])
+        if before[name][0]:  # a zero-width mark built from a spacing glyph stays zero width
+            g.width = round(g.width + font[base.baseGlyph].width - before[base.baseGlyph][0])
         resolved[name] = m
         return m
 
