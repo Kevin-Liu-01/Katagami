@@ -126,14 +126,16 @@ def _thirds(pts, a: int, c1: int, c2: int, b: int) -> None:
 
 
 G_TIP = 0.78  # the g tail's cut, as a share of the stroke's width where it starts to rise
+G_REACH = 0.9  # how far the g tail reaches left of the bottom's centre, as a share of the right side's reach
 
 
 def redraw_tails(fonts, p: Profile) -> None:
     """Redraw the ends of g, y and t (and a's foot where it has one). Point counts never change.
 
     g: the tail is the right side's turn into the bottom, mirrored about the
-    bottom's centre and cut level at Inter's terminal height. The curl
-    matches the bowl side's squaring and the cut is square to the stroke.
+    bottom's centre, drawn in to G_REACH of its width so the end sits inside
+    the bowl, and cut level at Inter's terminal height. The curl matches the
+    bowl side's squaring and the cut is square to the stroke.
     The inner edge then leans toward the outer one, by nothing at the
     counter's floor and by enough at the cut to leave it G_TIP as wide, so
     the stroke thins as it rises instead of ending as heavy as the stem.
@@ -160,7 +162,7 @@ def redraw_tails(fonts, p: Profile) -> None:
         # outer edge: the right side's turn into the bottom, mirrored about the bottom's centre
         # and cut where it reaches the terminal height
         bottom = P(cut + 3)
-        mirror = lambda q, c: (2 * c.x - q.x, q.y)  # noqa: E731
+        mirror = lambda q, c: (c.x - G_REACH * (q.x - c.x), q.y)  # noqa: E731
         arc = [mirror(P(cut + 6), bottom), mirror(P(cut + 5), bottom), mirror(P(cut + 4), bottom), (bottom.x, bottom.y)]
         t = _crossing(arc, lambda q: q[1] - y, 0.5, 0.0, 1.0)
         _, low = _split(arc, t)
