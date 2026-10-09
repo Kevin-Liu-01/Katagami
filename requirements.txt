@@ -5,3 +5,4 @@ fonttools[ufo,woff]
 skia-pathops
 drawbot-skia
 uharfbuzz
+numpy

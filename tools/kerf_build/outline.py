@@ -9,6 +9,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+import numpy as np
+
 from ufoLib2.objects import Contour, Glyph, Point
 
 
@@ -126,6 +128,154 @@ def apply_squaring(glyph: Glyph, plan, s_outer: float, s_inner: float, join: flo
             c, p = pts[ci_], pts[pi]
             c.x = p.x + (c.x - p.x) * k
             c.y = p.y + (c.y - p.y) * k
+
+
+# --- Stroke width --------------------------------------------------------
+# The stroke's width at points along the outline: from each point a ray runs
+# inward (in PostScript-oriented outlines the ink lies left of the direction
+# of travel) to where it leaves the ink. Points near sharp corners are left
+# out, where the ray would meet the neighbouring edge at once.
+
+
+def _polylines(glyph: Glyph, steps: int = 12):
+    """Edges of every contour, flattened: start and end points, and the key of
+    the curve segment each edge comes from (contour * 10000 + its end point),
+    or -1 for straight segments."""
+    A, B, keys = [], [], []
+    for ci, contour in enumerate(glyph.contours):
+        pts = contour.points
+        n = len(pts)
+        start = next((i for i, q in enumerate(pts) if q.type), None)
+        if start is None or n < 2:
+            continue
+        prev, off = pts[start], []
+        for k in range(1, n + 1):
+            idx = (start + k) % n
+            q = pts[idx]
+            if q.type is None:
+                off.append(q)
+                continue
+            if q.type == "curve" and len(off) == 2:
+                (ax, ay), (bx, by), (cx, cy), (dx, dy) = ((t.x, t.y) for t in (prev, off[0], off[1], q))
+                last = (ax, ay)
+                for j in range(1, steps + 1):
+                    t = j / steps
+                    u = 1 - t
+                    nxt = (u**3 * ax + 3 * u * u * t * bx + 3 * u * t * t * cx + t**3 * dx,
+                           u**3 * ay + 3 * u * u * t * by + 3 * u * t * t * cy + t**3 * dy)
+                    A.append(last); B.append(nxt); keys.append(ci * 10000 + idx)
+                    last = nxt
+            else:
+                A.append((prev.x, prev.y)); B.append((q.x, q.y)); keys.append(-1)
+            prev, off = q, []
+    return np.array(A, float).reshape(-1, 2), np.array(B, float).reshape(-1, 2), np.array(keys)
+
+
+def _winding(Q, A, B):
+    """Nonzero winding number of each point in Q around the edges A to B."""
+    ay, by = A[None, :, 1], B[None, :, 1]
+    qx, qy = Q[:, None, 0], Q[:, None, 1]
+    side = (B[None, :, 0] - A[None, :, 0]) * (qy - ay) - (qx - A[None, :, 0]) * (by - ay)
+    up = (ay <= qy) & (by > qy) & (side > 0)
+    down = (by <= qy) & (ay > qy) & (side < 0)
+    return up.sum(1) - down.sum(1)
+
+
+def stroke_widths(glyph: Glyph, step: float = 6.0, corner: float = 35.0, skip: float = 12.0):
+    """Width, own segment key and hit segment key at points along the outline."""
+    A, B, keys = _polylines(glyph)
+    if not len(A):
+        return np.zeros(0), np.zeros(0, int), np.zeros(0, int)
+    E = B - A
+    L = np.hypot(E[:, 0], E[:, 1])
+    keep = L > 1e-6
+    A, B, E, L, keys = A[keep], B[keep], E[keep], L[keep], keys[keep]
+    T = E / L[:, None]
+    # corners: where one edge turns into the next by more than `corner` degrees
+    nxt = np.roll(T, -1, axis=0)
+    turn = np.degrees(np.arccos(np.clip((T * nxt).sum(1), -1, 1)))
+    joined = np.hypot(*(np.roll(A, -1, axis=0) - B).T) < 1e-6
+    corners = B[(turn > corner) & joined]
+    # samples every `step` units along each edge
+    count = np.maximum(1, (L // step).astype(int))
+    e = np.repeat(np.arange(len(A)), count)
+    t = (np.concatenate([np.arange(c) for c in count]) + 0.5) / np.repeat(count, count)
+    P = A[e] + E[e] * t[:, None]
+    N = np.stack([-T[e, 1], T[e, 0]], axis=1)
+    ok = np.ones(len(P), bool)
+    if len(corners):
+        ok &= np.hypot(*(P[:, None, :] - corners[None]).transpose(2, 0, 1)).min(1) > skip
+    ok &= _winding(P - N * 0.75, A, B) == 0  # an edge inside the ink (an overlap) has no width
+    P, N, own = P[ok], N[ok], keys[e[ok]]
+    W = A[None] - P[:, None]
+    den = N[:, None, 0] * E[None, :, 1] - N[:, None, 1] * E[None, :, 0]
+    safe = np.where(np.abs(den) < 1e-9, 1e-9, den)
+    tt = (W[..., 0] * E[None, :, 1] - W[..., 1] * E[None, :, 0]) / safe
+    uu = (W[..., 0] * N[:, None, 1] - W[..., 1] * N[:, None, 0]) / safe
+    tt = np.where((np.abs(den) > 1e-9) & (tt > 0.5) & (uu >= 0) & (uu <= 1), tt, np.inf)
+    width = np.full(len(P), np.inf)
+    hit = np.full(len(P), -1)
+    for _ in range(4):  # the first crossing that leaves the ink; overlaps can hide it behind others
+        j = tt.argmin(1)
+        tj = tt[np.arange(len(P)), j]
+        out = _winding(P + N * (np.where(np.isfinite(tj), tj, 0) + 0.75)[:, None], A, B) == 0
+        done = np.isfinite(tj) & out & ~np.isfinite(width)
+        width[done], hit[done] = tj[done], keys[j[done]]
+        tt[np.arange(len(P)), j] = np.where(out, tt[np.arange(len(P)), j], np.inf)
+        if not (np.isfinite(tj) & ~out).any():
+            break
+    found = np.isfinite(width)
+    return width[found], own[found], hit[found]
+
+
+def handles(glyph: Glyph, plan) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    out = []
+    for ci, seg, *_ in plan:
+        pts = glyph.contours[ci].points
+        out.append(((pts[seg.c1].x, pts[seg.c1].y), (pts[seg.c2].x, pts[seg.c2].y)))
+    return out
+
+
+def keep_stroke(glyph: Glyph, plan, before, floor: float) -> int:
+    """Give back the squaring of the planned arcs that thin a stroke under `floor`.
+
+    `before` holds the handles from before squaring (`handles`). The arcs
+    that the thin points lie on or look across to move back toward their
+    unsquared shape by the least share that brings the stroke to `floor`, or
+    to what the unsquared outline had if that was less. Returns the number of
+    arcs moved.
+    """
+    after = handles(glyph, plan)
+    keys = [ci * 10000 + seg.p3 for ci, seg, *_ in plan]
+    w, own, hit = stroke_widths(glyph)
+    thin = w < floor
+    involved = (set(own[thin].tolist()) | set(hit[thin].tolist())) & set(keys)
+    if not involved:
+        return 0
+    idx = [i for i, k in enumerate(keys) if k in involved]
+    look = list(involved)
+
+    def width(share: float) -> float:
+        for i in idx:
+            ci, seg, *_ = plan[i]
+            pts = glyph.contours[ci].points
+            for pi, (b, a) in ((seg.c1, (before[i][0], after[i][0])), (seg.c2, (before[i][1], after[i][1]))):
+                pts[pi].x = b[0] + (a[0] - b[0]) * share
+                pts[pi].y = b[1] + (a[1] - b[1]) * share
+        w, own, hit = stroke_widths(glyph)
+        m = np.isin(own, look) | np.isin(hit, look)
+        return float(w[m].min()) if m.any() else math.inf
+
+    target = min(floor, 0.95 * width(0.0))
+    lo, hi = 0.0, 1.0
+    for _ in range(7):
+        mid = (lo + hi) / 2
+        if width(mid) >= target:
+            lo = mid
+        else:
+            hi = mid
+    width(lo)
+    return len(idx)
 
 
 # --- Horizontal emboldening ----------------------------------------------

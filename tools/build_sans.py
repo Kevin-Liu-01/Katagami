@@ -26,7 +26,9 @@ from kerf_build.fontops import (  # noqa: E402
     MASTERS, ROOT, assign_categories, erase_open_corners, load_inter_masters, promote_alternates, reflow_composites, resize_glyph, respace,
     set_names, snapshot, stem, swap_glyph_outlines,
 )
-from kerf_build.outline import apply_squaring, embolden_x, embolden_y, plan_corners, plan_squaring, round_corners  # noqa: E402
+from kerf_build.outline import (  # noqa: E402
+    apply_squaring, embolden_x, embolden_y, handles, keep_stroke, plan_corners, plan_squaring, round_corners,
+)
 from kerf_build.profiles import PROFILES, Profile  # noqa: E402
 
 FEATURES = ROOT / "vendor" / "inter" / "src" / "features"
@@ -35,6 +37,10 @@ KEEP_ROUND = ("circle", "circled", "ring", "degree", "bullet", "dotted")
 # moving their corners leaves a lump where the curve meets the stem; the fill
 # grows from nothing at Thin to its full share at Regular and Black.
 JOIN_BY_MASTER = {"Thin": 0.0, "Regular": 1.0, "Black": 1.0}
+# Squaring moves a counter further than the edge outside it, and eases curves
+# into stems; at Thin the stroke between them can fall to a few units. Thin's
+# squared arcs give back what they must to keep this share of its stem.
+THIN_FLOOR = 0.8
 TIGHT_RADIUS = 1.6  # in stems: arcs tighter than this square in proportion to their radius
 
 # After an alternate becomes the default, its feature switches back to
@@ -93,6 +99,7 @@ def promote_square_punctuation(fonts) -> None:
 
 def shape_curves(fonts, p: Profile) -> None:
     ref = fonts["Regular"]
+    floor = THIN_FLOOR * stem(fonts["Thin"])
     for g in ref:
         if not g.contours or keeps_round(ref, g.name):
             continue
@@ -100,8 +107,11 @@ def shape_curves(fonts, p: Profile) -> None:
         if not plan:
             continue
         s = p.square_upper if is_upper(ref, g.name) else p.square_lower
-        for f in fonts.values():
+        for style, f in fonts.items():
+            before = handles(f[g.name], plan) if style == "Thin" else None
             apply_squaring(f[g.name], plan, s, min(0.9, s * p.counter_boost), p.join_ease)
+            if before is not None:
+                keep_stroke(f[g.name], plan, before, floor)
 
 
 def _meet(a, b, y: float) -> tuple[float, float]:
