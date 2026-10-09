@@ -24,7 +24,6 @@ class Profile:
     tails: bool = True  # g's tail mirrors its bowl into a level cut; y and t end in vertical cuts
     t_slant: float = 0.0  # stems the top-left corner of t's stem drops, cutting its top at a slant
     c_close: float = 0.0  # share of c's opening closed: each level terminal moves half of it toward the other
-    g_tip: float = 0.78  # the g tail's cut as a share of the stroke's width where it starts to rise; 1 keeps it full
     g_rise: float = 0.0  # share of the curl above the g tail's cut that the cut moves up
     condense: float = 1.0  # horizontal ink scale for every letter and figure, stems kept, on top of `widths`
     xheight_scale: float = 1.0  # the lowercase from baseline to x-height scaled; ascenders move down with it
@@ -103,7 +102,6 @@ TEXT = Profile(
     t_slant=0.45,  # the top of t's stem cut at about 20 degrees, as Mori's is
     c_close=0.25,  # c's terminals closer together, a rounder c
     g_rise=0.35,  # the g's tail ends higher
-    g_tip=1.0,  # the tail keeps its full width to the cut
     condense=0.97,  # every letter and figure a little narrower
     xheight_scale=0.95,  # x-height 0.71 of the cap height (Inter 0.75)
     # halfway from Inter to Mori's ink proportions (Mori O/H 1.19, H 0.768 em, a 0.581 em)

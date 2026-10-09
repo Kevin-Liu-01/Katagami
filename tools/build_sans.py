@@ -144,10 +144,8 @@ def redraw_tails(fonts, p: Profile) -> None:
     g: the tail is the right side's turn into the bottom, mirrored about the
     bottom's centre, drawn in to G_REACH of its width so the end sits inside
     the bowl, and cut level at Inter's terminal height. The curl matches the
-    bowl side's squaring and the cut is square to the stroke.
-    The inner edge then leans toward the outer one, by nothing at the
-    counter's floor and by enough at the cut to leave it `g_tip` as wide, so
-    the stroke thins as it rises instead of ending as heavy as the stem.
+    bowl side's squaring and the cut is square to the stroke. The stroke
+    keeps its width to the cut.
 
     y: the tail comes down the diagonal, turns through a quarter turn and
     runs level to a vertical cut. t: the hook runs level from its bottom
@@ -183,10 +181,8 @@ def redraw_tails(fonts, p: Profile) -> None:
         arc = [(floor.x, floor.y), mirror(P(cut - 5), floor), mirror(P(cut - 6), floor), mirror(P(cut - 7), floor)]
         t = _crossing(arc, lambda q: q[1] - y, 0.5, 0.0, 1.0)
         high, _ = _split(arc, t)
-        d = (1 - p.g_tip) * (high[3][0] - P(cut).x)
-        lean = lambda q: (q[0] - d * (floor.x - q[0]) / (floor.x - high[3][0]), q[1])  # noqa: E731
         for i, xy in zip((cut - 3, cut - 2, cut - 1), high[1:]):
-            _set(P(i), lean(xy))
+            _set(P(i), xy)
 
     # y: the cut runs from a line point (inner end) to the next line point (outer end)
     pts = ref["y"].contours[0].points
