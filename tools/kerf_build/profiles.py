@@ -18,7 +18,6 @@ class Profile:
     counter_boost: float = 1.25  # counters move further so corner strokes keep their weight
     join_ease: float = 0.3  # share of the change a handle gets where a curve meets a stem
     notch_fill: float = 0.45  # share of the way a bowl-to-stem notch corner moves toward the stem's end
-    bowl_fill: float = 0.7  # the same, for the bowls of b, d, p and q
     valley_fill: float = 0.5  # share of the way the dip between m's arches rises toward the x-height
     square_punctuation: bool = False  # Inter's ss07 becomes the default
     tails: bool = True  # g's tail mirrors its bowl into a level cut; y and t end in vertical cuts

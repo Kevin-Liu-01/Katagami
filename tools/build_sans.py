@@ -511,15 +511,7 @@ def find_notches(glyph, xheight: float) -> list[tuple[int, int, list[int], float
     return out
 
 
-def is_bowl_letter(glyph) -> bool:
-    """b, d, p and q and their drawn variants (with stroke, hook, and so on)."""
-    if not glyph.unicodes:
-        return False
-    name = unicodedata.name(chr(glyph.unicodes[0]), "")
-    return any(name == f"LATIN SMALL LETTER {c}" or name.startswith(f"LATIN SMALL LETTER {c} WITH ") for c in "BDPQ")
-
-
-def fill_notches(fonts, amount: float, bowl_amount: float | None = None) -> None:
+def fill_notches(fonts, amount: float) -> None:
     """Move each notch corner part of the way toward its stem's end.
 
     Inter's heavy weights cut deep notches where bowls join stems, which
@@ -530,11 +522,10 @@ def fill_notches(fonts, amount: float, bowl_amount: float | None = None) -> None
     ref = fonts["Regular"]
     plans = {g.name: find_notches(g, ref.info.xHeight) for g in ref
              if g.contours and g.unicodes and unicodedata.category(chr(g.unicodes[0])) == "Ll"}
-    bowls = {name for name in plans if is_bowl_letter(fonts["Regular"][name])}
     for style, f in fonts.items():
         for name, notches in plans.items():
             g = f[name]
-            share = (bowl_amount if bowl_amount is not None and name in bowls else amount) * JOIN_BY_MASTER[style]
+            share = amount * JOIN_BY_MASTER[style]
             for ci, corner, moving, ref, far in notches:
                 pts = g.contours[ci].points
                 dy = (ref - pts[corner].y) * share
@@ -871,7 +862,7 @@ def build(p: Profile) -> Path:
         close_c(fonts, p.c_close)
     f_crossbar_overhang(fonts, p.f_overhang)
     if p.notch_fill:
-        fill_notches(fonts, p.notch_fill, p.bowl_fill)
+        fill_notches(fonts, p.notch_fill)
     fill_valleys(fonts, p.valley_fill)
     if p.tails:
         redraw_tails(fonts, p)
