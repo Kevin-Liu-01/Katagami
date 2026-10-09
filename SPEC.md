@@ -79,7 +79,7 @@ The cut ends of c, e, s and a are cut again along a level line (0 degrees) throu
 
 Three tails are redrawn, keeping each glyph's point count so the masters stay compatible:
 
-- **g:** the tail is the right side's turn into the bottom of the hook, mirrored about the bottom's centre and cut level at Inter's terminal height. The curl has the same curve and squaring as the bowl side, the rising stroke is as wide as the stem, and the level cut is square to the stroke.
+- **g:** the tail's outer edge is the right side's turn into the bottom of the hook, mirrored about the bottom's centre and cut level at Inter's terminal height, so the curl has the same curve and squaring as the bowl side. The inner edge leans toward the outer one, by nothing at the counter's floor and in proportion to the distance along the edge after that, so the cut is 0.78 as wide as the mirrored stroke (`G_TIP`). The tail thins toward its end and does not finish as heavy as the stem.
 - **y:** the tail comes down the right arm's diagonal, turns through a quarter turn and runs level to a vertical cut. The cut keeps Inter's position and length.
 - **t:** the hook runs level from its bottom to a vertical cut at Inter's terminal position.
 
@@ -150,9 +150,9 @@ U+2500 to U+259F are drawn by `tools/kerf_build/boxdraw.py`, not taken from Inte
 | Glyphs | about 11,240, of which about 3,340 are drawn by Katagami | about 3,500, all fitted to the cell |
 | Scripts | Latin, Greek and Cyrillic drawn; 19 more merged from Noto Sans; Chinese, Japanese and Korean through Katagami CJK | Latin, Greek, Cyrillic |
 | Features | Inter's full set plus small capitals | Inter's set without capital spacing or n:1 ligatures, plus small capitals and code ligatures |
-| People covered (map) | 99.6 percent, 222 of 234 languages | 44.5 percent, 172 of 234 |
+| People covered (map) | 99.9 percent, 223 of 234 languages | 44.4 percent, 172 of 234 |
 
-The map counts a language as covered when the family has at least 90 percent of the letters it draws for it, and for Chinese, Japanese and Korean the whole national standard. Traditional Chinese (Taiwan, Hong Kong) is the largest gap: the companions have 4,920 of Big5's 5,401 level-1 hanzi.
+The map counts a language as covered when the family has at least 90 percent of the letters it draws for it, and for Chinese, Japanese and Korean the whole national standard. Shares are rounded down. The eleven languages still missing are written in nine scripts the family does not carry yet: Tifinagh (Tamazight), Ol Chiki (Santali), Coptic, Tibetan, Hanifi Rohingya, N'Ko, Thaana, Vai and Canadian syllabics.
 
 ## Katagami Round
 
@@ -201,7 +201,7 @@ Katagami draws Latin, Greek and Cyrillic. Katagami Sans, Round and Text also set
 - Each Katagami master is merged with the scripts at its weight, and the three merged masters are built back into one variable font with the member's weight axis, named instances and line spacing. The Windows clipping box grows to the tallest script.
 - These glyphs are Noto's design at Katagami's size and weight; they are not redrawn in Katagami's style.
 
-Chinese, Japanese and Korean would pass the 65,535-glyph limit, so they are companion files, Katagami CJK SC, JP and KR (`tools/build_cjk.py`), as Pretendard JP is. Each is Noto Sans SC, JP or KR subset to a national standard (GB 2312's 6,763 hanzi; JIS X 0208's 6,355 kanji with the kana; all 11,172 Hangul syllables), scaled to 2048 units and given Katagami's line metrics. The website sets them in the same CSS family as each proportional member with unicode-range.
+Chinese, Japanese and Korean would pass the 65,535-glyph limit, so they are companion files, Katagami CJK SC, TC, JP and KR (`tools/build_cjk.py`), as Pretendard JP is. Each is Noto Sans SC, TC, JP or KR subset to a national standard (GB 2312's 6,763 hanzi; Big5's 13,053 hanzi with bopomofo; JIS X 0208's 6,355 kanji with the kana; all 11,172 Hangul syllables), scaled to 2048 units and given Katagami's line metrics. The website sets them in the same CSS family as each proportional member with unicode-range. Simplified and Traditional Chinese share most code points; SC is tried first for those, and the TC web file carries only the characters SC lacks.
 
 ## Not done yet
 

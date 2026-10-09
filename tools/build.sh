@@ -23,7 +23,7 @@ for entry in "${NOTO[@]}"; do
   url=$(printf %s "$file" | sed 's/\[/%5B/; s/\]/%5D/; s/,/%2C/')
   [[ -f "vendor/noto/$file" ]] || curl -sfL -o "vendor/noto/$file" "https://raw.githubusercontent.com/google/fonts/main/ofl/$dir/$url"
 done
-for cjk in SC JP KR; do
+for cjk in SC TC JP KR; do
   file="NotoSans$cjk[wght].ttf"
   dir="notosans$(printf %s "$cjk" | tr '[:upper:]' '[:lower:]')"
   [[ -f "vendor/noto/$file" ]] || curl -sfL -o "vendor/noto/$file" \

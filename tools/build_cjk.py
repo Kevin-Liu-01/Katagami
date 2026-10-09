@@ -1,5 +1,5 @@
-"""Build Katagami CJK SC, JP and KR: Chinese, Japanese and Korean companions to
-the Katagami members, from Google's Noto Sans SC, JP and KR (SIL OFL 1.1).
+"""Build Katagami CJK SC, TC, JP and KR: Chinese, Japanese and Korean companions to
+the Katagami members, from Google's Noto Sans SC, TC, JP and KR (SIL OFL 1.1).
 
     python tools/build_cjk.py
 
@@ -8,6 +8,7 @@ too heavy for the web, so these stay separate files, as Pretendard JP does.
 Each is Noto's variable font subset to a national character standard:
 
     SC  GB 2312: 6,763 hanzi and its CJK symbols
+    TC  Big5: 13,053 hanzi, its CJK symbols and bopomofo
     JP  JIS X 0208: 6,355 kanji, hiragana, katakana and its symbols
     KR  all 11,172 Hangul syllables and the jamo
 
@@ -46,10 +47,27 @@ def euc_chars(codec: str) -> set[int]:
     return out
 
 
+def big5_chars() -> set[int]:
+    """Every character of Big5: lead bytes A1 to F9, trail bytes 40 to 7E and A1 to FE."""
+    out = set()
+    for hi in range(0xA1, 0xFA):
+        for lo in (*range(0x40, 0x7F), *range(0xA1, 0xFF)):
+            try:
+                ch = bytes([hi, lo]).decode("big5")
+            except UnicodeDecodeError:
+                continue
+            if len(ch) == 1:
+                out.add(ord(ch))
+    return out
+
+
 def charset(region: str) -> set[int]:
     shared = {u for lo, hi in SHARED for u in range(lo, hi + 1)}
     if region == "SC":
         return {u for u in euc_chars("gb2312") if u >= 0x2E80} | shared
+    if region == "TC":
+        bopomofo = {u for lo, hi in ((0x3100, 0x312F), (0x31A0, 0x31BF)) for u in range(lo, hi + 1)}
+        return {u for u in big5_chars() if u >= 0x2E80} | bopomofo | shared
     if region == "JP":
         kana = {u for lo, hi in ((0x3040, 0x30FF), (0x31F0, 0x31FF)) for u in range(lo, hi + 1)}
         return {u for u in euc_chars("euc_jp") if u >= 0x2E80} | kana | shared
@@ -109,5 +127,7 @@ def build(region: str) -> Path:
 
 
 if __name__ == "__main__":
-    for region in ("SC", "JP", "KR"):
+    import sys
+
+    for region in sys.argv[1:] or ("SC", "TC", "JP", "KR"):
         build(region)

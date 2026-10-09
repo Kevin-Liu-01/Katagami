@@ -261,14 +261,14 @@ def set_names(font, family: str, style: str, weight: int) -> None:
     i.openTypeOS2WeightClass = weight
     i.openTypeOS2VendorID = "KERF"
     i.copyright = (
-        "Copyright 2026 The Katagami Project Authors (https://github.com/Kevin-Liu-01/Kerf). "
+        "Copyright 2026 The Katagami Project Authors (https://github.com/Kevin-Liu-01/Katagami). "
         "Derived from Inter, Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)."
     )
     i.trademark = None
     i.openTypeNameDesigner = "Kevin Liu"
     i.openTypeNameDesignerURL = "https://github.com/Kevin-Liu-01"
     i.openTypeNameManufacturer = "The Katagami Project Authors"
-    i.openTypeNameManufacturerURL = "https://github.com/Kevin-Liu-01/Kerf"
+    i.openTypeNameManufacturerURL = "https://github.com/Kevin-Liu-01/Katagami"
     i.openTypeNameLicense = (
         "This Font Software is licensed under the SIL Open Font License, Version 1.1. "
         "This license is available with a FAQ at: https://openfontlicense.org"

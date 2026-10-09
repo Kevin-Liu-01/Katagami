@@ -4,7 +4,7 @@ language map data and the built Katagami fonts.
     python tools/build_map.py
 
 Reads GT's public/world data (GT_WORLD, default the langmap worktree) and
-writes into Kerf-Website/map/:
+writes into Katagami-Website/map/:
 
     grid-<res>.u16.gz, density-<res>.u8.gz, blends-<res>.json   copied as is
     map.json      units, glyph sets, languages, per-family coverage and stats
@@ -35,12 +35,12 @@ from fontTools.ttLib import TTFont
 
 ROOT = Path(__file__).resolve().parents[1]
 WORLD = Path(os.environ.get("GT_WORLD", Path.home() / "gt/gt-cloud-wt-langmap/apps/landing/public/world"))
-SITE = Path(os.environ.get("KERF_SITE", ROOT.parent / "Kerf-Website"))
+SITE = Path(os.environ.get("KATAGAMI_SITE", ROOT.parent / "Katagami-Website"))
 OUT = SITE / "map"
 LEVELS = (1, 0.5, 0.25)
 STATS_LEVEL = 0.5
 COVERED = 0.9
-CJK = [ROOT / f"fonts/cjk/KatagamiCJK{r}[wght].ttf" for r in ("SC", "JP", "KR")]
+CJK = [ROOT / f"fonts/cjk/KatagamiCJK{r}[wght].ttf" for r in ("SC", "TC", "JP", "KR")]
 FONTS = {
     "round": [ROOT / "fonts/round/KatagamiRound[wght].ttf", *CJK],
     "sans": [ROOT / "fonts/sans/KatagamiSans[wght].ttf", *CJK],
@@ -189,8 +189,9 @@ def main() -> None:
     for fam in FONTS:
         written = [t for t, l in languages.items() if l["sets"] and all(k in coverage[fam] for k in l["sets"])]
         stats[fam] = {
-            "people": round(100 * covered[fam]["people"] / totals["people"], 1),
-            "land": round(100 * covered[fam]["land"] / totals["land"], 1),
+            # rounded down, so a share short of all never reads as 100
+            "people": math.floor(1000 * covered[fam]["people"] / totals["people"]) / 10,
+            "land": math.floor(1000 * covered[fam]["land"] / totals["land"]) / 10,
             "languages": len(written),
             "of": sum(1 for l in languages.values() if l["sets"]),
         }

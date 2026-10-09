@@ -13,7 +13,7 @@ Katagami is an open source type family with four members:
 - **Katagami Text**: the reading member, Inter moved toward PP Mori and away from Inter's tells: a lower x-height, smaller and tighter, wider capitals and round letters, a compact f, an l with a tail, a t cut at a slant, level cuts and no squaring. Variable weight from 100 to 900.
 - **Katagami Mono**: the same letters fitted to a 0.625 em cell at even widths, with flagged i, l and j, a serif I, a long-flag 1, a centre-bar zero and generated box drawing. Variable weight from 100 to 700.
 
-Katagami Sans, Round and Text also set 19 more scripts, from Devanagari and Arabic to Ethiopic and Khmer, with outlines merged from Google's Noto Sans (OFL), and Chinese, Japanese and Korean through the Katagami CJK companion fonts, so the proportional members set the languages of 99.6 percent of the world's people. See [SPEC.md](SPEC.md#other-scripts).
+Katagami Sans, Round and Text also set 19 more scripts, from Devanagari and Arabic to Ethiopic and Khmer, with outlines merged from Google's Noto Sans (OFL), and Chinese, Japanese and Korean through the Katagami CJK companion fonts, so the proportional members set the languages of 99.9 percent of the world's people. See [SPEC.md](SPEC.md#other-scripts).
 
 Every OpenType feature Inter has works in all four members, plus small capitals (`smcp`, `c2sc`) and, in Katagami Mono, code ligatures that keep every character in its own cell (`dlig`). See [SPEC.md](SPEC.md#opentype-features).
 
@@ -53,7 +53,7 @@ The build fetches Inter's sources at a pinned commit into `vendor/inter` and the
 
 `tools/proof.py sans|mono|round|text|family` renders proof sheets to `build/proofs/`.
 
-The specimen site at [kerf.kevinliu.studio](https://kerf.kevinliu.studio), with its [map of where Katagami writes](https://kerf.kevinliu.studio/map) and a [converter that shows any site in Katagami](https://kerf.kevinliu.studio/convert), lives in [Kerf-Website](https://github.com/Kevin-Liu-01/Kerf-Website). Check it out next to this repo, then `tools/build_site.py` writes the web fonts, `data.js` and `index.html` into it (set `KERF_SITE` to use another path). Pushing Kerf-Website deploys the site.
+The specimen site at [katagami.kevinliu.studio](https://katagami.kevinliu.studio), with its [map of where Katagami writes](https://katagami.kevinliu.studio/map) and a [converter that shows any site in Katagami](https://katagami.kevinliu.studio/convert), lives in [Katagami-Website](https://github.com/Kevin-Liu-01/Katagami-Website). Check it out next to this repo, then `tools/build_site.py` writes the web fonts, `data.js` and `index.html` into it (set `KATAGAMI_SITE` to use another path). Pushing Katagami-Website deploys the site.
 
 ## Layout
 
@@ -63,11 +63,11 @@ The specimen site at [kerf.kevinliu.studio](https://kerf.kevinliu.studio), with 
 | `tools/build_sans.py` | Inter masters to a proportional member's masters (`sans`, `round` or `text`) |
 | `tools/build_mono.py` | Katagami Sans masters to Katagami Mono masters |
 | `tools/build_world.py` | merges 19 Noto scripts into a proportional member |
-| `tools/build_cjk.py` | the Katagami CJK SC, JP and KR companions |
+| `tools/build_cjk.py` | the Katagami CJK SC, TC, JP and KR companions |
 | `tools/kerf_build/outline.py` | point-preserving transforms: curve squaring, horizontal emboldening |
 | `tools/kerf_build/fontops.py` | glyph swaps, resizing, composite re-seating, naming |
 | `tools/kerf_build/boxdraw.py` | box drawing and block elements |
-| `tools/build_site.py` | specimen site assets, written into Kerf-Website |
+| `tools/build_site.py` | specimen site assets, written into Katagami-Website |
 | `tools/build_map.py` | map data and coverage figures from General Translation's world language map data |
 
 ## License

@@ -1,7 +1,7 @@
 """Generate the specimen site's assets from the built fonts.
 
-The site lives in its own repo, Kerf-Website, checked out next to this one
-(or wherever KERF_SITE points). This writes into it:
+The site lives in its own repo, Katagami-Website, checked out next to this one
+(or wherever KATAGAMI_SITE points). This writes into it:
 
     fonts/KatagamiSans.woff2 ...        each member's Latin, Greek and Cyrillic core
     fonts/KatagamiSans-thai.woff2 ...   one file per merged script, per member
@@ -13,7 +13,7 @@ The site lives in its own repo, Kerf-Website, checked out next to this one
     index.html  page.html wrapped in a document, asset URLs stamped with hashes
     katagami-apply.js  its face table, between the generated-faces markers
 
-Run after tools/build.sh, then commit and push Kerf-Website; Vercel deploys it.
+Run after tools/build.sh, then commit and push Katagami-Website; Vercel deploys it.
 """
 
 from __future__ import annotations
@@ -37,24 +37,32 @@ from kerf_build.outline import round_corners  # noqa: E402
 from build_world import SCRIPTS  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-SITE = Path(os.environ.get("KERF_SITE", ROOT.parent / "Kerf-Website"))
+SITE = Path(os.environ.get("KATAGAMI_SITE", ROOT.parent / "Katagami-Website"))
 FONTS = {"sans": ROOT / "fonts/sans/KatagamiSans[wght].ttf", "round": ROOT / "fonts/round/KatagamiRound[wght].ttf",
          "text": ROOT / "fonts/text/KatagamiText[wght].ttf", "mono": ROOT / "fonts/mono/KatagamiMono[wght].ttf"}
 WOFF2 = {"sans": "KatagamiSans.woff2", "round": "KatagamiRound.woff2", "text": "KatagamiText.woff2", "mono": "KatagamiMono.woff2"}
-OUTLINE_CHARS = {"K": "K", "a": "a", "t": "t", "g": "g", "m": "m", "i": "i", "O": "O", "o": "o"}
+OUTLINE_CHARS = {"K": "K", "a": "a", "t": "t", "g": "g", "m": "m", "i": "i"}
+COMPARE = "on"  # the Curves plate draws these in Sans, Round and Text over Inter
 INTER_UFO = ROOT / "build/ufo/Inter-Regular.ufo"
 KERF_UFO = ROOT / "build/sans/KatagamiSans-Regular.ufo"
 MONO_UFO = ROOT / "build/mono/KatagamiMono-Regular.ufo"
 ROUND_UFO = ROOT / "build/round/KatagamiRound-Regular.ufo"
+TEXT_UFO = ROOT / "build/text/KatagamiText-Regular.ufo"
 FAMILY = {"sans": "Katagami Sans", "round": "Katagami Round", "text": "Katagami Text", "mono": "Katagami Mono"}
 WEIGHTS = {"sans": "100 900", "round": "100 900", "text": "100 900", "mono": "100 700"}
-CJK = {  # companion file -> the ranges it serves in every proportional family
-    "KatagamiCJKSC": [(0x2E80, 0x2FDF), (0x3000, 0x303F), (0x3200, 0x33FF), (0x3400, 0x4DBF), (0x4E00, 0x9FFF),
-                  (0xF900, 0xFAFF), (0xFF00, 0xFF60), (0xFFE0, 0xFFEF)],
+# Companion file -> the ranges it serves in every proportional family. Where two
+# faces share a range the browser tries the one declared later first, so SC
+# comes after TC: a character in both is drawn by SC, and TC draws the rest
+# (traditional forms, bopomofo). TC's web file leaves out what SC already has.
+HAN = [(0x2E80, 0x2FDF), (0x3000, 0x303F), (0x3200, 0x33FF), (0x3400, 0x4DBF), (0x4E00, 0x9FFF),
+       (0xF900, 0xFAFF), (0xFF00, 0xFF60), (0xFFE0, 0xFFEF)]
+CJK = {
+    "KatagamiCJKTC": [*HAN, (0x3100, 0x312F), (0x31A0, 0x31BF)],
+    "KatagamiCJKSC": HAN,
     "KatagamiCJKJP": [(0x3040, 0x30FF), (0x31F0, 0x31FF), (0xFF61, 0xFF9F)],
     "KatagamiCJKKR": [(0x1100, 0x11FF), (0x3130, 0x318F), (0xA960, 0xA97F), (0xAC00, 0xD7FF), (0xFFA0, 0xFFDC)],
 }
-FONT_URL = "https://kerf.kevinliu.studio/fonts/"
+FONT_URL = "https://katagami.kevinliu.studio/fonts/"
 HERO = "Katagami"  # morphs Katagami Mono <- Katagami Sans -> Katagami Round; all three share Inter's point structure
 PAGES = {"page.html": "index.html", "map-page.html": "map.html", "convert-page.html": "convert.html"}  # hand-written fragment -> served page
 
@@ -184,6 +192,13 @@ def outlines() -> dict:
     return out
 
 
+def member_outlines() -> dict:
+    """The COMPARE letters at Regular in Inter and the three proportional members."""
+    fonts = {k: ufoLib2.Font.open(p) for k, p in
+             (("inter", INTER_UFO), ("sans", KERF_UFO), ("round", ROUND_UFO), ("text", TEXT_UFO))}
+    return {ch: {k: {"adv": f[ch].width, "contours": flatten(f, ch)} for k, f in fonts.items()} for ch in COMPARE}
+
+
 def unicode_range(unicodes, avoid=frozenset()) -> str:
     """CSS unicode-range for a set of code points. Runs join across gaps that
     hold none of `avoid`, so the list stays short without claiming another
@@ -248,10 +263,14 @@ def web_fonts() -> list[list]:
         src = ROOT / "fonts" / "cjk" / f"{name}[wght].ttf"
         if not src.exists():
             continue
-        if not fresh(src, SITE / "fonts" / f"{name}.woff2"):
+        out = SITE / "fonts" / f"{name}.woff2"
+        if name == "KatagamiCJKTC":
+            sc = set(TTFont(src.with_name("KatagamiCJKSC[wght].ttf")).getBestCmap())
+            woff2_slice(src, set(TTFont(src).getBestCmap()) - sc, out)
+        elif not fresh(src, out):
             font = TTFont(src)
             font.flavor = "woff2"
-            font.save(SITE / "fonts" / f"{name}.woff2")
+            font.save(out)
         css = ",".join(f"U+{a:X}-{b:X}" for a, b in ranges)
         for key in ("sans", "round", "text"):
             faces.append([FAMILY[key], stamp(f"fonts/{name}.woff2").removeprefix("fonts/"), "100 900", css])
@@ -283,6 +302,7 @@ def main() -> None:
     write_faces(web_fonts())
     data["mono"]["metrics"]["cell"] = TTFont(FONTS["mono"])["hmtx"]["zero"][0]
     data["outlines"] = outlines()
+    data["members"] = member_outlines()
     (SITE / "data.js").write_text("window.KERF = " + json.dumps(data, separators=(",", ":")) + ";\n")
 
     # Each hand-written page fragment is wrapped in a document. Asset URLs are

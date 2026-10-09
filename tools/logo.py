@@ -10,8 +10,8 @@ offcut. What remains reads as a K. Writes:
     docs/logo/katagami-mark.svg        the mark, ink
     docs/logo/katagami-mark-cut.svg    the mark with the cut lines in red, as on the specimen
     docs/logo/katagami-logo.svg        the mark and the word Katagami set in Katagami Sans SemiBold
-    Kerf-Website/favicon.svg       the mark, following the browser's light or dark theme
-    Kerf-Website/favicon.png, apple-touch-icon.png   the mark on the paper colour
+    Katagami-Website/favicon.svg       the mark, following the browser's light or dark theme
+    Katagami-Website/favicon.png, apple-touch-icon.png   the mark on the paper colour
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from fontTools.ttLib import TTFont
 from fontTools.varLib.instancer import instantiateVariableFont
 
 ROOT = Path(__file__).resolve().parents[1]
-SITE = Path(os.environ.get("KERF_SITE", ROOT.parent / "Kerf-Website"))
+SITE = Path(os.environ.get("KATAGAMI_SITE", ROOT.parent / "Katagami-Website"))
 OUT = ROOT / "docs" / "logo"
 INK, PAPER, CUT = "#111214", "#f1f2ef", "#d92d20"
 INK_DARK = "#ebece9"

@@ -125,13 +125,18 @@ def _thirds(pts, a: int, c1: int, c2: int, b: int) -> None:
     _set(pts[c2], (A.x + 2 * (B.x - A.x) / 3, A.y + 2 * (B.y - A.y) / 3))
 
 
+G_TIP = 0.78  # the g tail's cut, as a share of the stroke's width where it starts to rise
+
+
 def redraw_tails(fonts, p: Profile) -> None:
     """Redraw the ends of g, y and t (and a's foot where it has one). Point counts never change.
 
     g: the tail is the right side's turn into the bottom, mirrored about the
     bottom's centre and cut level at Inter's terminal height. The curl
-    matches the bowl side's squaring, the rising stroke is as wide as the
-    stem, and the cut is square to the stroke.
+    matches the bowl side's squaring and the cut is square to the stroke.
+    The inner edge then leans toward the outer one, by nothing at the
+    counter's floor and by enough at the cut to leave it G_TIP as wide, so
+    the stroke thins as it rises instead of ending as heavy as the stem.
 
     y: the tail comes down the diagonal, turns through a quarter turn and
     runs level to a vertical cut. t: the hook runs level from its bottom
@@ -166,8 +171,10 @@ def redraw_tails(fonts, p: Profile) -> None:
         arc = [(floor.x, floor.y), mirror(P(cut - 5), floor), mirror(P(cut - 6), floor), mirror(P(cut - 7), floor)]
         t = _crossing(arc, lambda q: q[1] - y, 0.5, 0.0, 1.0)
         high, _ = _split(arc, t)
+        d = (1 - G_TIP) * (high[3][0] - P(cut).x)
+        lean = lambda q: (q[0] - d * (floor.x - q[0]) / (floor.x - high[3][0]), q[1])  # noqa: E731
         for i, xy in zip((cut - 3, cut - 2, cut - 1), high[1:]):
-            _set(P(i), xy)
+            _set(P(i), lean(xy))
 
     # y: the cut runs from a line point (inner end) to the next line point (outer end)
     pts = ref["y"].contours[0].points
