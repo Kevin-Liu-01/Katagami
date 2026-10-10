@@ -10,7 +10,7 @@ Katagami is an open source type family with four members:
 
 - **Katagami Sans**: a sans serif with squared curves, horizontal cuts and square punctuation. Variable weight from 100 to 900.
 - **Katagami Round**: geometric bowls with every vertex rounded, between Katagami Sans and Inter. Variable weight from 100 to 900.
-- **Katagami Text**: the reading member, Inter moved toward PP Mori and away from Inter's tells: a lower x-height, smaller and tighter, wider capitals and round letters, a compact f, an l with a tail, a t cut at a slant, level cuts and no squaring. Variable weight from 100 to 900.
+- **Katagami Text**: the reading member, Inter moved toward PP Mori and away from Inter's tells: a lower x-height, smaller and tighter, wider capitals and round letters, a compact f, a t cut at a slant, level cuts and no squaring. Variable weight from 100 to 900.
 - **Katagami Mono**: the same letters fitted to a 0.625 em cell at even widths, with flagged i, l and j, a serif I, a long-flag 1, a centre-bar zero and generated box drawing. Variable weight from 100 to 700.
 
 Katagami Sans, Round and Text also set 19 more scripts, from Devanagari and Arabic to Ethiopic and Khmer, with outlines merged from Google's Noto Sans (OFL), and Chinese, Japanese and Korean through the Katagami CJK companion fonts, so the proportional members set the languages of 99.9 percent of the world's people. See [SPEC.md](SPEC.md#other-scripts).

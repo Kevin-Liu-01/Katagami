@@ -96,8 +96,8 @@ TEXT = Profile(
     square_lower=-0.02,
     counter_boost=1.0,
     notch_fill=0.35,
-    # Katagami's long-flag 1, G with a spur, l with a tail, compact f
-    promote=("cv01-one.fea", "cv05-l-tail.fea", "cv10-g-spur.fea", "cv12-compact-f.fea"),
+    # Katagami's long-flag 1, G with a spur, compact f; the l stays straight
+    promote=("cv01-one.fea", "cv10-g-spur.fea", "cv12-compact-f.fea"),
     t_slant=0.45,  # the top of t's stem cut at about 20 degrees, as Mori's is
     c_close=0.25,  # c's terminals closer together, a rounder c
     g_rise=0.35,  # the g's tail ends higher
