@@ -135,7 +135,7 @@ def _thirds(pts, a: int, c1: int, c2: int, b: int) -> None:
     _set(pts[c2], (A.x + 2 * (B.x - A.x) / 3, A.y + 2 * (B.y - A.y) / 3))
 
 
-G_REACH = 0.9  # how far the g tail reaches left of the bottom's centre, as a share of the right side's reach
+G_REACH = 0.95  # how far the g tail reaches left of the bottom's centre, as a share of the right side's reach
 
 
 def redraw_tails(fonts, p: Profile) -> None:

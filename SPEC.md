@@ -79,7 +79,7 @@ The cut ends of c, e, s and a are cut again along a level line (0 degrees) throu
 
 Three tails are redrawn, keeping each glyph's point count so the masters stay compatible:
 
-- **g:** the tail's outer edge is the right side's turn into the bottom of the hook, mirrored about the bottom's centre, drawn in to 0.9 of the right side's reach (`G_REACH`) so the end sits inside the bowl at every weight, and cut level at Inter's terminal height. The curl keeps the bowl side's squaring. The inner edge is the counter's turn mirrored the same way, so the tail keeps its full width to the cut.
+- **g:** the tail's outer edge is the right side's turn into the bottom of the hook, mirrored about the bottom's centre, drawn in to 0.95 of the right side's reach (`G_REACH`) so the end sits inside the bowl at every weight, and cut level at Inter's terminal height. The curl keeps the bowl side's squaring. The inner edge is the counter's turn mirrored the same way, so the tail keeps its full width to the cut.
 - **y:** the tail comes down the right arm's diagonal, turns through a quarter turn and runs level to a vertical cut. The cut keeps Inter's position and length.
 - **t:** the hook runs level from its bottom to a vertical cut at Inter's terminal position.
 
