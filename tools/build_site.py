@@ -14,6 +14,7 @@ The site lives in its own repo, Katagami-Website, checked out next to this one
     katagami-apply.js  its face table, between the generated-faces markers
 
 Run after tools/build.sh, then commit and push Katagami-Website; Vercel deploys it.
+After editing only a page fragment, `tools/build_site.py --pages` rewraps the pages.
 """
 
 from __future__ import annotations
@@ -64,7 +65,7 @@ CJK = {
 }
 FONT_URL = "https://katagami.kevinliu.studio/fonts/"
 HERO = "Katagami"  # morphs Katagami Mono <- Katagami Sans -> Katagami Round; all three share Inter's point structure
-PAGES = {"page.html": "index.html", "map-page.html": "map.html", "convert-page.html": "convert.html"}  # hand-written fragment -> served page
+PAGES = {"page.html": "index.html", "about-page.html": "about.html", "map-page.html": "map.html", "convert-page.html": "convert.html"}  # hand-written fragment -> served page
 
 
 SCRIPT_OF = {u: name for name, ranges in SCRIPTS.items() for lo, hi in ranges for u in range(lo, hi + 1)}
@@ -291,20 +292,7 @@ def write_faces(faces: list[list]) -> None:
         apply.write_text(text)
 
 
-def main() -> None:
-    (SITE / "fonts").mkdir(parents=True, exist_ok=True)
-    data = {"version": "0.1", "names": {}}
-    for key, path in FONTS.items():
-        font = TTFont(path)
-        data[key] = {"metrics": metrics(font), "chars": chars(font), "features": features(font)}
-        for cp, *_ in data[key]["chars"]:
-            data["names"][cp] = unicodedata.name(chr(cp), "").title()
-    write_faces(web_fonts())
-    data["mono"]["metrics"]["cell"] = TTFont(FONTS["mono"])["hmtx"]["zero"][0]
-    data["outlines"] = outlines()
-    data["members"] = member_outlines()
-    (SITE / "data.js").write_text("window.KERF = " + json.dumps(data, separators=(",", ":")) + ";\n")
-
+def write_pages() -> None:
     # Each hand-written page fragment is wrapped in a document. Asset URLs are
     # stamped with a content hash, so a changed file gets a new URL and the
     # cache headers in vercel.json never pair a new page with old data.
@@ -325,6 +313,23 @@ def main() -> None:
             '<link rel="apple-touch-icon" href="/apple-touch-icon.png">\n'
             "</head>\n<body>\n" + page + "\n</body>\n</html>\n"
         )
+
+
+def main() -> None:
+    (SITE / "fonts").mkdir(parents=True, exist_ok=True)
+    data = {"version": "0.1", "names": {}}
+    for key, path in FONTS.items():
+        font = TTFont(path)
+        data[key] = {"metrics": metrics(font), "chars": chars(font), "features": features(font)}
+        for cp, *_ in data[key]["chars"]:
+            data["names"][cp] = unicodedata.name(chr(cp), "").title()
+    write_faces(web_fonts())
+    data["mono"]["metrics"]["cell"] = TTFont(FONTS["mono"])["hmtx"]["zero"][0]
+    data["outlines"] = outlines()
+    data["members"] = member_outlines()
+    (SITE / "data.js").write_text("window.KERF = " + json.dumps(data, separators=(",", ":")) + ";\n")
+
+    write_pages()
     for p in sorted(SITE.rglob("*")):
         rel = p.relative_to(SITE)
         if p.is_file() and not any(part.startswith(".") for part in rel.parts):
@@ -332,4 +337,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    # --pages rewraps the hand-written pages only, for a change to their markup
+    write_pages() if "--pages" in sys.argv else main()
