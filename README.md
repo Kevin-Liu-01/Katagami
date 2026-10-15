@@ -71,7 +71,7 @@ tools/build.sh sans     # one member: sans, round, text, serif, mono or cjk
 
 The build fetches Inter's sources at a pinned commit into `vendor/inter` and Noto Sans into `vendor/noto`. Each proportional member takes 15 to 40 minutes on a busy machine, most of it in fontmake and the script merge, and Mono takes a few minutes after Sans.
 
-After a build, `tools/build_site.py` writes the website's web fonts, data, download zip and pages into a checkout of [Katagami-Website](https://github.com/Kevin-Liu-01/Katagami-Website) next to this repo (or at `KATAGAMI_SITE`), and `tools/build_map.py` writes the map data. `tools/build_site.py --pages` rewraps the pages only.
+After a build, `tools/build_site.py` writes the website's web fonts, data, download zip and pages into a checkout of [Katagami-Website](https://github.com/Kevin-Liu-01/Katagami-Website) next to this repo (or at `KATAGAMI_SITE`), and `tools/build_map.py` writes the map data. `tools/build_site.py --pages` rewraps the pages only. Then `tools/build_seo.py` writes the library pages and the files for search and answer engines, and `node tools/og.mjs` draws the social cards.
 
 ## Layout
 
@@ -88,6 +88,9 @@ After a build, `tools/build_site.py` writes the website's web fonts, data, downl
 | `tools/kerf_build/boxdraw.py` | box drawing and block elements |
 | `tools/build_site.py` | the website's fonts, data, downloads and pages |
 | `tools/build_map.py` | the map data and coverage figures |
+| `tools/build_seo.py` | the library pages kept out of the navigation (a page per member, comparisons, guides, explainers, a page per script and per language), their Markdown twins, `llms.txt`, `llms-full.txt`, the sitemap and `robots.txt` |
+| `tools/seo/typefaces.json` | facts about the typefaces the comparisons name, each with its sources |
+| `tools/og.mjs` | the 1200 by 630 social cards, set in Katagami |
 | `tools/logo.py` | the mark: a square cut three times, whose leftover piece is the K |
 | `SPEC.md` | every design decision and its numbers |
 

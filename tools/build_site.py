@@ -407,38 +407,172 @@ def footer_html(facts: dict) -> str:
       </div>
       <nav class="f-col" aria-label="Members"><h3>Members</h3>{members}</nav>
       <nav class="f-col" aria-label="Explore"><h3>Explore</h3><a href="/glyphs">Glyphs</a><a href="/features">Features</a><a href="/map">Map</a><a href="/convert">Font-ify</a></nav>
-      <nav class="f-col" aria-label="Project"><h3>Project</h3><a href="/about">About</a><a href="/faq">FAQ</a><a href="/download">Download</a><a href="{REPO}">GitHub</a><a href="{REPO}/blob/main/OFL.txt">License</a></nav>
+      <nav class="f-col" aria-label="Project"><h3>Project</h3><a href="/about">About</a><a href="/faq">FAQ</a><a href="/download">Download</a><a href="/library">Library</a><a href="{REPO}">GitHub</a><a href="{REPO}/blob/main/OFL.txt">License</a></nav>
     </div>
     <div class="f-word" aria-hidden="true"><b>Katagami</b><span></span></div>
   </div>
 </footer>"""
 
 
+SITE_URL = "https://katagami.kevinliu.studio"
+# each served page: (title, description, Open Graph image, schema.org page type)
+PAGE_META = {
+    "index.html": ("Katagami: a free variable type family in five members",
+                   "Katagami is a free, open-source type family in five members: Sans, Round, Text, Serif and Mono. Variable from 100 to 900, it sets 22 scripts and Chinese, Japanese and Korean, under the SIL Open Font License.",
+                   "home", "WebPage"),
+    "glyphs.html": ("Katagami glyphs: every character in five fonts",
+                    "Search every character in Katagami Sans, Round, Text, Serif and Mono by character, Unicode name or code point, and see each glyph on its metric lines.",
+                    "glyphs", "CollectionPage"),
+    "features.html": ("Katagami OpenType features: figures, small capitals and alternates",
+                      "Every OpenType feature in Katagami shown off and on: tabular figures, fractions, small capitals, character variants, stylistic sets and code ligatures, with the CSS to turn each one on.",
+                      "features", "WebPage"),
+    "map.html": ("Where Katagami writes: a world map of languages in letters",
+                 "A world map drawn in letters: each land cell is a letter from the language spoken there, set in Katagami. Katagami sets the main language of places where 99.9 percent of people live.",
+                 "map", "WebPage"),
+    "convert.html": ("Font-ify: see any website in Katagami",
+                     "Type an address and see the page with every font swapped for Katagami, side by side with the original. The rewrite runs in your browser.",
+                     "convert", "WebPage"),
+    "about.html": ("About Katagami: one type family cut like a stencil",
+                   "Why Katagami was made, where its name comes from, how katagami paper stencils are cut, and the credits for the type family.",
+                   "about", "AboutPage"),
+    "faq.html": ("Katagami FAQ: license, web use, languages and features",
+                 "Answers about Katagami: commercial use under the SIL Open Font License, which member to use, web fonts, OpenType features, languages and how the fonts are made.",
+                 "faq", "FAQPage"),
+    "download.html": ("Download Katagami: free variable fonts under the OFL",
+                      "Download Katagami 0.1: five variable TrueType fonts and four CJK companions, with install steps for macOS, Windows and Linux and a stylesheet for the web.",
+                      "download", "WebPage"),
+}
+MEMBER_PATHS = {"sans": "/katagami-sans", "round": "/katagami-round", "text": "/katagami-text", "serif": "/katagami-serif", "mono": "/katagami-mono"}
+
+
+def asset_stamps() -> dict:
+    assets = ["data.js", "katagami-apply.js", "site.css", "site.js", "library.css", "map/map.json", "download/files.json",
+              "fonts/katagami.css", *(f"fonts/{name}" for name in WOFF2.values())]
+    return {rel: hashlib.sha256((SITE / rel).read_bytes()).hexdigest()[:10] for rel in assets if (SITE / rel).exists()}
+
+
+def base_graph(facts: dict) -> list:
+    """The site, its author and the type family: the nodes every page carries."""
+    person = {"@type": "Person", "@id": f"{SITE_URL}/#kevin", "name": "Kevin Liu", "url": "https://kevinliu.studio",
+              "sameAs": ["https://github.com/Kevin-Liu-01"]}
+    site = {"@type": "WebSite", "@id": f"{SITE_URL}/#website", "url": f"{SITE_URL}/", "name": "Katagami", "inLanguage": "en",
+            "publisher": {"@id": person["@id"]},
+            "potentialAction": {"@type": "SearchAction",
+                                "target": {"@type": "EntryPoint", "urlTemplate": f"{SITE_URL}/glyphs?q={{search_term_string}}"},
+                                "query-input": "required name=search_term_string"}}
+    family = {"@type": ["CreativeWork", "SoftwareApplication"], "@id": f"{SITE_URL}/#katagami", "name": "Katagami",
+              "alternateName": ["Katagami type family", "型紙"], "additionalType": "https://www.wikidata.org/wiki/Q17451",
+              "genre": "Typeface", "url": f"{SITE_URL}/",
+              "description": PAGE_META["index.html"][1], "author": {"@id": person["@id"]}, "creator": {"@id": person["@id"]},
+              "license": "https://openfontlicense.org/", "isAccessibleForFree": True, "softwareVersion": "0.1",
+              "dateCreated": "2026-10-07", "dateModified": facts["date"], "applicationCategory": "DesignApplication",
+              "operatingSystem": "macOS, Windows, Linux, Web", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
+              "downloadUrl": f"{SITE_URL}/download/Katagami-0.1.zip", "sameAs": [REPO],
+              "keywords": "free font, variable font, open source font, OFL font, sans serif, serif, monospace font, multilingual font",
+              "hasPart": [{"@type": "CreativeWork", "name": FAMILY[k], "url": f"{SITE_URL}{MEMBER_PATHS[k]}"} for k in MEMBER_PATHS]}
+    return [site, person, family]
+
+
+def head_html(meta: dict, stamps: dict) -> str:
+    """The head of a page: title, description, canonical address, social cards,
+    its Markdown twin and its structured data."""
+    esc = lambda t: t.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")  # noqa: E731
+    url = SITE_URL + meta["path"]
+    image = f"{SITE_URL}/og/{meta.get('image', 'home')}.png"
+    graph = json.dumps({"@context": "https://schema.org", "@graph": meta["graph"]}, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+    md = meta["path"].rstrip("/") + ".md" if meta["path"] != "/" else "/index.md"
+    return "".join([
+        '<meta charset="utf-8">\n',
+        '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n',
+        f"<title>{esc(meta['title'])}</title>\n",
+        f'<meta name="description" content="{esc(meta["description"])}">\n',
+        f'<link rel="canonical" href="{url}">\n',
+        '<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">\n',
+        '<meta name="author" content="Kevin Liu">\n',
+        '<meta name="theme-color" content="#f1f2ef" media="(prefers-color-scheme: light)">\n',
+        '<meta name="theme-color" content="#0e0f10" media="(prefers-color-scheme: dark)">\n',
+        '<meta property="og:site_name" content="Katagami">\n',
+        f'<meta property="og:type" content="{meta.get("og_type", "website")}">\n',
+        f'<meta property="og:title" content="{esc(meta["title"])}">\n',
+        f'<meta property="og:description" content="{esc(meta["description"])}">\n',
+        f'<meta property="og:url" content="{url}">\n',
+        f'<meta property="og:image" content="{image}">\n',
+        '<meta property="og:image:width" content="1200">\n<meta property="og:image:height" content="630">\n',
+        f'<meta property="og:image:alt" content="{esc(meta["title"])}">\n',
+        '<meta name="twitter:card" content="summary_large_image">\n',
+        f'<meta name="twitter:title" content="{esc(meta["title"])}">\n',
+        f'<meta name="twitter:description" content="{esc(meta["description"])}">\n',
+        f'<meta name="twitter:image" content="{image}">\n',
+        f'<link rel="alternate" type="text/markdown" href="{md}" title="This page in Markdown">\n',
+        '<link rel="alternate" type="text/plain" href="/llms.txt" title="llms.txt">\n',
+        '<link rel="sitemap" type="application/xml" href="/sitemap.xml">\n',
+        '<link rel="icon" href="/favicon.svg" type="image/svg+xml">\n',
+        '<link rel="icon" href="/favicon.png" type="image/png" sizes="64x64">\n',
+        '<link rel="apple-touch-icon" href="/apple-touch-icon.png">\n',
+        '<link rel="manifest" href="/site.webmanifest">\n',
+        f'<link rel="preload" href="/fonts/KatagamiSans.woff2?v={stamps.get("fonts/KatagamiSans.woff2", "")}" as="font" type="font/woff2" crossorigin>\n',
+        f'<link rel="stylesheet" href="/site.css?v={stamps.get("site.css", "")}">\n',
+        f'<script type="application/ld+json">{graph}</script>\n',
+    ])
+
+
+def page_graph(meta: dict, facts: dict, crumbs: list | None = None, extra: list | None = None) -> list:
+    """base_graph with the page itself, its breadcrumb trail and any page-specific nodes."""
+    url = SITE_URL + meta["path"]
+    page = {"@type": meta.get("schema", "WebPage"), "@id": f"{url}#page", "url": url, "name": meta["title"],
+            "description": meta["description"], "inLanguage": "en", "isPartOf": {"@id": f"{SITE_URL}/#website"},
+            "about": {"@id": f"{SITE_URL}/#katagami"}, "dateModified": facts["date"],
+            "primaryImageOfPage": f"{SITE_URL}/og/{meta.get('image', 'home')}.png"}
+    graph = [*base_graph(facts), page]
+    if crumbs:
+        trail = [("Katagami", "/"), *crumbs]
+        graph.append({"@type": "BreadcrumbList", "@id": f"{url}#crumbs", "itemListElement": [
+            {"@type": "ListItem", "position": i + 1, "name": name, "item": SITE_URL + href} for i, (name, href) in enumerate(trail)]})
+        page["breadcrumb"] = {"@id": f"{url}#crumbs"}
+    if extra:
+        if meta.get("schema") == "FAQPage":
+            page["mainEntity"] = extra
+        else:
+            graph += extra
+    return graph
+
+
+def wrap(page: str, here: str, meta: dict, facts: dict, stamps: dict) -> str:
+    """A page fragment as a whole document: the shared head, header and footer,
+    with every asset URL stamped by its content hash, so a changed file gets a
+    new URL and the cache headers in vercel.json never pair a new page with old data."""
+    page = re.sub(r"<title>.*?</title>\n?", "", page, count=1, flags=re.S)
+    page = re.sub(r'<meta name="description"[^>]*>\n?', "", page, count=1)
+    page = page.replace("<!-- site:nav -->", nav_html(here, facts)).replace("<!-- site:footer -->", footer_html(facts))
+    for rel, digest in stamps.items():
+        page = page.replace(f'"{rel}"', f'"{rel}?v={digest}"').replace(f'"/{rel}"', f'"/{rel}?v={digest}"')
+    return ('<!doctype html>\n<html lang="en">\n<head>\n' + head_html(meta, stamps) + "</head>\n<body>\n" + page
+            + f'\n<script src="/site.js?v={stamps.get("site.js", "")}" defer></script>\n</body>\n</html>\n')
+
+
+def faq_entities(fragment: str) -> list:
+    """The questions and answers of the FAQ page, as schema.org Question nodes."""
+    out = []
+    for m in re.finditer(r'<details class="q"[^>]*>.*?<h2>(.*?)</h2>.*?<div class="a">(.*?)</div>\s*</details>', fragment, re.S):
+        answer = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", m.group(2))).strip()
+        out.append({"@type": "Question", "name": m.group(1), "acceptedAnswer": {"@type": "Answer", "text": answer}})
+    return out
+
+
 def write_pages() -> None:
-    # Each hand-written page fragment is wrapped in a document. Asset URLs are
-    # stamped with a content hash, so a changed file gets a new URL and the
-    # cache headers in vercel.json never pair a new page with old data.
-    assets = ["data.js", "katagami-apply.js", "site.css", "site.js", "map/map.json", "download/files.json", "fonts/katagami.css", *(f"fonts/{name}" for name in WOFF2.values())]
-    stamps = {rel: hashlib.sha256((SITE / rel).read_bytes()).hexdigest()[:10]
-              for rel in assets if (SITE / rel).exists()}
+    stamps = asset_stamps()
     facts = site_facts()
     for source, target in PAGES.items():
         if not (SITE / source).exists():
             continue
         page = (SITE / source).read_text()
         here = "/" + target.removesuffix(".html").replace("index", "")
-        page = page.replace("<!-- site:nav -->", nav_html(here, facts)).replace("<!-- site:footer -->", footer_html(facts))
-        for rel, digest in stamps.items():
-            page = page.replace(f'"{rel}"', f'"{rel}?v={digest}"')
-        (SITE / target).write_text(
-            '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
-            '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
-            '<link rel="icon" href="/favicon.svg" type="image/svg+xml">\n'
-            '<link rel="icon" href="/favicon.png" type="image/png" sizes="64x64">\n'
-            '<link rel="apple-touch-icon" href="/apple-touch-icon.png">\n'
-            f'<link rel="stylesheet" href="/site.css?v={stamps.get("site.css", "")}">\n'
-            "</head>\n<body>\n" + page + f'\n<script src="/site.js?v={stamps.get("site.js", "")}" defer></script>\n</body>\n</html>\n'
-        )
+        title, description, image, schema = PAGE_META[target]
+        meta = {"path": here, "title": title, "description": description, "image": image, "schema": schema}
+        extra = faq_entities(page) if target == "faq.html" else None
+        crumbs = None if here == "/" else [(title.split(":")[0], here)]
+        meta["graph"] = page_graph(meta, facts, crumbs, extra)
+        (SITE / target).write_text(wrap(page, here, meta, facts, stamps))
 
 
 CJK_FILES = [ROOT / "fonts" / "cjk" / f"{name}[wght].ttf" for name in CJK]

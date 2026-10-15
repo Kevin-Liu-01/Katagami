@@ -1,0 +1,308 @@
+[
+ {
+  "name": "Inter",
+  "designers": "Rasmus Andersson",
+  "foundry": "rsms (self-published)",
+  "year": "2017",
+  "license": "SIL Open Font License 1.1",
+  "free_commercial": "Yes",
+  "weights": "100 to 900",
+  "italics": "Yes",
+  "axes": "wght 100 to 900, opsz 14 to 32",
+  "scripts": "Latin, Greek, Cyrillic (147 languages)",
+  "features": "Optical sizes with Inter Display, slashed zero, tabular figures, cv01 to cv13, ss01 to ss08",
+  "url": "https://rsms.me/inter/",
+  "sources": [
+   "https://rsms.me/inter/",
+   "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/METADATA.pb"
+  ]
+ },
+ {
+  "name": "Noto Sans",
+  "designers": "Steve Matteson (Latin design), Google",
+  "foundry": "Google (Noto project)",
+  "year": "2013",
+  "license": "SIL Open Font License 1.1",
+  "free_commercial": "Yes",
+  "weights": "100 to 900",
+  "italics": "Yes",
+  "axes": "wght 100 to 900, wdth 62.5 to 100",
+  "scripts": "Latin, Greek, Cyrillic; other scripts in separate Noto fonts",
+  "features": "Designed to harmonize with the script-specific Noto fonts",
+  "url": "https://notofonts.github.io/latin-greek-cyrillic/",
+  "sources": [
+   "https://raw.githubusercontent.com/google/fonts/main/ofl/notosans/METADATA.pb",
+   "https://raw.githubusercontent.com/notofonts/noto-fonts/main/FAQ.md"
+  ]
+ },
+ {
+  "name": "PP Mori",
+  "designers": "Caio Kondo",
+  "foundry": "Pangram Pangram",
+  "year": "2022",
+  "license": "Pangram Pangram End User License Agreement (paid licenses)",
+  "free_commercial": "No (free trial for personal use only)",
+  "weights": "100 to 900 (11 weights)",
+  "italics": "Yes",
+  "axes": "unknown",
+  "scripts": "Latin",
+  "features": "Ligatures, alternates for a, g, r, t and y, tabular figures",
+  "url": "https://pangrampangram.com/products/mori",
+  "sources": [
+   "https://pangrampangram.com/products/mori",
+   "https://fontsinuse.com/typefaces/127055/mori"
+  ]
+ },
+ {
+  "name": "NewsSerif",
+  "designers": "Henning Skibbe",
+  "foundry": "Character Type",
+  "year": "2020",
+  "license": "Character Type End User License Agreement (paid licenses)",
+  "free_commercial": "No",
+  "weights": "Hairline to Black",
+  "italics": "Paired with NewsSans italics",
+  "axes": "Weight and optical size (axis tags not published)",
+  "scripts": "unknown",
+  "features": "Text, Large and Huge optical subfamilies, wedge-shaped serifs, small caps, oldstyle and tabular figures",
+  "url": "https://charactertype.com/typefaces/newsserif/",
+  "sources": [
+   "https://charactertype.com/typefaces/newsserif/",
+   "https://charactertype.com/eula/"
+  ]
+ },
+ {
+  "name": "Source Serif 4",
+  "designers": "Frank Grießhammer",
+  "foundry": "Adobe",
+  "year": "2014",
+  "license": "SIL Open Font License 1.1",
+  "free_commercial": "Yes",
+  "weights": "200 to 900",
+  "italics": "Yes",
+  "axes": "wght 200 to 900, opsz 8 to 60",
+  "scripts": "Latin, Greek, Cyrillic",
+  "features": "Five optical sizes, small caps, made to pair with Source Sans",
+  "url": "https://github.com/adobe-fonts/source-serif",
+  "sources": [
+   "https://github.com/adobe-fonts/source-serif",
+   "https://raw.githubusercontent.com/google/fonts/main/ofl/sourceserif4/METADATA.pb"
+  ]
+ },
+ {
+  "name": "SF Pro",
+  "designers": "Apple",
+  "foundry": "Apple",
+  "year": "2015",
+  "license": "Apple license: for creating mock-ups of interfaces for Apple's platforms only, by registered Apple developers; not to be embedded in other products",
+  "free_commercial": "No",
+  "weights": "Ultralight to Black (9 weights)",
+  "italics": "Yes",
+  "axes": "Weight, width and optical size (axis tags not published)",
+  "scripts": "Latin, Greek, Cyrillic",
+  "features": "System font for Apple platforms, four widths, a rounded variant, size-specific outlines",
+  "url": "https://developer.apple.com/fonts/",
+  "sources": [
+   "https://developer.apple.com/fonts/",
+   "https://developer.apple.com/videos/play/wwdc2022/110381/"
+  ]
+ },
+ {
+  "name": "Helvetica Now",
+  "designers": "Monotype Studio, after Helvetica by Max Miedinger and Eduard Hoffmann",
+  "foundry": "Monotype",
+  "year": "2019",
+  "license": "Monotype end user license agreements (paid, per use)",
+  "free_commercial": "No",
+  "weights": "Hairline to Extra Black",
+  "italics": "Yes",
+  "axes": "Weight, width and optical size in Helvetica Now Variable (axis tags not published)",
+  "scripts": "unknown",
+  "features": "Micro, Text and Display optical sizes, alternates such as a single-story a",
+  "url": "https://www.monotype.com/fonts/helvetica-now",
+  "sources": [
+   "https://www.monotype.com/fonts/helvetica-now",
+   "https://www.myfonts.com/fonts/mti/helvetica-now-variable"
+  ]
+ },
+ {
+  "name": "Roboto",
+  "designers": "Christian Robertson",
+  "foundry": "Google",
+  "year": "2011",
+  "license": "SIL Open Font License 1.1",
+  "free_commercial": "Yes",
+  "weights": "100 to 900",
+  "italics": "Yes",
+  "axes": "wght 100 to 900, wdth 75 to 100",
+  "scripts": "Latin, Greek, Cyrillic, Vietnamese",
+  "features": "Default font on Android and ChromeOS, Material Design's typeface",
+  "url": "https://fonts.google.com/specimen/Roboto",
+  "sources": [
+   "https://github.com/google/fonts/blob/main/ofl/roboto/METADATA.pb",
+   "https://opensource.googleblog.com/2015/05/roboto-googles-signature-font-is-now.html"
+  ]
+ },
+ {
+  "name": "Berkeley Mono",
+  "designers": "Neil Panchal",
+  "foundry": "U.S. Graphics Company",
+  "year": "2022",
+  "license": "U.S. Graphics license (paid; the Developer tier is personal use only)",
+  "free_commercial": "No",
+  "weights": "Thin to Black (12 weights) in 5 widths",
+  "italics": "Oblique",
+  "axes": "wdth, wght, slnt",
+  "scripts": "Latin",
+  "features": "Programming ligatures, stylistic sets for zero and seven, box drawing, Powerline glyphs",
+  "url": "https://usgraphics.com/products/berkeley-mono",
+  "sources": [
+   "https://usgraphics.com/products/berkeley-mono",
+   "https://type-atlas.xyz/typeface/berkeley-mono/"
+  ]
+ },
+ {
+  "name": "Camber",
+  "designers": "Eduardo Manso",
+  "foundry": "Emtype Foundry",
+  "year": "2015",
+  "license": "Emtype end user license agreements (paid, perpetual)",
+  "free_commercial": "No",
+  "weights": "Thin to Bold (7 weights)",
+  "italics": "Yes",
+  "axes": "None",
+  "scripts": "Latin",
+  "features": "Wide, squarish geometric sans for display and text",
+  "url": "https://www.emtype.net/fonts/camber",
+  "sources": [
+   "https://www.emtype.net/fonts/camber",
+   "https://emtype.net/licenses"
+  ]
+ },
+ {
+  "name": "Geist Sans",
+  "designers": "Andrés Briganti, Mateo Zaragoza",
+  "foundry": "Vercel, with Basement Studio",
+  "year": "2023",
+  "license": "SIL Open Font License 1.1",
+  "free_commercial": "Yes",
+  "weights": "100 to 900",
+  "italics": "Yes (since 1.5.0)",
+  "axes": "wght 100 to 900",
+  "scripts": "Latin (including Vietnamese), Cyrillic",
+  "features": "Stylistic sets ss01 to ss11, tabular figures, fractions",
+  "url": "https://vercel.com/font",
+  "sources": [
+   "https://github.com/vercel/geist-font/releases",
+   "https://github.com/google/fonts/blob/main/ofl/geist/METADATA.pb"
+  ]
+ },
+ {
+  "name": "Geist Mono",
+  "designers": "Andrés Briganti, Mateo Zaragoza",
+  "foundry": "Vercel, with Basement Studio",
+  "year": "2023",
+  "license": "SIL Open Font License 1.1",
+  "free_commercial": "Yes",
+  "weights": "100 to 900",
+  "italics": "Yes (since 1.5.0)",
+  "axes": "wght 100 to 900",
+  "scripts": "Latin (including Vietnamese), Cyrillic",
+  "features": "Programming ligatures opt-in through ss11 (since 1.7.0), box drawing",
+  "url": "https://vercel.com/font",
+  "sources": [
+   "https://github.com/vercel/geist-font/releases",
+   "https://github.com/google/fonts/blob/main/ofl/geistmono/METADATA.pb"
+  ]
+ },
+ {
+  "name": "JetBrains Mono",
+  "designers": "Philipp Nurullin, Konstantin Bulenkov",
+  "foundry": "JetBrains",
+  "year": "2020",
+  "license": "SIL Open Font License 1.1",
+  "free_commercial": "Yes",
+  "weights": "100 to 800",
+  "italics": "Yes",
+  "axes": "wght 100 to 800",
+  "scripts": "Latin (including Vietnamese), Cyrillic, Greek",
+  "features": "Programming ligatures on by default (a no-ligature build exists), cv01 to cv20, taller lowercase",
+  "url": "https://www.jetbrains.com/lp/mono/",
+  "sources": [
+   "https://www.jetbrains.com/lp/mono/",
+   "https://github.com/JetBrains/JetBrainsMono/wiki/OpenType-features"
+  ]
+ },
+ {
+  "name": "Fira Code",
+  "designers": "Nikita Prokopov, on Fira Mono by Carrois Apostrophe",
+  "foundry": "Independent (open source)",
+  "year": "2014",
+  "license": "SIL Open Font License 1.1",
+  "free_commercial": "Yes",
+  "weights": "300 to 700",
+  "italics": "No",
+  "axes": "wght 300 to 700",
+  "scripts": "Latin, Cyrillic, Greek",
+  "features": "Programming ligatures, character variants, stylistic sets, box drawing",
+  "url": "https://github.com/tonsky/FiraCode",
+  "sources": [
+   "https://github.com/tonsky/FiraCode",
+   "https://github.com/google/fonts/blob/main/ofl/firacode/METADATA.pb"
+  ]
+ },
+ {
+  "name": "IBM Plex Sans",
+  "designers": "Mike Abbink, Paul van der Laan, Pieter van Rosmalen",
+  "foundry": "IBM, with Bold Monday",
+  "year": "2017",
+  "license": "SIL Open Font License 1.1",
+  "free_commercial": "Yes",
+  "weights": "100 to 700",
+  "italics": "Yes",
+  "axes": "wght 100 to 700, wdth 75 to 100",
+  "scripts": "Latin, Cyrillic, Greek; companion families for Arabic, Devanagari, Hebrew, Thai, Chinese, Japanese and Korean",
+  "features": "Condensed width, alternates for a, g and 0",
+  "url": "https://www.ibm.com/plex/",
+  "sources": [
+   "https://github.com/IBM/plex",
+   "https://github.com/google/fonts/blob/main/ofl/ibmplexsans/METADATA.pb"
+  ]
+ },
+ {
+  "name": "IBM Plex Mono",
+  "designers": "Mike Abbink, Paul van der Laan, Pieter van Rosmalen",
+  "foundry": "IBM, with Bold Monday",
+  "year": "2017",
+  "license": "SIL Open Font License 1.1",
+  "free_commercial": "Yes",
+  "weights": "100 to 700",
+  "italics": "Yes",
+  "axes": "wght 100 to 700 (variable release, 2026)",
+  "scripts": "Latin, Cyrillic",
+  "features": "Dotted zero with a slashed alternate, an italic after the IBM Selectric",
+  "url": "https://www.ibm.com/plex/",
+  "sources": [
+   "https://github.com/google/fonts/blob/main/ofl/ibmplexmono/METADATA.pb",
+   "https://github.com/IBM/plex/releases"
+  ]
+ },
+ {
+  "name": "IBM Plex Serif",
+  "designers": "Mike Abbink, Paul van der Laan, Pieter van Rosmalen",
+  "foundry": "IBM, with Bold Monday",
+  "year": "2017",
+  "license": "SIL Open Font License 1.1",
+  "free_commercial": "Yes",
+  "weights": "100 to 700",
+  "italics": "Yes",
+  "axes": "wght 100 to 700 (variable release, 2026)",
+  "scripts": "Latin, Cyrillic",
+  "features": "Transitional design with rectangular serifs, alternates for a, g and 0",
+  "url": "https://www.ibm.com/plex/",
+  "sources": [
+   "https://github.com/google/fonts/blob/main/ofl/ibmplexserif/METADATA.pb",
+   "https://github.com/IBM/plex/releases"
+  ]
+ }
+]
