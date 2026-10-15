@@ -1,9 +1,11 @@
 # Katagami design spec
 
-Katagami is a type family with three members built from one source:
+Katagami is a type family with five members built from one source:
 
 - **Katagami Sans**, a squared proportional sans serif for interfaces and display.
 - **Katagami Round**, a rounder, universal sans serif for interfaces and text.
+- **Katagami Text**, the member for reading, with a lower x-height and tighter spacing.
+- **Katagami Serif**, Katagami Text with flat slab serifs.
 - **Katagami Mono**, a monospace for code, terminals and tables, fitted from Katagami Sans.
 
 Katagami Sans starts from the outlines of [Inter](https://github.com/rsms/inter) (SIL OFL 1.1) and moves them toward the squared geometry of Camber (Eduardo Manso, Emtype Foundry). Katagami Mono is built from Katagami Sans and takes its approach to the monospace cell from the machine-readable faces of the 1970s, the same tradition Berkeley Mono (US Graphics) draws on.
@@ -75,7 +77,7 @@ Accented and composite glyphs are re-seated on their changed bases, and their ma
 
 ## Terminals
 
-The cut ends of c, e, s and a are cut again along a level line (0 degrees) through the old cut's midpoint, from Inter's 16 degrees. Each edge of the stroke is split where it crosses the new line by de Casteljau subdivision: the edge that ran past it is trimmed, the edge that stopped short is extended along its own curve, and both handles of each edge move with the split. The edges stay pieces of their original curves, so the letter is not warped. Inter's capitals and figures are already cut level. The f's crossbar, which starts inside the compact f's stem, reaches 0.4 stems past the stem's left edge. Katagami Round takes the same cuts and the same f.
+The cut ends of c, e, s and a are cut again along a level line (0 degrees) through the old cut's midpoint, from Inter's 16 degrees. Each edge of the stroke is split where it crosses the new line by de Casteljau subdivision: the edge that ran past it is trimmed, the edge that stopped short is extended along its own curve, and both handles of each edge move with the split. The edges stay pieces of their original curves, so the letter is not warped. Inter's capitals and figures are already cut level. The f's crossbar, which starts inside the compact f's stem, reaches 0.8 Regular stems past the stem's left edge at every weight, so the bar shows the same length on the left from Thin to Black (`f_overhang`). Katagami Round and Katagami Text take the same f.
 
 Three tails are redrawn, keeping each glyph's point count so the masters stay compatible:
 
@@ -162,23 +164,36 @@ Katagami Round sits between Katagami Sans and Inter: geometric bowls that are le
 
 - **Curves:** squared at 0.24 (caps) and 0.22 (lowercase), with the tight-curve rule, so bowls read as geometric without Katagami Sans's flat sides.
 - **Vertices:** every convex corner sharper than 20 degrees is rounded with a radius of 0.22 stems (kappa 0.5523 handles). The corners are chosen on Regular and rounded in every master, so the masters stay compatible. Curves are not rounded further.
-- **Terminals:** c, e, s, a and g cut level, as in Katagami Sans. The f crossbar overhangs the stem by 0.4 stems.
+- **Terminals:** c, e, s, a and g cut level, as in Katagami Sans. The f crossbar overhangs the stem by 0.8 Regular stems at every weight.
 - **Letterforms:** Katagami's figures and compact f, and Inter's G with spur (cv10).
 - **Joins:** bowl-to-stem notches fill 35 percent of the way.
 - **Spacing:** sidebearings 3 units tighter than Inter, space 552 units.
 
 ## Katagami Text
 
-Katagami Text is the member for reading. It moves Inter toward PP Mori's proportions and away from Inter's own tells, the tall x-height first. It is the least technical member and the one the converter on the website uses for serif text. The parameters are the `text` profile.
+Katagami Text is the member for reading. It moves Inter toward PP Mori's proportions and away from Inter's own tells, the tall x-height first. It is the least technical member. The parameters are the `text` profile.
 
 - **x-height:** the lowercase from the baseline to the x-height is scaled by 0.95. Ascenders, dots and accents move down with it and descenders stay, so the x-height is 0.71 of the cap height (Inter 0.75).
 - **Size:** every glyph, advance, anchor and kerning value is then scaled by 0.96 about the origin, with the line height unchanged: caps 0.699 em (PP Mori 0.70, Inter 0.728), x-height 0.498 em.
 - **Curves:** a slight negative squaring (0.02), so bowls are a touch rounder than Inter's.
 - **Widths:** round letters wider (O and Q 1.05, C and G 1.04, o 1.03, e and s 1.025, a 1.03), the narrow capitals opened (E 1.06, F 1.05, L and S 1.03), and the other capitals 3 to 4 percent wider (H 1.04), toward Mori's H of 0.768 em. On top of these, every letter and figure is condensed to 0.97 of its ink width with its stems kept (`condense`), so a line of Text sets about 2 percent narrower.
-- **Letterforms:** a plain double-storey a with a straight stem and its arch cut level; Inter's compact f (cv12); a straight l; a t whose stem top is cut at a slant, its left corner 0.45 stems lower than its right; a c whose level terminals move toward each other by a quarter of the gap between them, each edge extended along its own curve (`c_close`); a g whose tail is cut 0.35 of the way from Inter's terminal height to the top of its curl, so it ends higher (`g_rise`); Katagami's long-flag 1; G with a spur (cv10).
+- **Letterforms:** a plain double-storey a with a straight stem and its arch cut level; Inter's compact f (cv12), its crossbar reaching 0.8 Regular stems past the stem at every weight; a straight l; a t whose stem top is cut at a slant, its left corner 0.45 stems lower than its right; a c whose level terminals move toward each other by a quarter of the gap between them, each edge extended along its own curve (`c_close`); a g whose tail is cut 0.35 of the way from Inter's terminal height to the top of its curl, so it ends higher (`g_rise`); Katagami's long-flag 1; G with a spur (cv10).
 - **Terminals:** c, e, s, a and g cut level, as PP Mori cuts them.
 - **Weight:** the heavy weights are lighter than Inter's (700 is Inter's 640, 800 its 760), as PP Mori's are.
 - **Spacing:** sidebearings 14 units tighter before scaling, so o's sidebearing is about 42 per 1000 (Inter 51, Mori 41); space 512 units before scaling.
+
+## Katagami Serif
+
+Katagami Serif is Katagami Text with bracketed serifs, after NewsSerif (Henning Skibbe, Character Type), and stays close to Text: it keeps Text's outlines and g. The `serif` profile is the `text` profile with the `serif_*` values set. `plan_serifs`, `add_contrast` and `cut_serifs` in `tools/build_sans.py` run after the x-height is lowered. The converter on the website uses it for serif text.
+
+- **Plan:** every serif is found on Regular before any is cut, and the same serifs are added in the same order to Thin, Regular and Black, so the masters stay compatible.
+- **Contrast:** every point keeps its x and moves 0.3 of the way from its y to the same point's y in the next lighter master (Regular toward Thin, Black toward Regular), so stems keep Text's width and horizontal strokes get thinner (`serif_contrast`). Moving toward the neighbouring master keeps the joins of diagonals in M, N and K where they were.
+- **Where serifs go:** on a straight, flat stroke end at the baseline, the x-height, the cap height or the glyph's own top or bottom. A side takes a serif when the straight segment at that corner is a stroke at least 1.2 stems long and steeper than 45 degrees (`find_stem_ends`). Feet, capital stems and the ends of diagonals take one on each side. An apex or vertex whose two sides spread away from it (the top of A, the bottom of v) takes none. A flat end longer than 2.6 stems is a bar (the bottoms of E and L), and it takes one serif, under its stem.
+- **Shape:** a serif runs flat along its line, 0.65 of the stroke's width past each side at Regular (`serif_reach`), to a flat end 0.3 of its thickness tall. A cubic curve leaves that end level and meets the stroke's own side at the serif's full thickness, along the side's direction, so a diagonal's serif follows the diagonal. The thickness is the master's H crossbar (`serif_depth` 1.0). Toward Thin and Black the reach scales with the stem width to the power 0.15. Every serif is its own contour, overlapping its stroke, and the glyph carries the TrueType overlap flag.
+- **Heads:** the top of a lowercase vertical stem takes one serif, on the left, cut on a slant: its tip drops 0.35 stems below the line (`serif_head`), the stem's top left corner moves down onto the same line, and the underside curves into the stem.
+- **Arms and terminals:** the free ends of bars on a metric line (the arms of E, F, L, T and Z, and z) and the level terminals of c, a, C and G (the upper one) and s and S (both) end in a spur 0.55 stems long (`serif_beak`). Its outer edge is flush with the end, its tip is flat, 0.2 of its base wide, and its inner edge curves back to the bar.
+- **Counters:** two serifs that face each other on one line (the feet of n, m, h and u) share the space between them and leave at least half a Regular stem of white. A serif cut short keeps its angle, so its thickness shrinks with its reach.
+- **Widths:** a side whose serif reaches past the letter's ink widens until the tip is a quarter of a Regular stem from the edge of the advance. Composites move with their base glyphs.
 
 ## Alternates and their accented forms
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build Katagami from Inter's sources. Usage: tools/build.sh [sans|mono|round|text|cjk|all]
+# Build Katagami from Inter's sources. Usage: tools/build.sh [sans|mono|round|text|serif|cjk|all]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PY=.venv/bin/python
@@ -68,4 +68,12 @@ if [[ "$which" == text || "$which" == all ]]; then
   .venv/bin/fontmake -m build/text/KatagamiText.designspace -o variable \
     --output-path 'build/text/KatagamiText-core[wght].ttf' --flatten-components
   $PY tools/build_world.py text
+fi
+
+if [[ "$which" == serif || "$which" == all ]]; then
+  $PY tools/build_sans.py serif
+  mkdir -p fonts/serif
+  .venv/bin/fontmake -m build/serif/KatagamiSerif.designspace -o variable \
+    --output-path 'build/serif/KatagamiSerif-core[wght].ttf' --flatten-components
+  $PY tools/build_world.py serif
 fi

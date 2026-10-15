@@ -3,7 +3,7 @@ transforms with its own parameters. Every number here is explained in SPEC.md.""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import replace, dataclass, field
 
 
 @dataclass(frozen=True)
@@ -25,6 +25,11 @@ class Profile:
     c_close: float = 0.0  # share of c's opening closed: each level terminal moves half of it toward the other
     g_rise: float = 0.0  # share of the curl above the g tail's cut that the cut moves up
     condense: float = 1.0  # horizontal ink scale for every letter and figure, stems kept, on top of `widths`
+    serif_reach: float = 0.0  # serifs: how far the tip reaches past each side of a stroke, in stroke widths; 0 cuts none
+    serif_depth: float = 0.0  # serifs: how thick where they meet the stroke, as a share of the master's H crossbar
+    serif_head: float = 0.0  # stems the tip of a lowercase head serif drops below its line
+    serif_beak: float = 0.0  # stems a spur reaches from an arm end or a level terminal
+    serif_contrast: tuple[tuple[str, float], ...] = ()  # per master, the share of the way each point's y moves toward the next lighter master's
     xheight_scale: float = 1.0  # the lowercase from baseline to x-height scaled; ascenders move down with it
     scale: float = 1.0  # every glyph scaled about the origin; the line height stays
     promote: tuple[str, ...] = ()  # Inter feature files whose alternates become the default
@@ -33,7 +38,7 @@ class Profile:
     space_width: int | None = None  # advance of the space; None keeps Inter's
     terminal_angle: float | None = None  # degrees from horizontal for cut terminals; None keeps Inter's
     ascender_lift: int = 0  # units the lowercase ascenders rise above the cap height
-    f_overhang: float = 0.0  # stems the f crossbar reaches past the stem's left edge
+    f_overhang: float = 0.0  # Regular stems the f crossbar reaches past the stem's left edge, the same at every weight
     corner_radius: float = 0.0  # stems; rounds every sharp vertex of the outline
     weight_map: tuple[tuple[int, int], ...] = ((100, 100), (200, 200), (300, 300), (400, 400), (500, 500),
                                                (600, 580), (700, 670), (800, 780), (900, 900))
@@ -51,7 +56,7 @@ SANS = Profile(
     # flat-top 3, open 4, straight-stem 6 and 9, long-flag 1, compact f
     promote=DIGITS + ("cv12-compact-f.fea",),
     terminal_angle=0.0,  # Camber cuts c, e, s, a and g level
-    f_overhang=0.4,
+    f_overhang=0.8,
     widths={
         "O": 0.90, "Q": 0.90, "C": 0.92, "G": 0.92, "D": 0.96,
         "o": 0.92, "c": 0.94, "e": 0.94,
@@ -79,7 +84,7 @@ ROUND = Profile(
     spacing=-3,
     space_width=552,  # 270 per 1000 (Inter 281)
     terminal_angle=0.0,  # c, e, s, a and g cut level, as in Katagami Sans
-    f_overhang=0.4,
+    f_overhang=0.8,
     corner_radius=0.22,  # round only at the vertices
 )
 
@@ -99,6 +104,7 @@ TEXT = Profile(
     # Katagami's long-flag 1, G with a spur, compact f; the l stays straight
     promote=("cv01-one.fea", "cv10-g-spur.fea", "cv12-compact-f.fea"),
     t_slant=0.45,  # the top of t's stem cut at about 20 degrees, as Mori's is
+    f_overhang=0.8,
     c_close=0.25,  # c's terminals closer together, a rounder c
     g_rise=0.35,  # the g's tail ends higher
     condense=0.97,  # every letter and figure a little narrower
@@ -120,4 +126,20 @@ TEXT = Profile(
                 (600, 560), (700, 640), (800, 760), (900, 900)),
 )
 
-PROFILES = {p.key: p for p in (SANS, ROUND, TEXT)}
+# Katagami Text with bracketed serifs, after NewsSerif, kept close to Text:
+# Text's outlines and widths with a light contrast, serifs that run flat to a
+# short flat end and curve back into the stroke, lowercase heads cut on a slant,
+# and spurs on arms and level terminals. SPEC.md, Katagami Serif.
+SERIF = replace(
+    TEXT,
+    key="serif",
+    family="Katagami Serif",
+    file_stem="KatagamiSerif",
+    serif_reach=0.65,  # the tip, past each side of a stroke, at Regular
+    serif_depth=1.0,  # of the H crossbar, where the serif meets the stroke
+    serif_head=0.35,  # stems the head serif's tip drops
+    serif_beak=0.55,  # stems
+    serif_contrast=(("Regular", 0.3), ("Black", 0.3)),  # of the way to the next lighter master's y
+)
+
+PROFILES = {p.key: p for p in (SANS, ROUND, TEXT, SERIF)}

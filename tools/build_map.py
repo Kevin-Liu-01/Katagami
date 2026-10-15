@@ -45,6 +45,7 @@ FONTS = {
     "round": [ROOT / "fonts/round/KatagamiRound[wght].ttf", *CJK],
     "sans": [ROOT / "fonts/sans/KatagamiSans[wght].ttf", *CJK],
     "text": [ROOT / "fonts/text/KatagamiText[wght].ttf", *CJK],
+    "serif": [ROOT / "fonts/serif/KatagamiSerif[wght].ttf", *CJK],
     "mono": [ROOT / "fonts/mono/KatagamiMono[wght].ttf"],
 }
 DENSITY_LOG_MIN, DENSITY_STEPS = -3, 32

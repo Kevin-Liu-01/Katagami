@@ -173,23 +173,29 @@ def promote_alternates(fonts: dict, fea_files, features_dir: Path) -> None:
                     comp.baseGlyph = swap[comp.baseGlyph]
 
 
-def respace(fonts: dict, delta: float) -> None:
+def respace(fonts: dict, delta) -> None:
     """Add `delta` units to both sidebearings of every spacing glyph.
+
+    `delta` is one number for every master, or a {master: units} dict.
 
     Outlines and anchors move right by delta and advances grow by 2 delta.
     Composites follow their base; marks inside them move with the base.
     """
-    if not delta:
+    deltas = delta if isinstance(delta, dict) else {style: delta for style in fonts}
+    if not any(deltas.values()):
         return
     import unicodedata
 
     ref = fonts["Regular"]
     # nonspacing marks and glyphs narrower than the change keep their advance
     skip = {g.name for g in ref
-            if g.width <= 2 * abs(delta)
+            if g.width <= 2 * max(abs(d) for d in deltas.values())
             or (g.unicodes and unicodedata.category(chr(g.unicodes[0])) in ("Mn", "Me"))
             or g.name.endswith("comb")}
-    for f in fonts.values():
+    for style, f in fonts.items():
+        delta = deltas.get(style, 0)
+        if not delta:
+            continue
         widths = {g.name: g.width for g in f}
         for g in f:
             if g.name in skip:

@@ -19,11 +19,14 @@ After editing only a page fragment, `tools/build_site.py --pages` rewraps the pa
 
 from __future__ import annotations
 
-import copy
 import hashlib
 import json
 import os
+import re
+import subprocess
+import time
 import unicodedata
+import zipfile
 from pathlib import Path
 
 import sys
@@ -33,24 +36,24 @@ from fontTools import subset
 from fontTools.ttLib import TTFont
 
 sys.path.insert(0, str(Path(__file__).parent))
-from kerf_build.fontops import decompose  # noqa: E402
-from kerf_build.outline import round_corners  # noqa: E402
 from build_world import SCRIPTS  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SITE = Path(os.environ.get("KATAGAMI_SITE", ROOT.parent / "Katagami-Website"))
 FONTS = {"sans": ROOT / "fonts/sans/KatagamiSans[wght].ttf", "round": ROOT / "fonts/round/KatagamiRound[wght].ttf",
-         "text": ROOT / "fonts/text/KatagamiText[wght].ttf", "mono": ROOT / "fonts/mono/KatagamiMono[wght].ttf"}
-WOFF2 = {"sans": "KatagamiSans.woff2", "round": "KatagamiRound.woff2", "text": "KatagamiText.woff2", "mono": "KatagamiMono.woff2"}
+         "text": ROOT / "fonts/text/KatagamiText[wght].ttf", "serif": ROOT / "fonts/serif/KatagamiSerif[wght].ttf",
+         "mono": ROOT / "fonts/mono/KatagamiMono[wght].ttf"}
+WOFF2 = {"sans": "KatagamiSans.woff2", "round": "KatagamiRound.woff2", "text": "KatagamiText.woff2",
+         "serif": "KatagamiSerif.woff2", "mono": "KatagamiMono.woff2"}
 OUTLINE_CHARS = {"K": "K", "a": "a", "t": "t", "g": "g", "m": "m", "i": "i"}
-COMPARE = "on"  # the Curves plate draws these in Sans, Round and Text over Inter
-INTER_UFO = ROOT / "build/ufo/Inter-Regular.ufo"
+COMPARE = "on"  # the Curves plate draws these in Sans, Round and Text
 KERF_UFO = ROOT / "build/sans/KatagamiSans-Regular.ufo"
 MONO_UFO = ROOT / "build/mono/KatagamiMono-Regular.ufo"
 ROUND_UFO = ROOT / "build/round/KatagamiRound-Regular.ufo"
 TEXT_UFO = ROOT / "build/text/KatagamiText-Regular.ufo"
-FAMILY = {"sans": "Katagami Sans", "round": "Katagami Round", "text": "Katagami Text", "mono": "Katagami Mono"}
-WEIGHTS = {"sans": "100 900", "round": "100 900", "text": "100 900", "mono": "100 700"}
+SERIF_UFO = ROOT / "build/serif/KatagamiSerif-Regular.ufo"
+FAMILY = {"sans": "Katagami Sans", "round": "Katagami Round", "text": "Katagami Text", "serif": "Katagami Serif", "mono": "Katagami Mono"}
+WEIGHTS = {"sans": "100 900", "round": "100 900", "text": "100 900", "serif": "100 900", "mono": "100 700"}
 # Companion file -> the ranges it serves in every proportional family. Where two
 # faces share a range the browser tries the one declared later first, so SC
 # comes after TC: a character in both is drawn by SC, and TC draws the rest
@@ -64,8 +67,20 @@ CJK = {
     "KatagamiCJKKR": [(0x1100, 0x11FF), (0x3130, 0x318F), (0xA960, 0xA97F), (0xAC00, 0xD7FF), (0xFFA0, 0xFFDC)],
 }
 FONT_URL = "https://katagami.kevinliu.studio/fonts/"
-HERO = "Katagami"  # morphs Katagami Mono <- Katagami Sans -> Katagami Round; all three share Inter's point structure
-PAGES = {"page.html": "index.html", "about-page.html": "about.html", "map-page.html": "map.html", "convert-page.html": "convert.html"}  # hand-written fragment -> served page
+HERO = "Katagami"  # morphs Mono, Round, Sans, Text and Serif; all five share Inter's point structure
+PAGES = {"page.html": "index.html", "about-page.html": "about.html", "map-page.html": "map.html", "convert-page.html": "convert.html",
+         "glyphs-page.html": "glyphs.html", "features-page.html": "features.html", "faq-page.html": "faq.html",
+         "download-page.html": "download.html"}  # hand-written fragment -> served page
+# features a reader turns on or off; the rest shape scripts and work underneath
+OPTIONAL = re.compile(r"^(cv\d\d|ss\d\d|calt|case|cpsp|dlig|frac|numr|dnom|ordn|pnum|tnum|salt|sinf|smcp|c2sc|subs|sups|zero|liga)$")
+REPO = "https://github.com/Kevin-Liu-01/Katagami"
+MARK = ('<svg class="mark" viewBox="0 0 100 100" aria-hidden="true"><path d="M0 0 L31 0 L31 100 L0 100 Z"/>'
+        '<path d="M38 0 L100 0 L100 30 L38 50 Z"/><path d="M38 50 L100 70 L100 100 L38 100 Z"/></svg>')
+SPARKLES = ('<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15.98 1.804a1 1 0 0 0-1.96 0l-.24 1.192a1 1 0 0 1-.784.785l-1.192.238a1 1 0 0 0 0 1.962l1.192.238a1 1 0 0 1 .785.785l.238 1.192a1 1 0 0 0 1.962 0l.238-1.192a1 1 0 0 1 .785-.785l1.192-.238a1 1 0 0 0 0-1.962l-1.192-.238a1 1 0 0 1-.785-.785l-.238-1.192ZM6.949 5.684a1 1 0 0 0-1.898 0l-.683 2.051a1 1 0 0 1-.633.633l-2.051.683a1 1 0 0 0 0 1.898l2.051.684a1 1 0 0 1 .633.632l.683 2.051a1 1 0 0 0 1.898 0l.683-2.051a1 1 0 0 1 .633-.633l2.051-.683a1 1 0 0 0 0-1.898l-2.051-.683a1 1 0 0 1-.633-.633L6.95 5.684ZM13.949 13.684a1 1 0 0 0-1.898 0l-.184.551a1 1 0 0 1-.632.633l-.551.183a1 1 0 0 0 0 1.898l.551.183a1 1 0 0 1 .633.633l.183.551a1 1 0 0 0 1.898 0l.184-.551a1 1 0 0 1 .632-.633l.551-.183a1 1 0 0 0 0-1.898l-.551-.184a1 1 0 0 1-.633-.632l-.183-.551Z"/></svg>')
+TRAY = ('<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z"/>'
+        '<path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z"/></svg>')
+GITHUB = ('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>')
+LINKS = [("/glyphs", "Glyphs"), ("/features", "Features"), ("/map", "Map"), ("/about", "About"), ("/faq", "FAQ")]
 
 
 SCRIPT_OF = {u: name for name, ranges in SCRIPTS.items() for lo, hi in ranges for u in range(lo, hi + 1)}
@@ -78,6 +93,23 @@ def group(cp: int) -> str:
         return "drawing"
     cat = unicodedata.category(chr(cp))
     return {"L": "letters", "N": "figures", "P": "punctuation", "S": "symbols", "M": "marks"}.get(cat[0], "other")
+
+
+def feature_chars(font: TTFont, feature, limit: int = 48) -> str:
+    """The characters a feature's single, alternate and ligature substitutions
+    start from, in code point order: what turning it on changes."""
+    lookups = font["GSUB"].table.LookupList.Lookup
+    rev = {g: cp for cp, g in font.getBestCmap().items()}
+    found = set()
+    for li in feature.LookupListIndex:
+        lookup = lookups[li]
+        for st in lookup.SubTable:
+            kind = lookup.LookupType
+            if kind == 7:
+                kind, st = st.ExtensionLookupType, st.ExtSubTable
+            keys = (st.mapping if kind == 1 else st.alternates if kind == 3 else st.ligatures if kind == 4 else {})
+            found |= {rev[g] for g in keys if g in rev}
+    return "".join(chr(cp) for cp in sorted(found) if not unicodedata.category(chr(cp)).startswith(("C", "Z", "M")))[:limit]
 
 
 def features(font: TTFont) -> list[dict]:
@@ -94,7 +126,10 @@ def features(font: TTFont) -> list[dict]:
             nid = getattr(params, "UINameID", None) or getattr(params, "FeatUILabelNameID", None)
             if nid:
                 label = name.getDebugName(nid) or ""
-        out.append({"tag": tag, "label": label})
+        entry = {"tag": tag, "label": label}
+        if OPTIONAL.match(tag):
+            entry["chars"] = feature_chars(font, rec.Feature)
+        out.append(entry)
     return out
 
 
@@ -111,20 +146,6 @@ def metrics(font: TTFont) -> dict:
             "capHeight": os2.sCapHeight, "xHeight": os2.sxHeight,
             "glyphs": len(font.getGlyphOrder()), "characters": len(font.getBestCmap()),
             "weights": [a.minValue for a in font["fvar"].axes] + [a.maxValue for a in font["fvar"].axes]}
-
-
-def contours(font, ch: str, corners=()) -> dict:
-    """A glyph's outline as [x, y, type] lists; `corners` adds zero-radius
-    rounded corners (same points as Katagami Round's, same shape)."""
-    g = font[ch]
-    if g.components:
-        decompose(font, [ch])
-    if corners:
-        g = copy.deepcopy(g)
-        round_corners(g, [(ci, idx) for ci, idx in corners], 0.0)
-    return {"adv": g.width,
-            "contours": [[[round(p.x, 1), round(p.y, 1), {"curve": "c", "line": "l", None: "o"}.get(p.type, "l")]
-                          for p in c.points] for c in g.contours]}
 
 
 TYPES = {"curve": "c", "line": "l", None: "o"}
@@ -156,6 +177,27 @@ def flat_plan(font, gname: str, offset: int = 0) -> list:
     return out
 
 
+def flatten_marked(font, ref, gname: str, xf=(1, 0, 0, 1, 0, 0)) -> list:
+    """flatten(), each contour paired with True when `ref`'s glyph of the same
+    name has no such contour: the slabs Katagami Serif adds to Katagami Text."""
+    g = font[gname]
+    n = len(ref[gname].contours)
+    a, b, c, d, e, f = xf
+    out = [([[round(a * p.x + c * p.y + e, 1), round(b * p.x + d * p.y + f, 1), TYPES.get(p.type, "l")] for p in cont.points], k >= n)
+           for k, cont in enumerate(g.contours)]
+    for comp in g.components:
+        A, B, C, D, E, F = comp.transformation
+        out += flatten_marked(font, ref, comp.baseGlyph,
+                              (a * A + c * B, b * A + d * B, a * C + c * D, b * C + d * D, a * E + c * F + e, b * E + d * F + f))
+    return out
+
+
+def weave(contours: list, marked: list, slabs: list) -> list:
+    """Put `slabs` back between `contours` where `marked` had its slabs."""
+    rest, extra = iter(contours), iter(slabs)
+    return [next(extra) if slab else next(rest) for _, slab in marked]
+
+
 def expand(contours: list, plan: list) -> list:
     """Split each planned corner into the four coincident points Katagami Round has there."""
     out = [list(c) for c in contours]
@@ -168,13 +210,11 @@ def expand(contours: list, plan: list) -> list:
 
 
 def outlines() -> dict:
-    inter, kerf, mono, rnd = (ufoLib2.Font.open(p) for p in (INTER_UFO, KERF_UFO, MONO_UFO, ROUND_UFO))
+    kerf, mono, rnd, text, serif = (ufoLib2.Font.open(p) for p in (KERF_UFO, MONO_UFO, ROUND_UFO, TEXT_UFO, SERIF_UFO))
     shape = lambda o: [len(c) for c in o["contours"]]  # noqa: E731
     out = {}
     for ch, gname in OUTLINE_CHARS.items():
-        a, b = contours(inter, gname), contours(kerf, gname)
-        assert shape(a) == shape(b), ch
-        out[ch] = {"inter": a, "kerf": b}
+        out[ch] = {}
         if ch in HERO:
             # Katagami Round rounds its vertices, which adds points. Give Sans and
             # Mono the same corners at zero radius so all three still morph.
@@ -187,16 +227,32 @@ def outlines() -> dict:
             if shape(mono_like) != shape(sans_like):
                 mono_like = sans_like
             assert shape(rounded) == shape(sans_like), f"{ch}: round and Katagami Sans outlines differ"
-            out[ch]["hero"] = sans_like
-            out[ch]["mono"] = mono_like
-            out[ch]["round"] = rounded
+            # Serif is Text with slab rectangles added. The other four states carry
+            # each slab at zero height on the edge it grows from, so it draws nothing
+            # until the slider moves from Text toward Serif.
+            marked = flatten_marked(serif, text, gname)
+            serif_base = [c for c, slab in marked if not slab]
+            text_flat = flatten(text, gname)
+            assert [len(c) for c in serif_base] == [len(c) for c in text_flat], f"{ch}: Serif and Text outlines differ"
+            dx = serif_base[0][0][0] - text_flat[0][0][0]
+            ys = [p[1] for c in serif_base for p in c]
+            mid = (min(ys) + max(ys)) / 2
+            slabs = [c for c, slab in marked if slab]
+            flat = []
+            for c in slabs:
+                lo, hi = min(p[1] for p in c), max(p[1] for p in c)
+                edge = lo if abs(lo - mid) > abs(hi - mid) else hi
+                flat.append([[round(p[0] - dx, 1), edge, p[2]] for p in c])
+            for key, o in (("hero", sans_like), ("mono", mono_like), ("round", rounded)):
+                out[ch][key] = {"adv": o["adv"], "contours": weave(o["contours"], marked, flat)}
+            out[ch]["text"] = {"adv": text[gname].width, "contours": weave(expand(text_flat, plan), marked, flat)}
+            out[ch]["serif"] = {"adv": serif[gname].width, "contours": weave(expand(serif_base, plan), marked, slabs)}
     return out
 
 
 def member_outlines() -> dict:
-    """The COMPARE letters at Regular in Inter and the three proportional members."""
-    fonts = {k: ufoLib2.Font.open(p) for k, p in
-             (("inter", INTER_UFO), ("sans", KERF_UFO), ("round", ROUND_UFO), ("text", TEXT_UFO))}
+    """The COMPARE letters at Regular in Sans, Round and Text."""
+    fonts = {k: ufoLib2.Font.open(p) for k, p in (("sans", KERF_UFO), ("round", ROUND_UFO), ("text", TEXT_UFO))}
     return {ch: {k: {"adv": f[ch].width, "contours": flatten(f, ch)} for k, f in fonts.items()} for ch in COMPARE}
 
 
@@ -273,7 +329,7 @@ def web_fonts() -> list[list]:
             font.flavor = "woff2"
             font.save(out)
         css = ",".join(f"U+{a:X}-{b:X}" for a, b in ranges)
-        for key in ("sans", "round", "text"):
+        for key in ("sans", "round", "text", "serif"):
             faces.append([FAMILY[key], stamp(f"fonts/{name}.woff2").removeprefix("fonts/"), "100 900", css])
     return faces
 
@@ -292,17 +348,86 @@ def write_faces(faces: list[list]) -> None:
         apply.write_text(text)
 
 
+def site_facts() -> dict:
+    """Numbers the header and footer print, read from the built data and the repository."""
+    facts = {"characters": 0, "glyphs": 0, "features": 0, "people": "", "commit": "", "date": time.strftime("%Y-%m-%d")}
+    data_js = SITE / "data.js"
+    if data_js.exists():
+        text = data_js.read_text()
+        data = json.loads(text[text.index("{"):text.rindex("}") + 1])
+        facts["characters"] = data["sans"]["metrics"]["characters"]
+        facts["glyphs"] = sum(data[k]["metrics"]["glyphs"] for k in FONTS if k in data)
+        facts["features"] = len({f["tag"] for f in data["sans"]["features"] if OPTIONAL.match(f["tag"])})
+    map_json = SITE / "map" / "map.json"
+    if map_json.exists():
+        facts["people"] = json.loads(map_json.read_text()).get("stats", {}).get("sans", {}).get("people", "")
+    try:
+        facts["commit"] = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        pass
+    return facts
+
+
+def nav_html(here: str, facts: dict) -> str:
+    """The header every page shares, with the current page marked."""
+    cur = lambda href: ' aria-current="page"' if href == here else ""  # noqa: E731
+    links = "".join(f'<a href="{h}"{cur(h)}>{t}</a>' for h, t in LINKS)
+    hints = {"/glyphs": f"{facts['characters']:,} characters", "/features": f"{facts['features']} features",
+             "/map": f"{facts['people']}% of people" if facts["people"] else "", "/about": "Why I made it", "/faq": "",
+             "/convert": "Any site, set in Katagami", "/download": "v0.1, OFL"}
+    sheet = "".join(f'<a href="{h}"{cur(h)}>{t}<span>{hints.get(h, "")}</span></a>'
+                    for h, t in [*LINKS, ("/convert", "Font-ify"), ("/download", "Download")])
+    return f"""<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/">{MARK}<b>Katagami</b><span>v0.1</span></a>
+    <nav aria-label="Pages">
+      <div class="links">{links}</div>
+      <a class="pill fontify" href="/convert"{cur("/convert")}>{SPARKLES}<span>Font-ify</span></a>
+      <a class="pill dl" href="/download"{cur("/download")}>{TRAY}<span>Download</span></a>
+      <a class="gh" href="{REPO}" target="_blank" rel="noopener" aria-label="Katagami on GitHub">{GITHUB}</a>
+      <details class="menu">
+        <summary aria-label="Menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="shut" d="M4 7h16M4 12h16M4 17h16"/><path class="open" d="M6 6l12 12M18 6L6 18"/></svg></summary>
+        <div class="sheet-menu">{sheet}<a href="{REPO}" target="_blank" rel="noopener">GitHub<span>Source and issues</span></a></div>
+      </details>
+    </nav>
+  </div>
+</header>"""
+
+
+def footer_html(facts: dict) -> str:
+    """The footer every page shares."""
+    members = "".join(f'<a href="/#{k}">{FAMILY[k]}</a>' for k in ("sans", "round", "text", "serif", "mono"))
+    commit = f'<a href="{REPO}/commit/{facts["commit"]}">{facts["commit"]}</a>' if facts["commit"] else ""
+    return f"""<footer class="site">
+  <div class="wrap">
+    <div class="f-grid">
+      <div class="f-lede">
+        <p>Katagami is a free type family in five members, Sans, Round, Text, Serif and Mono, under the SIL Open Font License 1.1. You can use it, change it and ship it in any product.</p>
+        <p class="f-meta"><span>v0.1</span><span>{facts["glyphs"]:,} glyphs</span><span>built {facts["date"]}</span>{commit}</p>
+      </div>
+      <nav class="f-col" aria-label="Members"><h3>Members</h3>{members}</nav>
+      <nav class="f-col" aria-label="Explore"><h3>Explore</h3><a href="/glyphs">Glyphs</a><a href="/features">Features</a><a href="/map">Map</a><a href="/convert">Font-ify</a></nav>
+      <nav class="f-col" aria-label="Project"><h3>Project</h3><a href="/about">About</a><a href="/faq">FAQ</a><a href="/download">Download</a><a href="{REPO}">GitHub</a><a href="{REPO}/blob/main/OFL.txt">License</a></nav>
+    </div>
+    <div class="f-word" aria-hidden="true"><b>Katagami</b><span></span></div>
+  </div>
+</footer>"""
+
+
 def write_pages() -> None:
     # Each hand-written page fragment is wrapped in a document. Asset URLs are
     # stamped with a content hash, so a changed file gets a new URL and the
     # cache headers in vercel.json never pair a new page with old data.
-    assets = ["data.js", "katagami-apply.js", "map/map.json", "fonts/katagami.css", *(f"fonts/{name}" for name in WOFF2.values())]
+    assets = ["data.js", "katagami-apply.js", "site.css", "site.js", "map/map.json", "download/files.json", "fonts/katagami.css", *(f"fonts/{name}" for name in WOFF2.values())]
     stamps = {rel: hashlib.sha256((SITE / rel).read_bytes()).hexdigest()[:10]
               for rel in assets if (SITE / rel).exists()}
+    facts = site_facts()
     for source, target in PAGES.items():
         if not (SITE / source).exists():
             continue
         page = (SITE / source).read_text()
+        here = "/" + target.removesuffix(".html").replace("index", "")
+        page = page.replace("<!-- site:nav -->", nav_html(here, facts)).replace("<!-- site:footer -->", footer_html(facts))
         for rel, digest in stamps.items():
             page = page.replace(f'"{rel}"', f'"{rel}?v={digest}"')
         (SITE / target).write_text(
@@ -311,8 +436,36 @@ def write_pages() -> None:
             '<link rel="icon" href="/favicon.svg" type="image/svg+xml">\n'
             '<link rel="icon" href="/favicon.png" type="image/png" sizes="64x64">\n'
             '<link rel="apple-touch-icon" href="/apple-touch-icon.png">\n'
-            "</head>\n<body>\n" + page + "\n</body>\n</html>\n"
+            f'<link rel="stylesheet" href="/site.css?v={stamps.get("site.css", "")}">\n'
+            "</head>\n<body>\n" + page + f'\n<script src="/site.js?v={stamps.get("site.js", "")}" defer></script>\n</body>\n</html>\n'
         )
+
+
+CJK_FILES = [ROOT / "fonts" / "cjk" / f"{name}[wght].ttf" for name in CJK]
+
+
+def write_downloads() -> None:
+    """The zip of the five members with the license, and files.json, which the
+    download page lists: every font file with its size and a link."""
+    out = SITE / "download"
+    out.mkdir(exist_ok=True)
+    zpath = out / "Katagami-0.1.zip"
+    members = [(key, FONTS[key]) for key in ("sans", "round", "text", "serif", "mono")]
+    if not all(fresh(path, zpath) for _, path in members):
+        with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+            # fixed timestamps, so the same fonts make the same zip
+            for arc, src in [*((f"Katagami-0.1/{path.name}", path) for _, path in members),
+                             ("Katagami-0.1/OFL.txt", ROOT / "OFL.txt")]:
+                info = zipfile.ZipInfo(arc, date_time=(2026, 1, 1, 0, 0, 0))
+                info.compress_type = zipfile.ZIP_DEFLATED
+                z.writestr(info, src.read_bytes())
+    raw = lambda path: f"{REPO}/raw/main/{path.relative_to(ROOT).as_posix().replace('[', '%5B').replace(']', '%5D')}"  # noqa: E731
+    files = [{"key": key, "family": FAMILY[key], "file": path.name, "weights": WEIGHTS[key].replace(" ", " to "),
+              "glyphs": len(TTFont(path).getGlyphOrder()), "bytes": path.stat().st_size, "url": raw(path)} for key, path in members]
+    cjk = [{"family": f"Katagami CJK {path.stem[11:13]}", "file": path.name, "bytes": path.stat().st_size, "url": raw(path)}
+           for path in CJK_FILES if path.exists()]
+    (out / "files.json").write_text(json.dumps({"version": "0.1", "zip": {"file": zpath.name, "bytes": zpath.stat().st_size},
+                                                "members": files, "cjk": cjk}, separators=(",", ":")))
 
 
 def main() -> None:
@@ -325,6 +478,7 @@ def main() -> None:
             data["names"][cp] = unicodedata.name(chr(cp), "").title()
     write_faces(web_fonts())
     data["mono"]["metrics"]["cell"] = TTFont(FONTS["mono"])["hmtx"]["zero"][0]
+    write_downloads()
     data["outlines"] = outlines()
     data["members"] = member_outlines()
     (SITE / "data.js").write_text("window.KERF = " + json.dumps(data, separators=(",", ":")) + ";\n")

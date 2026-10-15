@@ -62,8 +62,10 @@ KEEP_NATURAL = 0.25
 NATURAL = set("iljIJ1ıȷ")  # narrow by identity; J and dotless j get arms instead
 # f, t, r, dotless j and J keep their stem and stretch only what lies left and
 # right of it, so arms and crossbars reach into the cell like Berkeley Mono's.
-# (share of the cell, height of the stem slice as a share of x-height or cap)
-ARMS = {"f": (0.70, 0.3), "t": (0.68, 0.3), "r": (0.58, 0.3), "ȷ": (0.54, 0.5), "J": (0.64, 0.6)}
+# (share of the cell, height of the stem slice as a share of x-height or cap,
+# and for f the length of the crossbar left of the stem as a share of the cell,
+# the same at every weight)
+ARMS = {"f": (0.70, 0.3, 0.18), "t": (0.68, 0.3), "r": (0.58, 0.3), "ȷ": (0.54, 0.5), "J": (0.64, 0.6)}
 # Wide glyphs keep only part of the stem compensation. The stems thin, which
 # is how a monospace m finds room for its counters.
 COMP_FLOOR = 0.45
@@ -281,8 +283,10 @@ def stem_edges(g: Glyph, y: float):
     return (xs[0], xs[-1]) if len(xs) == 2 else None
 
 
-def stretch_arms(font, g: Glyph, share: float, slice_at: float) -> bool:
-    """Widen what lies left and right of the stem so the ink reaches `share` of the cell."""
+def stretch_arms(font, g: Glyph, share: float, slice_at: float, left_share: float | None = None) -> bool:
+    """Widen what lies left and right of the stem so the ink reaches `share` of
+    the cell. With `left_share`, the left side reaches exactly that share of the
+    cell past the stem and the right side takes the rest."""
     edges = stem_edges(g, slice_at)
     if edges is None:
         return False
@@ -292,7 +296,11 @@ def stretch_arms(font, g: Glyph, share: float, slice_at: float) -> bool:
     if left + right <= 1:
         return False
     k = min(2.6, max(1.0, (share * CELL - (sr - sl)) / (left + right)))
-    remap = lambda x: sl - (sl - x) * k if x < sl else sr + (x - sr) * k if x > sr else x  # noqa: E731
+    kl = kr = k
+    if left_share is not None and left > 1 and right > 1:
+        kl = left_share * CELL / left
+        kr = min(2.6, max(1.0, (share * CELL - (sr - sl) - left_share * CELL) / right))
+    remap = lambda x: sl - (sl - x) * kl if x < sl else sr + (x - sr) * kr if x > sr else x  # noqa: E731
     for c in g.contours:
         for p in c.points:
             p.x = remap(p.x)
@@ -470,10 +478,10 @@ def main() -> None:
             origin = None
             ch = base_letter(fonts["Regular"][name])
             if ch in ARMS and ch == chr(g.unicodes[0]):
-                share, at = ARMS[ch]
+                share, at, *left_share = ARMS[ch]
                 height = f.info.capHeight if ch.isupper() else f.info.xHeight
                 b0 = g.getBounds(f)
-                if stretch_arms(f, g, share, at * height):
+                if stretch_arms(f, g, share, at * height, *left_share):
                     origin = (b0.xMin + b0.xMax) / 2
             maps[name] = fit_to_cell(f, g, k, stem, origin)
         draw_slabs(f, stem, bar)

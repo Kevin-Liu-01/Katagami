@@ -24,6 +24,7 @@ weight, not redrawn in Katagami's style.
 
 from __future__ import annotations
 
+import copy
 import sys
 import tempfile
 from pathlib import Path
@@ -120,11 +121,14 @@ def merge_master(kerf: Path, parts: list[Path], out: Path) -> Path:
     keep = {
         "hhea": (base["hhea"].ascent, base["hhea"].descent, base["hhea"].lineGap),
         "typo": (base["OS/2"].sTypoAscender, base["OS/2"].sTypoDescender, base["OS/2"].sTypoLineGap),
+        # the merge takes the largest x-height and cap height among the parts; Katagami's own are the right ones
+        "heights": (base["OS/2"].sxHeight, base["OS/2"].sCapHeight),
     }
     merged = Merger(options=Options(drop_tables=["DSIG", "STAT", "meta", "vhea", "vmtx", "VVAR", "gasp", "prep"])).merge([str(kerf)] + [str(p) for p in parts])
     hhea, os2 = merged["hhea"], merged["OS/2"]
     hhea.ascent, hhea.descent, hhea.lineGap = keep["hhea"]
     os2.sTypoAscender, os2.sTypoDescender, os2.sTypoLineGap = keep["typo"]
+    os2.sxHeight, os2.sCapHeight = keep["heights"]
     merged["name"] = base["name"]
     merged["head"].unitsPerEm = 2048
     merged.save(out)
@@ -146,6 +150,31 @@ def stamp_copyright(path: Path) -> None:
     for rec in font["name"].names:
         if rec.nameID == 0 and "Noto" not in rec.toUnicode():
             rec.string = rec.toUnicode() + NOTICE
+    font.save(path)
+
+
+def restore_feature_labels(core: Path, path: Path) -> None:
+    """Give the merged font back the names of its stylistic sets and character
+    variants. The merge drops their FeatureParams, and the name IDs they used
+    are taken by the instance names, so each label gets a new ID."""
+    src = TTFont(core)
+    labels = {}
+    for rec in src["GSUB"].table.FeatureList.FeatureRecord:
+        params = rec.Feature.FeatureParams
+        nid = params and (getattr(params, "UINameID", None) or getattr(params, "FeatUILabelNameID", None))
+        if nid and rec.FeatureTag not in labels:
+            labels[rec.FeatureTag] = (params, src["name"].getDebugName(nid))
+    font = TTFont(path)
+    ids = {}
+    for rec in font["GSUB"].table.FeatureList.FeatureRecord:
+        if rec.FeatureTag not in labels:
+            continue
+        params, text = labels[rec.FeatureTag]
+        if text not in ids:
+            ids[text] = font["name"].addName(text, platforms=((3, 1, 0x409),), minNameID=256)
+        params = copy.deepcopy(params)
+        setattr(params, "UINameID" if hasattr(params, "UINameID") else "FeatUILabelNameID", ids[text])
+        rec.Feature.FeatureParams = params
     font.save(path)
 
 
@@ -188,6 +217,7 @@ def build(key: str, only: list[str] | None = None) -> Path:
         font, _, _ = build_variable(str(work / "world.designspace"))
         font.save(target)
     stamp_copyright(target)
+    restore_feature_labels(core, target)
     out = TTFont(target)
     print(f"{target.relative_to(ROOT)}: {len(out.getGlyphOrder())} glyphs, {len(out.getBestCmap())} characters, "
           f"{target.stat().st_size / 1e6:.1f} MB")
