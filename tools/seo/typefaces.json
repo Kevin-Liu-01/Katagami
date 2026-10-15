@@ -72,6 +72,24 @@
   ]
  },
  {
+  "name": "Signifier",
+  "designers": "Kris Sowersby",
+  "foundry": "Klim Type Foundry",
+  "year": "2020",
+  "license": "Klim Type Foundry licences (paid desktop, web and app licences)",
+  "free_commercial": "No",
+  "weights": "Thin to Black (100 to 900)",
+  "italics": "Yes, an italic for each of the 7 weights",
+  "axes": "wght 100 to 900, with the full family purchase",
+  "scripts": "Latin",
+  "features": "Rectangular baseline serifs, triangular head serifs and chopped terminals; oldstyle and tabular figures, small caps, alternate zero and one, fractions, superiors and inferiors",
+  "url": "https://klim.co.nz/fonts/signifier/",
+  "sources": [
+   "https://klim.co.nz/fonts/signifier/",
+   "https://klim.co.nz/blog/signifier-design-information/"
+  ]
+ },
+ {
   "name": "Source Serif 4",
   "designers": "Frank Grießhammer",
   "foundry": "Adobe",

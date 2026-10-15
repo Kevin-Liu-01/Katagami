@@ -15,7 +15,7 @@ Katagami is a free, open-source type family in five members that share one skele
 | **Katagami Sans** | Interfaces and display: squared curves, level cuts, square punctuation | 100 to 900 | 11,242 | `fonts/sans/KatagamiSans[wght].ttf` |
 | **Katagami Round** | Softer interfaces: bowls squared less, every vertex rounded at 0.22 stems | 100 to 900 | 11,243 | `fonts/round/KatagamiRound[wght].ttf` |
 | **Katagami Text** | Long reading: x-height 0.71 of the caps, set 4 percent smaller, tighter, a closer c and a straight l | 100 to 900 | 11,243 | `fonts/text/KatagamiText[wght].ttf` |
-| **Katagami Serif** | Reading with serifs: Text with bracketed serifs, slanted heads and a light contrast | 100 to 900 | 11,243 | `fonts/serif/KatagamiSerif[wght].ttf` |
+| **Katagami Serif** | Reading with serifs: Text with rectangular serifs, triangular heads and a light contrast | 100 to 900 | 11,243 | `fonts/serif/KatagamiSerif[wght].ttf` |
 | **Katagami Mono** | Code and terminals: a 0.625 em cell, every confusable character distinct, opt-in code ligatures | 100 to 700 | 3,507 | `fonts/mono/KatagamiMono[wght].ttf` |
 
 Every weight from Thin to Black (Mono Thin to Bold) is a named instance, so apps that do not handle variable fonts list them as styles.
@@ -54,7 +54,7 @@ Katagami is generated. The build scripts in `tools/` take Inter's sources, apply
 - **Sans** squares bowls toward their corners (upper 0.36, lower 0.32), condenses round letters so o matches n, cuts terminals level and makes punctuation square.
 - **Round** squares about two thirds as far as Sans and rounds every sharp vertex at 0.22 stems.
 - **Text** lowers the x-height to 0.71 of the caps, sets everything 4 percent smaller, tightens spacing, widens round letters and capitals, and condenses letters to 0.97 of their ink width with stems kept.
-- **Serif** is Text with bracketed serifs cut onto its stroke ends: each runs flat 0.65 of a stem past the stroke to a short flat end and curves back into the stroke's own side, as thick as the H crossbar where it meets it. Lowercase heads are cut on a slant, and arms and level terminals take spurs. Every point keeps its x and moves 0.3 of the way to its height in the next lighter master, which thins the horizontals.
+- **Serif** is Text with rectangular serifs cut onto its stroke ends: each runs 0.65 of a stem past the stroke, ends square at 0.6 of the H crossbar's thickness, and meets the stroke's own side in a short bracket. Lowercase heads are triangular, the arms of E, F, L, T and Z take short vertical serifs, and the level cuts of c, a and s stay as they are in Text. Every point keeps its x and moves 0.3 of the way to its height in the next lighter master, which thins the horizontals.
 - **Mono** fits Sans to a 1280-unit cell, holds the stems, stretches the arms of f, t, r and J into the cell, and draws the box-drawing block from Unicode names.
 - **Thin** keeps a floor: where squaring would thin a stroke below 0.8 of Inter's, the curve is eased back.
 
@@ -100,7 +100,7 @@ Version 0.1 is a generated draft. Next come hand corrections (a flat-topped t, a
 
 ## Credits
 
-Katagami starts from [Inter](https://github.com/rsms/inter) by Rasmus Andersson, and its merged scripts and CJK companions come from [Noto](https://github.com/notofonts), both under the SIL Open Font License. Camber (Eduardo Manso, Emtype Foundry), Berkeley Mono (U.S. Graphics), PP Mori (Pangram Pangram) and NewsSerif (Henning Skibbe, Character Type) were measured as references for proportion, curve shape, the mono cell and the serifs; Katagami contains none of their outlines.
+Katagami starts from [Inter](https://github.com/rsms/inter) by Rasmus Andersson, and its merged scripts and CJK companions come from [Noto](https://github.com/notofonts), both under the SIL Open Font License. Camber (Eduardo Manso, Emtype Foundry), Berkeley Mono (U.S. Graphics), PP Mori (Pangram Pangram) and NewsSerif (Henning Skibbe, Character Type) were measured as references for proportion, curve shape, the mono cell and the serifs, and the serif shapes follow the design notes of Signifier (Kris Sowersby, Klim Type Foundry). Katagami contains none of their outlines.
 
 The name comes from katagami (型紙, "pattern paper"), the Japanese paper stencils cut to dye patterns on cloth.
 

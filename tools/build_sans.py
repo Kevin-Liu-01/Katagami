@@ -747,35 +747,12 @@ def find_arm_ends(font, g, sw: float) -> list[tuple]:
     return out
 
 
-def find_level_cuts(font, g) -> list[tuple]:
-    """The level terminal cuts level_terminals leaves on c, s, a, C, S and G: a
-    horizontal line between two curves, off the metric lines. Returns
-    (contour, i, j, way) per cut; way is -1 for a cut with the ink above it (an
-    upper terminal, whose beak hangs down) and 1 for one with the ink below."""
-    out = []
-    for ci, c in enumerate(g.contours):
-        pts = c.points
-        n = len(pts)
-        for i in range(n):
-            j = (i + 1) % n
-            a, q = pts[i], pts[j]
-            if a.type != "curve" or q.type != "line" or pts[(j + 1) % n].type is not None:
-                continue
-            if abs(a.y - q.y) > 0.5 or a.smooth or q.smooth:
-                continue
-            out.append((ci, i, j, -1 if q.x > a.x else 1))
-    return out
-
-
-# The letters whose level terminals take a beak, and which terminals: "upper"
-# hangs a beak from the top terminal only, "both" from both.
-BEAKS = {"c": "upper", "a": "upper", "s": "both", "C": "upper", "G": "upper", "S": "both"}
 ARMS = set("EFLTZzΓΕΖΤГЕТ")
 
 
 def plan_serifs(fonts) -> dict:
     """Where Katagami Serif's serifs go, found on Regular before any of them is cut:
-    stem ends, the free ends of arms and the terminals that take a beak."""
+    stem ends and the free ends of arms."""
     ref = fonts["Regular"]
     sw = stem(ref)
     letters = {g.name for g in ref if g.unicodes and unicodedata.category(chr(g.unicodes[0]))[0] == "L"}
@@ -788,9 +765,8 @@ def plan_serifs(fonts) -> dict:
         ch = char.get(base(g), "")
         ends = find_stem_ends(ref, g, sw, letters)
         arms = find_arm_ends(ref, g, sw) if ch in ARMS else []
-        cuts = [c for c in find_level_cuts(ref, g) if ch in BEAKS and (BEAKS[ch] == "both" or c[3] == -1)]
-        if ends or arms or cuts:
-            plan[name] = (ends, arms, cuts)
+        if ends or arms:
+            plan[name] = (ends, arms)
     return plan
 
 
@@ -821,8 +797,11 @@ def add_contrast(fonts, amounts: dict) -> None:
                 comp.transformation = (xx, xy, yx, yy, dx, dy + amount * (y - dy))
 
 
-SERIF_TIP = 0.3  # the flat end of a serif, as a share of its thickness
-SPUR_TIP = 0.2  # the flat end of a spur or beak, as a share of its base
+SERIF_TIP = 0.3  # the flat end of a head serif, as a share of its thickness
+# A serif's bracket: how far it runs along the serif, as a share of the serif's
+# reach, and how far it climbs the stroke, as a share of the serif's thickness.
+BRACKET = (0.4, 0.5)
+ARM_WIDTH = 0.4  # an arm's serif, in stems
 
 
 def _contour(nodes) -> Contour:
@@ -845,67 +824,63 @@ def _side_x(side, y: float) -> float:
     return x0 + u * (x1 - x0)
 
 
-def _serif_nodes(y, s, left, right, ol, orr, tl, tr, has_l, has_r):
-    """A serif on the stroke end at height y, growing into the stroke in the
-    direction s (1 for a foot, -1 for a top). Each side that has one runs flat
-    along the line to its tip, ends in a short flat cut, and curves back into
-    the stroke's side, level at the tip and along the side where it meets it.
-    has_l and has_r come from the plan, so every master gets the same points
-    even where a counter leaves a side no reach."""
-    nodes = []
-    if has_l:
-        e = SERIF_TIP * tl
-        tip = left[0][0] - ol
-        nodes.append((tip, y, True))
-    else:
-        nodes.append((left[0][0], y, True))
+def _bracket(side, y: float, s: int, t: float, tip: float, way: int) -> list:
+    """One side of a rectangular serif, from its square end to the stroke: the
+    end at `tip`, the flat back at y + s * t, and a bracket that leaves the back
+    level and meets the stroke's side along it. way is 1 for a serif right of
+    the stroke and -1 for one left of it."""
+    back = y + s * t
+    sx = _side_x(side, back)
+    run = max(0.0, BRACKET[0] * way * (tip - sx))
+    top = back + s * BRACKET[1] * t
+    return [(tip, y, True), (tip, back, True), (sx + way * run, back, True), (sx + way * 0.45 * run, back, False),
+            (_side_x(side, back + 0.55 * (top - back)), back + 0.55 * (top - back), False), (_side_x(side, top), top, True)]
+
+
+def _serif_nodes(y, s, left, right, ol, orr, t, has_l, has_r):
+    """A rectangular serif on the stroke end at height y, growing into the
+    stroke in the direction s (1 for a foot, -1 for a top). Each side that has
+    one runs out along the line, ends square at its full thickness t, and comes
+    back flat to a short bracket into the stroke's side. has_l and has_r come
+    from the plan, so every master gets the same points even where a counter
+    leaves a side no reach."""
     if has_r:
-        e = SERIF_TIP * tr
-        tip = right[0][0] + orr
-        mid = y + s * (e + 0.45 * (tr - e))
-        nodes += [(tip, y, True), (tip, y + s * e, True),
-                  (tip - 0.5 * (tip - _side_x(right, y + s * e)), y + s * e, False),
-                  (_side_x(right, mid), mid, False), (_side_x(right, y + s * tr), y + s * tr, True)]
+        nodes = _bracket(right, y, s, t, right[0][0] + orr, 1)
     else:
-        nodes += [(right[0][0], y, True), (_side_x(right, y + s * tr), y + s * tr, True)]
+        nodes = [(right[0][0], y, True), (_side_x(right, y + s * t), y + s * t, True)]
     if has_l:
-        e = SERIF_TIP * tl
-        tip = left[0][0] - ol
-        mid = y + s * (e + 0.45 * (tl - e))
-        nodes += [(_side_x(left, y + s * tl), y + s * tl, True), (_side_x(left, mid), mid, False),
-                  (tip + 0.5 * (_side_x(left, y + s * e) - tip), y + s * e, False), (tip, y + s * e, True)]
+        nodes = _bracket(left, y, s, t, left[0][0] - ol, -1)[::-1] + nodes
     else:
-        nodes.append((_side_x(left, y + s * tl), y + s * tl, True))
+        nodes = [(_side_x(left, y + s * t), y + s * t, True), (left[0][0], y, True)] + nodes
     # a top is a foot mirrored, which turns the contour the other way
     return nodes if s > 0 else nodes[::-1]
 
 
-def _spur_nodes(xe, lo, hi, side, way, w, length):
-    """A spur at the free end xe of a bar from lo to hi: a straight outer edge
-    flush with the end, a short flat tip `length` past the bar, and an inner
-    edge that curves from the tip back to the bar `w` in from the end. It hangs
-    below the bar when way is -1 and stands above it when way is 1."""
-    f = SPUR_TIP * w
-    nodes = [(xe - f, lo - length, True), (xe, lo - length, True), (xe, hi, True), (xe - w, hi, True),
-             (xe - w, lo, True), (xe - w + 0.55 * (w - f), lo, False), (xe - f, lo - 0.45 * length, False)]
+def _arm_nodes(xe, lo, hi, side, way, w, length):
+    """A rectangular serif at the free end xe of a bar from lo to hi: an outer
+    edge flush with the end, a square end `length` past the bar, `w` wide, and a
+    straight inner edge that brackets into the bar. It hangs below the bar when
+    way is -1 and stands above it when way is 1."""
+    rise, run = BRACKET[0] * length, BRACKET[1] * w
+    nodes = [(xe - w, lo - length, True), (xe, lo - length, True), (xe, hi, True), (xe - w - run, hi, True),
+             (xe - w - run, lo, True), (xe - w - 0.45 * run, lo, False), (xe - w, lo - 0.55 * rise, False), (xe - w, lo - rise, True)]
     nodes = [(xe + side * (x - xe), y if way < 0 else lo + hi - y, on) for x, y, on in nodes]
     # mirrored once, the contour turns the other way
     return nodes if (side > 0) == (way < 0) else nodes[::-1]
 
 
 def cut_serifs(fonts, plan: dict, reach: float, depth: float, head_drop: float, beak: float) -> None:
-    """Cut bracketed wedge serifs onto the ends plan_serifs found.
+    """Cut rectangular serifs onto the ends plan_serifs found.
 
-    A serif runs flat along its line, as thick as `depth` of the master's H
-    crossbar where it meets the stroke, out `reach` of the stroke's width at
-    Regular, where it ends in a short flat cut; a curve leaves that end level
-    and meets the stroke's own side, so a diagonal gets a serif that follows it.
-    Toward Thin and Black the reach scales with the stem to the power 0.15. The
-    head of a lowercase stem is cut on a slant: its tip drops `head_drop` stems
-    below the line and the stem's top left corner moves down onto the cut. Arms
-    and the terminals in BEAKS take a spur `beak` stems long at their outer end.
-    Every serif is its own contour, added in the same order to every master, so
-    the masters stay compatible.
+    A serif runs out along its line `reach` of the stroke's width at Regular,
+    ends square, `depth` of the master's H crossbar thick, and comes back flat
+    to a short bracket into the stroke's own side, so a diagonal's serif meets
+    the diagonal. Toward Thin and Black the reach scales with the stem to the
+    power 0.15. The head of a lowercase stem is a triangle: its tip drops
+    `head_drop` stems below the line and the stem's top left corner moves down
+    onto the cut. The free end of an arm takes a vertical serif `beak` stems
+    long. Every serif is its own contour, added in the same order to every
+    master, so the masters stay compatible.
     """
     sw_ref = stem(fonts["Regular"])
     def crossbar(font) -> float:
@@ -918,7 +893,7 @@ def cut_serifs(fonts, plan: dict, reach: float, depth: float, head_drop: float, 
         t = depth * crossbar(f)
         before = snapshot(f)
         widened = {}
-        for name, (ends, arms, cuts) in plan.items():
+        for name, (ends, arms) in plan.items():
             g = f[name]
             ink = g.getBounds(f)
             spans = []
@@ -950,8 +925,6 @@ def cut_serifs(fonts, plan: dict, reach: float, depth: float, head_drop: float, 
                         s2[4] = min(s2[4], max(0, room))
             shapes = []
             for x0, x1, y, top, ol, orr, head, corner, o, lside, rside, has_l, has_r in spans:
-                # a serif cut short to keep white in a counter keeps its angle
-                tl, tr = (t if not side else t * min(1, side / o) for side in (ol, orr))
                 if head:
                     d = head_drop * sw
                     yq = y - d * (x1 - x0) / (ol + x1 - x0)
@@ -962,20 +935,12 @@ def cut_serifs(fonts, plan: dict, reach: float, depth: float, head_drop: float, 
                                    (tip, bottom, True), (tip + 0.5 * (x0 - tip), bottom, False),
                                    (_side_x(lside, low + 0.55 * (bottom - low)), low + 0.55 * (bottom - low), False)])
                 else:
-                    shapes.append(_serif_nodes(y, -1 if top else 1, lside, rside, ol, orr, tl, tr, has_l, has_r))
+                    shapes.append(_serif_nodes(y, -1 if top else 1, lside, rside, ol, orr, t, has_l, has_r))
             length = beak * sw_ref * k
             for ci, i, j, side, way in arms:
                 pts = g.contours[ci].points
                 lo, hi = sorted((pts[i].y, pts[j].y))
-                shapes.append(_spur_nodes(pts[i].x, lo, hi, side, way, 0.8 * sw, length))
-            cx = (ink.xMin + ink.xMax) / 2
-            for ci, i, j, way in cuts:
-                pts = g.contours[ci].points
-                a, q = pts[i], pts[j]
-                o, n = (a, q) if abs(a.x - cx) > abs(q.x - cx) else (q, a)
-                # the cut is the bar here, with a little of the stroke behind it
-                lo, hi = (o.y, o.y + 6) if way < 0 else (o.y - 6, o.y)
-                shapes.append(_spur_nodes(o.x, lo, hi, 1 if o.x > n.x else -1, way, 0.55 * abs(n.x - o.x), length))
+                shapes.append(_arm_nodes(pts[i].x, lo, hi, side, way, ARM_WIDTH * sw, length))
             for nodes in shapes:
                 g.appendContour(_contour(nodes))
             # the serifs overlap their strokes; the flag tells rasterizers to fill the union

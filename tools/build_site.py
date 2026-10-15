@@ -350,7 +350,10 @@ def write_faces(faces: list[list]) -> None:
 
 def site_facts() -> dict:
     """Numbers the header and footer print, read from the built data and the repository."""
-    facts = {"characters": 0, "glyphs": 0, "features": 0, "people": "", "commit": "", "date": time.strftime("%Y-%m-%d")}
+    facts = {"characters": 0, "glyphs": 0, "features": 0, "people": "", "commit": "", "date": time.strftime("%Y-%m-%d"), "zip": ""}
+    zip_path = SITE / "download" / "Katagami-0.1.zip"
+    if zip_path.exists():
+        facts["zip"] = f"{zip_path.stat().st_size / 1048576:.1f} MB"  # the unit the download page uses
     data_js = SITE / "data.js"
     if data_js.exists():
         text = data_js.read_text()
@@ -395,21 +398,49 @@ def nav_html(here: str, facts: dict) -> str:
 
 
 def footer_html(facts: dict) -> str:
-    """The footer every page shares."""
-    members = "".join(f'<a href="/#{k}">{FAMILY[k]}</a>' for k in ("sans", "round", "text", "serif", "mono"))
+    """The footer every page shares: how to use the fonts, the page index, the
+    name as a live specimen, and the build, the author and the theme."""
+    weights = {"mono": "100 to 700"}
+    members = "".join(f'<a href="{MEMBER_PATHS[k]}" style="font-family:\'{FAMILY[k]}\'">{FAMILY[k]}<small>{weights.get(k, "100 to 900")}</small></a>'
+                      for k in ("sans", "round", "text", "serif", "mono"))
+    hints = {"/glyphs": f"{facts['characters']:,} characters", "/features": f"{facts['features']} features",
+             "/map": f"{facts['people']}% of people" if facts["people"] else "", "/convert": "Any site, set in Katagami"}
+    explore = "".join(f'<a href="{h}">{t}<small>{hints[h]}</small></a>' for h, t in
+                      (("/glyphs", "Glyphs"), ("/features", "Features"), ("/map", "Map"), ("/convert", "Font-ify")))
     commit = f'<a href="{REPO}/commit/{facts["commit"]}">{facts["commit"]}</a>' if facts["commit"] else ""
+    css = f"{SITE_URL}/fonts/katagami.css"
+    seg = "".join(f'<button type="button" data-k="{i}" aria-pressed="{str(k == "sans").lower()}">{FAMILY[k].split()[1]}</button>'
+                  for i, k in enumerate(("sans", "round", "text", "serif", "mono")))
     return f"""<footer class="site">
   <div class="wrap">
-    <div class="f-grid">
-      <div class="f-lede">
-        <p>Katagami is a free type family in five members, Sans, Round, Text, Serif and Mono, under the SIL Open Font License 1.1. You can use it, change it and ship it in any product.</p>
-        <p class="f-meta"><span>v0.1</span><span>{facts["glyphs"]:,} glyphs</span><span>built {facts["date"]}</span>{commit}</p>
+    <section class="f-use" aria-label="Use Katagami">
+      <div class="f-say">
+        <h2>Use Katagami anywhere</h2>
+        <p>The SIL Open Font License 1.1 lets you use, change and ship the fonts in any product, paid or free.</p>
       </div>
-      <nav class="f-col" aria-label="Members"><h3>Members</h3>{members}</nav>
-      <nav class="f-col" aria-label="Explore"><h3>Explore</h3><a href="/glyphs">Glyphs</a><a href="/features">Features</a><a href="/map">Map</a><a href="/convert">Font-ify</a></nav>
+      <div class="f-acts">
+        <a class="f-dl" href="/download">{TRAY}<span>Download v0.1</span><small>{facts["zip"]}</small></a>
+        <div class="f-css"><code>&lt;link rel="stylesheet" href="{css}"&gt;</code><button type="button" data-copy='<link rel="stylesheet" href="{css}">'>Copy</button></div>
+      </div>
+    </section>
+    <div class="f-grid">
+      <nav class="f-col f-members" aria-label="Members"><h3>Members</h3>{members}</nav>
+      <nav class="f-col f-hinted" aria-label="Explore"><h3>Explore</h3>{explore}</nav>
       <nav class="f-col" aria-label="Project"><h3>Project</h3><a href="/about">About</a><a href="/faq">FAQ</a><a href="/download">Download</a><a href="/library">Library</a><a href="{REPO}">GitHub</a><a href="{REPO}/blob/main/OFL.txt">License</a></nav>
+      <div class="f-col f-build"><h3>This build</h3><p>Version 0.1</p><p>{facts["glyphs"]:,} glyphs</p><p>Built {facts["date"]}</p>{commit}</div>
     </div>
-    <div class="f-word" aria-hidden="true"><b>Katagami</b><span></span></div>
+    <div class="f-type">
+      <div class="f-controls">
+        <div class="seg" role="group" aria-label="Member">{seg}</div>
+        <label class="f-weight">Weight <input type="range" min="100" max="900" step="1" value="800"><output>800</output></label>
+      </div>
+      <div class="f-word" aria-hidden="true"><b>Katagami</b></div>
+    </div>
+    <div class="f-bar">
+      <p>Made by <a href="https://kevinliu.studio">Kevin Liu</a></p>
+      <div class="seg f-theme" role="group" aria-label="Theme"><button type="button" data-theme-set="auto">Auto</button><button type="button" data-theme-set="light">Light</button><button type="button" data-theme-set="dark">Dark</button></div>
+      <button type="button" class="f-top">Back to top</button>
+    </div>
   </div>
 </footer>"""
 
@@ -484,6 +515,8 @@ def head_html(meta: dict, stamps: dict) -> str:
     return "".join([
         '<meta charset="utf-8">\n',
         '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n',
+        # the theme the footer's switch saved, set before the first paint
+        '<script>try{var t=localStorage.getItem("katagami-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>\n',
         f"<title>{esc(meta['title'])}</title>\n",
         f'<meta name="description" content="{esc(meta["description"])}">\n',
         f'<link rel="canonical" href="{url}">\n',
