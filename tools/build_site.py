@@ -386,7 +386,7 @@ def nav_html(here: str, facts: dict) -> str:
     links = "".join(f'<a href="{h}"{cur(h)}>{t}</a>' for h, t in LINKS)
     hints = {"/glyphs": f"{facts['characters']:,} characters", "/features": f"{facts['features']} features",
              "/map": f"{facts['people']}% of people" if facts["people"] else "", "/about": "Why I made it", "/faq": "",
-             "/convert": "Any site, set in Katagami", "/download": "v0.1, OFL"}
+             "/convert": "Any site in Katagami", "/download": "v0.1 under the OFL"}
     sheet = "".join(f'<a href="{h}"{cur(h)}>{t}<span>{hints.get(h, "")}</span></a>'
                     for h, t in [*LINKS, ("/convert", "Font-ify"), ("/download", "Download")])
     keys = ("sans", "round", "text", "serif", "mono")
@@ -423,7 +423,7 @@ def footer_html(facts: dict) -> str:
     members = "".join(f'<a href="{MEMBER_PATHS[k]}" style="font-family:\'{FAMILY[k]}\'">{FAMILY[k]}<small>{weights.get(k, "100 to 900")}</small></a>'
                       for k in ("sans", "round", "text", "serif", "mono"))
     hints = {"/glyphs": f"{facts['characters']:,} characters", "/features": f"{facts['features']} features",
-             "/map": f"{facts['people']}% of people" if facts["people"] else "", "/convert": "Any site, set in Katagami"}
+             "/map": f"{facts['people']}% of people" if facts["people"] else "", "/convert": "Any site in Katagami"}
     explore = "".join(f'<a href="{h}">{t}<small>{hints[h]}</small></a>' for h, t in
                       (("/glyphs", "Glyphs"), ("/features", "Features"), ("/map", "Map"), ("/convert", "Font-ify")))
     commit = f'<a href="{REPO}/commit/{facts["commit"]}">{facts["commit"]}</a>' if facts["commit"] else ""
@@ -434,7 +434,7 @@ def footer_html(facts: dict) -> str:
   <div class="wrap">
     <section class="f-use" aria-label="Use Katagami">
       <div class="f-say">
-        <h2>Use Katagami anywhere</h2>
+        <h2>Katagami is free for any project</h2>
         <p>The SIL Open Font License 1.1 lets you use, change and ship the fonts in any product, paid or free.</p>
       </div>
       <div class="f-acts">
@@ -468,28 +468,28 @@ SITE_URL = "https://katagami.kevinliu.studio"
 # each served page: (title, description, Open Graph image, schema.org page type)
 PAGE_META = {
     "index.html": ("Katagami: a free variable type family in five members",
-                   "Katagami is a free, open-source type family in five members: Sans, Round, Text, Serif and Mono. Variable from 100 to 900, it sets 22 scripts and Chinese, Japanese and Korean, under the SIL Open Font License.",
+                   "Katagami is a free, open-source type family with five members: Sans, Round, Text, Serif and Mono. Each member is a variable font with weights from 100 to 900, and the family sets 22 scripts plus Chinese, Japanese and Korean.",
                    "home", "WebPage"),
     "glyphs.html": ("Katagami glyphs: every character in five fonts",
                     "Search every character in Katagami Sans, Round, Text, Serif and Mono by character, Unicode name or code point, and see each glyph on its metric lines.",
                     "glyphs", "CollectionPage"),
     "features.html": ("Katagami OpenType features: figures, small capitals and alternates",
-                      "Every OpenType feature in Katagami shown off and on: tabular figures, fractions, small capitals, character variants, stylistic sets and code ligatures, with the CSS to turn each one on.",
+                      "This page shows every OpenType feature in Katagami off and on, from tabular figures and fractions to small capitals, stylistic sets and code ligatures. Each feature comes with the CSS that turns it on.",
                       "features", "WebPage"),
     "map.html": ("Where Katagami writes: a world map of languages in letters",
-                 "A world map drawn in letters: each land cell is a letter from the language spoken there, set in Katagami. Katagami sets the main language of places where 99.9 percent of people live.",
+                 "The map draws the world in letters. Each land cell shows a letter of the language spoken there in Katagami, which sets the main language of places where 99.9 percent of people live.",
                  "map", "WebPage"),
     "convert.html": ("Font-ify: see any website in Katagami",
                      "Type an address and see the page with every font swapped for Katagami, side by side with the original. The rewrite runs in your browser.",
                      "convert", "WebPage"),
-    "about.html": ("About Katagami: one type family cut like a stencil",
-                   "Why Katagami was made, where its name comes from, how katagami paper stencils are cut, and the credits for the type family.",
+    "about.html": ("About Katagami",
+                   "This page explains why Katagami was made, where its name comes from and how katagami paper stencils are cut. It also lists the credits.",
                    "about", "AboutPage"),
     "faq.html": ("Katagami FAQ: license, web use, languages and features",
-                 "Answers about Katagami: commercial use under the SIL Open Font License, which member to use, web fonts, OpenType features, languages and how the fonts are made.",
+                 "These answers cover commercial use under the SIL Open Font License, which member to use, web fonts, OpenType features, languages and how the fonts are made.",
                  "faq", "FAQPage"),
     "download.html": ("Download Katagami: free variable fonts under the OFL",
-                      "Download Katagami 0.1: five variable TrueType fonts and four CJK companions, with install steps for macOS, Windows and Linux and a stylesheet for the web.",
+                      "Katagami 0.1 has five variable TrueType fonts and four CJK companions. The page has install steps for macOS, Windows and Linux and a stylesheet for the web.",
                       "download", "WebPage"),
 }
 MEMBER_PATHS = {"sans": "/katagami-sans", "round": "/katagami-round", "text": "/katagami-text", "serif": "/katagami-serif", "mono": "/katagami-mono"}
