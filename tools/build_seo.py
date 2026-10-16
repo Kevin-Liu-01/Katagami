@@ -495,6 +495,75 @@ def guide_pages(F: dict, C: dict, M: dict, T: dict) -> None:
          [("Library", "/library"), ("Learn", "/library#learn"), ("Katagami stencils", "/learn/katagami-stencils")], image="learn", group="Learn")
 
 
+
+# ---------- agents ----------
+
+# the same prompt the machine view of the site offers (site.js PROMPT)
+AGENT_PROMPT = (f"Set this project's fonts to Katagami. Read {SITE_URL}/llms.txt first. Link {SITE_URL}/fonts/katagami.css and use "
+                '"Katagami Sans" for interface text, "Katagami Serif" for long reading and "Katagami Mono" for code, each with a system fallback. '
+                "Leave code ligatures off. Change nothing else.")
+# the characters agent interfaces print for state, checked against Katagami Mono when the pages are written
+STATUS_GLYPHS = "⏺⎿✓✗✔✘●○◉◆▶▸›…⏵⏸⏹⚠✕★☆✻✢✳✶✽•→←↑↓"
+
+
+def agent_pages(F: dict) -> None:
+    """Two explainers for agents and the people who set them up: agent-native
+    fonts, and the fonts coding agents print in. Katagami Mono's coverage is read
+    from the built font."""
+    cmap = TTFont(FONTS["mono"], lazy=True).getBestCmap()
+    def covered(lo: int, hi: int) -> str:
+        return f"{sum(1 for u in range(lo, hi + 1) if u in cmap)} of {hi - lo + 1}"
+    rows = [[name, f"U+{lo:04X} to U+{hi:04X}", use, covered(lo, hi)] for name, lo, hi, use in (
+        ("Box drawing", 0x2500, 0x257F, "panels, borders and tables"), ("Block elements", 0x2580, 0x259F, "progress bars and meters"),
+        ("Braille patterns", 0x2800, 0x28FF, "spinners such as ⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"), ("Arrows", 0x2190, 0x21FF, "steps, moves and keys"))]
+    have = " ".join(ch for ch in STATUS_GLYPHS if ord(ch) in cmap)
+    lacks = " ".join(ch for ch in STATUS_GLYPHS if ord(ch) not in cmap)
+    page("/learn/fonts-in-coding-agents", "Fonts in coding agents: what a terminal font has to draw",
+         "Coding agents print their interface as text in a terminal grid. The characters they use, what the font has to get right, and how to set Katagami Mono in each terminal.",
+         "Fonts in coding agents", "A coding agent that runs in a terminal prints in the terminal's font. The agent picks the characters, and the terminal picks how they look.",
+         [("h2", "What an agent prints"),
+          ("p", "An agent's interface is text in a grid of cells. Around the code and the prose it draws panels and tables with box-drawing characters, progress with block elements, spinners with Braille patterns, and steps and results with arrows, check marks and bullets."),
+          ("code", "text", "╭─ plan ─────────────────────╮\n│ ⠋ reading 12 files         │\n│ ✓ tests pass  ▕████▌       │\n│ → edit src/fonts.ts        │\n╰────────────────────────────╯"),
+          ("p", "When the font lacks one of these characters, the terminal draws it from another font, usually at another width, and the columns after it stop lining up."),
+          ("h2", "What the font needs"),
+          ("list", ["One cell width for every glyph, symbols included.",
+                    "0 and O, and 1, l and I drawn apart, because agents print hashes, IDs, tokens and paths that people copy.",
+                    "Ligatures off unless asked for, so `->` and `!=` show the characters the agent wrote and a diff shows what changed.",
+                    "The box-drawing, block and Braille ranges in the font itself.",
+                    "Weights that hold up when an interface bolds a heading or dims a note."]),
+          ("h2", "Katagami Mono"),
+          ("table", ["Range", "Code points", "Used for", "Katagami Mono"], rows),
+          ("p", f"Status characters it draws: {have}." + (f" Not yet: {lacks}." if lacks else "")),
+          ("p", "Its cell is 1,280 units, 0.625 em. Code ligatures for `->`, `=>`, `!=`, `==` and `>=` stay off until you turn on `dlig`, and each character in a ligature keeps its own cell."),
+          ("h2", "Set it in your terminal"),
+          ("table", ["Terminal", "Setting"], [["Ghostty", '`font-family = "Katagami Mono"` in `~/.config/ghostty/config`'], ["Kitty", "`font_family Katagami Mono` in `kitty.conf`"],
+                                              ["WezTerm", '`config.font = wezterm.font("Katagami Mono")`'], ["Alacritty", '`family = "Katagami Mono"` under `[font.normal]`'],
+                                              ["iTerm2", "Settings, Profiles, Text, Font"], ["Windows Terminal", '`"font": { "face": "Katagami Mono" }` in a profile'],
+                                              ["VS Code and Cursor", '`"terminal.integrated.fontFamily": "Katagami Mono"`'], ["Zed", '`"terminal": { "font_family": "Katagami Mono" }`']]),
+          ("p", "Install `KatagamiMono[wght].ttf` from the [download page](/download) first, then restart the terminal."),
+          ("p", "[Agent-native fonts](/learn/agent-native-fonts) covers what an agent needs to find and install a font on its own.")],
+         [("Library", "/library"), ("Learn", "/library#learn"), ("Fonts in coding agents", "/learn/fonts-in-coding-agents")], image="learn", group="Learn")
+    page("/learn/agent-native-fonts", "Agent-native fonts: a font an agent can find, read and install",
+         "What an agent needs from a font: text it can read, an index, a license it can act on, stable addresses and facts as data. How Katagami provides each, with a prompt for a coding agent.",
+         "Agent-native fonts", "An agent-native font is one an agent can find, read about, install and set up without a person in between. Katagami publishes what an agent needs as plain text at stable addresses.",
+         [("h2", "What an agent needs"),
+          ("table", ["Need", "On this site"], [
+              ["Text it can read", "Every page has a Markdown twin at the same address with `.md`, and a request that sends `Accept: text/markdown` gets it."],
+              ["An index", "[/llms.txt](/llms.txt) lists every page, and [/llms-full.txt](/llms-full.txt) holds the whole site in one file."],
+              ["A license it can act on", "The SIL Open Font License 1.1 allows bundling the fonts into a repository, an app or a site, so an agent can add them to a project."],
+              ["Stable addresses", "The stylesheet is at `/fonts/katagami.css` with open CORS, and [/download/files.json](/download/files.json) lists every font file with its size."],
+              ["Facts as data", "Each member's metrics, characters and OpenType features are in `/data.js`."],
+              ["Lines that stay put", "Every member has the same line metrics, an ascender of 1984 and a descender of -494 on a 2048 em, so swapping one member for another does not move the lines."]]),
+          ("h2", "A prompt for a coding agent"),
+          ("code", "text", AGENT_PROMPT),
+          ("p", "The prompt names the stylesheet and the families and limits the change, so the diff stays small enough to review."),
+          ("h2", "The machine view"),
+          ("p", "The Machine switch at the top of every page shows that page as an agent reads it: its Markdown twin, set in Katagami Mono."),
+          ("h2", "In the terminal"),
+          ("p", "Agents that run in a terminal print in the terminal's font. [Fonts in coding agents](/learn/fonts-in-coding-agents) covers what that font has to draw and how to set it.")],
+         [("Library", "/library"), ("Learn", "/library#learn"), ("Agent-native fonts", "/learn/agent-native-fonts")], image="learn", group="Learn")
+
+
 # ---------- scripts and languages ----------
 
 SCRIPT_INDEX: list[dict] = []
@@ -755,6 +824,7 @@ def main() -> None:
     compare_pages(F)
     member_pages(F, C, M)
     guide_pages(F, C, M, T)
+    agent_pages(F)
     library_page()
     write()
 

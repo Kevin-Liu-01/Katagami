@@ -77,6 +77,7 @@ REPO = "https://github.com/Kevin-Liu-01/Katagami"
 MARK = ('<svg class="mark" viewBox="0 0 100 100" aria-hidden="true"><path d="M0 0 L31 0 L31 100 L0 100 Z"/>'
         '<path d="M38 0 L100 0 L100 30 L38 50 Z"/><path d="M38 50 L100 70 L100 100 L38 100 Z"/></svg>')
 SPARKLES = ('<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15.98 1.804a1 1 0 0 0-1.96 0l-.24 1.192a1 1 0 0 1-.784.785l-1.192.238a1 1 0 0 0 0 1.962l1.192.238a1 1 0 0 1 .785.785l.238 1.192a1 1 0 0 0 1.962 0l.238-1.192a1 1 0 0 1 .785-.785l1.192-.238a1 1 0 0 0 0-1.962l-1.192-.238a1 1 0 0 1-.785-.785l-.238-1.192ZM6.949 5.684a1 1 0 0 0-1.898 0l-.683 2.051a1 1 0 0 1-.633.633l-2.051.683a1 1 0 0 0 0 1.898l2.051.684a1 1 0 0 1 .633.632l.683 2.051a1 1 0 0 0 1.898 0l.683-2.051a1 1 0 0 1 .633-.633l2.051-.683a1 1 0 0 0 0-1.898l-2.051-.683a1 1 0 0 1-.633-.633L6.95 5.684ZM13.949 13.684a1 1 0 0 0-1.898 0l-.184.551a1 1 0 0 1-.632.633l-.551.183a1 1 0 0 0 0 1.898l.551.183a1 1 0 0 1 .633.633l.183.551a1 1 0 0 0 1.898 0l.184-.551a1 1 0 0 1 .632-.633l.551-.183a1 1 0 0 0 0-1.898l-.551-.184a1 1 0 0 1-.633-.632l-.183-.551Z"/></svg>')
+SEARCH = ('<svg viewBox="0 0 20 20" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z"/></svg>')
 TRAY = ('<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z"/>'
         '<path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z"/></svg>')
 GITHUB = ('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>')
@@ -388,17 +389,27 @@ def nav_html(here: str, facts: dict) -> str:
              "/convert": "Any site, set in Katagami", "/download": "v0.1, OFL"}
     sheet = "".join(f'<a href="{h}"{cur(h)}>{t}<span>{hints.get(h, "")}</span></a>'
                     for h, t in [*LINKS, ("/convert", "Font-ify"), ("/download", "Download")])
+    keys = ("sans", "round", "text", "serif", "mono")
+    picks = "".join(f'<button type="button" data-member="{k}" aria-pressed="{str(k == "sans").lower()}"><b style="font-family:\'{FAMILY[k]}\'">{FAMILY[k]}</b><span>{"100 to 700" if k == "mono" else "100 to 900"}</span></button>' for k in keys)
+    menu_members = "".join(f'<button type="button" data-member="{k}" aria-pressed="{str(k == "sans").lower()}">{FAMILY[k].split()[1]}</button>' for k in keys)
+    modes = '<button type="button" data-mode="human" aria-pressed="true">Human</button><button type="button" data-mode="machine" aria-pressed="false">Machine</button>'
     return f"""<header class="top">
   <div class="wrap">
     <a class="brand" href="/">{MARK}<b>Katagami</b><span>v0.1</span></a>
     <nav aria-label="Pages">
       <div class="links">{links}</div>
+      <button type="button" class="find" data-cmdk aria-label="Search pages, glyphs and actions" aria-keyshortcuts="Meta+K Control+K">{SEARCH}<span>Search</span><kbd>⌘K</kbd></button>
+      <details class="pick">
+        <summary aria-label="Set the whole site in a member"><b>Aa</b><span>Sans</span></summary>
+        <div class="pick-menu" role="group" aria-label="Member">{picks}</div>
+      </details>
+      <div class="seg mode" role="group" aria-label="View">{modes}</div>
       <a class="pill fontify" href="/convert"{cur("/convert")}>{SPARKLES}<span>Font-ify</span></a>
       <a class="pill dl" href="/download"{cur("/download")}>{TRAY}<span>Download</span></a>
       <a class="gh" href="{REPO}" target="_blank" rel="noopener" aria-label="Katagami on GitHub">{GITHUB}</a>
       <details class="menu">
         <summary aria-label="Menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="shut" d="M4 7h16M4 12h16M4 17h16"/><path class="open" d="M6 6l12 12M18 6L6 18"/></svg></summary>
-        <div class="sheet-menu">{sheet}<a href="{REPO}" target="_blank" rel="noopener">GitHub<span>Source and issues</span></a></div>
+        <div class="sheet-menu"><div class="menu-tools"><div class="seg mode" role="group" aria-label="View">{modes}</div><div class="seg menu-members" role="group" aria-label="Member">{menu_members}</div></div>{sheet}<a href="{REPO}" target="_blank" rel="noopener">GitHub<span>Source and issues</span></a></div>
       </details>
     </nav>
   </div>
@@ -524,7 +535,7 @@ def head_html(meta: dict, stamps: dict) -> str:
         '<meta charset="utf-8">\n',
         '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n',
         # the theme the footer's switch saved, set before the first paint
-        '<script>try{var t=localStorage.getItem("katagami-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>\n',
+        '<script>try{var t=localStorage.getItem("katagami-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;if(localStorage.getItem("katagami-mode")==="machine")document.documentElement.dataset.mode="machine"}catch(e){}</script>\n',
         f"<title>{esc(meta['title'])}</title>\n",
         f'<meta name="description" content="{esc(meta["description"])}">\n',
         f'<link rel="canonical" href="{url}">\n',
