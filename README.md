@@ -1,42 +1,94 @@
-# Katagami
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo/katagami-logo-dark.svg">
+    <img src="docs/logo/katagami-logo.svg" alt="Katagami" height="52">
+  </picture>
+</p>
 
-<img src="docs/logo/katagami-logo.svg" alt="Katagami" height="64">
+<p align="center">
+  A free type family in five members that share one skeleton.<br>
+  <a href="https://katagami.kevinliu.studio">Site</a> ·
+  <a href="https://katagami.kevinliu.studio/glyphs">Glyphs</a> ·
+  <a href="https://katagami.kevinliu.studio/features">Features</a> ·
+  <a href="https://katagami.kevinliu.studio/map">Map</a> ·
+  <a href="https://katagami.kevinliu.studio/convert">Font-ify</a> ·
+  <a href="https://katagami.kevinliu.studio/download">Download</a>
+</p>
 
-Katagami is a free, open-source type family in five members that share one skeleton: a sans for interfaces, a rounded sans, a reading face, a serif and a monospace. Every member is a variable font with a weight axis, and the proportional members set 22 scripts plus Chinese, Japanese and Korean.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/readme/hero-dark.png">
+  <img src="docs/readme/hero-light.png" alt="The word Katagami in Katagami Sans, drawn as outlines with every Bézier point and handle on its ascender, cap height, x-height, baseline and descender">
+</picture>
 
-**Site:** [katagami.kevinliu.studio](https://katagami.kevinliu.studio) has the [glyphs](https://katagami.kevinliu.studio/glyphs), the [features](https://katagami.kevinliu.studio/features), a [map of where it writes](https://katagami.kevinliu.studio/map), [Font-ify](https://katagami.kevinliu.studio/convert) for seeing any site in Katagami, and the [download](https://katagami.kevinliu.studio/download).
+Katagami is a free, open-source type family: Katagami Sans for interfaces, Katagami Round for softer interfaces, Katagami Text for long reading, Katagami Serif, and Katagami Mono for code. Each member is one variable font with a weight axis. The four proportional members set Latin, Greek, Cyrillic and 19 more scripts, and four companion fonts add Chinese, Japanese and Korean. The fonts are released under the SIL Open Font License 1.1, so you can use them in any product, change them and ship them.
 
-![Katagami Sans, Round, Text, Serif and Mono, each set in its own face](docs/members.png)
+The drawing above is the first thing on [the website](https://katagami.kevinliu.studio). A slider there morphs the word through all five members, and every point can be dragged.
 
 ## Members
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/readme/members-dark.png">
+  <img src="docs/readme/members-light.png" alt="One line in each member: Katagami Sans, Round, Text, Serif and Mono">
+</picture>
+
 | Member | For | Weights | Glyphs | File |
 |---|---|---|---|---|
-| **Katagami Sans** | Interfaces and display: squared curves, level cuts, square punctuation | 100 to 900 | 11,242 | `fonts/sans/KatagamiSans[wght].ttf` |
-| **Katagami Round** | Softer interfaces: bowls squared less, every vertex rounded at 0.22 stems | 100 to 900 | 11,243 | `fonts/round/KatagamiRound[wght].ttf` |
-| **Katagami Text** | Long reading: x-height 0.71 of the caps, set 4 percent smaller, tighter, a closer c and a straight l | 100 to 900 | 11,243 | `fonts/text/KatagamiText[wght].ttf` |
+| **Katagami Sans** | Interfaces and display: squared bowls, level cuts and square punctuation | 100 to 900 | 11,242 | `fonts/sans/KatagamiSans[wght].ttf` |
+| **Katagami Round** | Softer interfaces: bowls squared less, every corner rounded at 0.22 stems | 100 to 900 | 11,243 | `fonts/round/KatagamiRound[wght].ttf` |
+| **Katagami Text** | Long reading: an x-height 0.71 of the caps, set 4 percent smaller and tighter | 100 to 900 | 11,243 | `fonts/text/KatagamiText[wght].ttf` |
 | **Katagami Serif** | Reading with serifs: Text with rectangular serifs, triangular heads and a light contrast | 100 to 900 | 11,243 | `fonts/serif/KatagamiSerif[wght].ttf` |
-| **Katagami Mono** | Code and terminals: a 0.625 em cell, every confusable character distinct, opt-in code ligatures | 100 to 700 | 3,507 | `fonts/mono/KatagamiMono[wght].ttf` |
+| **Katagami Mono** | Code and terminals: a 0.625 em cell, every confusable character drawn apart, opt-in code ligatures | 100 to 700 | 3,507 | `fonts/mono/KatagamiMono[wght].ttf` |
 
-Every weight from Thin to Black (Mono Thin to Bold) is a named instance, so apps that do not handle variable fonts list them as styles.
+## Weights
 
-All five share the same decisions: level cuts on c, e, s, a and g, a g whose tail mirrors its bowl, y and t tails that end in vertical cuts, and an f whose crossbar reaches the same distance past its stem at every weight.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/readme/weights-dark.png">
+  <img src="docs/readme/weights-light.png" alt="The word Rag in nine weights, from 100 to 900, in each of the five members">
+</picture>
 
-## Coverage
+Every weight from Thin (100) to Black (900) is a named instance, and Mono runs from Thin to Bold (700). Apps that do not handle variable fonts list each weight as its own style.
+
+## Details
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/readme/details-dark.png">
+  <img src="docs/readme/details-light.png" alt="Six details: level cuts on c, e, s, a and g; the f at three weights; the g's tail; Katagami Serif's serifs; Katagami Round's corners; Katagami Mono's 0, O, 1, l and I">
+</picture>
+
+The five members share these decisions. [SPEC.md](SPEC.md) records each one with its numbers.
+
+## Scripts and languages
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/readme/scripts-dark.png">
+  <img src="docs/readme/scripts-light.png" alt="The name of a language in each of the 22 scripts and the four CJK companions, set in Katagami Sans">
+</picture>
 
 - **Drawn:** Latin, Greek and Cyrillic.
-- **Merged:** 19 more scripts, from Devanagari, Bengali and Tamil to Arabic, Hebrew, Thai, Ethiopic and Khmer, merged from Noto Sans and scaled to Katagami's x-height. Each proportional member maps 6,580 characters in all.
-- **Companions:** Katagami CJK SC (7,768 characters), TC (14,154), JP (7,359) and KR (12,422), from Noto Sans SC, TC, JP and KR, which the web stylesheet assigns to Sans, Round, Text and Serif.
+- **Merged:** Arabic, Hebrew, Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala, Thai, Lao, Myanmar, Khmer, Georgian, Armenian and Ethiopic, merged from Noto Sans and scaled to Katagami's x-height. Each proportional member maps 6,580 characters.
+- **Companions:** Katagami CJK SC (7,768 characters), TC (14,154), JP (7,359) and KR (12,422), built from Noto Sans SC, TC, JP and KR. The web stylesheet assigns them to Sans, Round, Text and Serif.
 
-Together they set the main language of places where 99.9 percent of people live. The [map](https://katagami.kevinliu.studio/map) shows where, and lists the 11 languages that are not covered yet.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/readme/map-dark.png">
+  <img src="docs/readme/map-light.png" alt="A world map in which every land cell is a letter of the language spoken there, set in Katagami">
+</picture>
+
+Together they set the main language of places where 99.9 percent of people live, and 223 of the 234 languages on the [map](https://katagami.kevinliu.studio/map) in full. The map draws each land cell as a letter of the language spoken there and lists the 11 languages Katagami does not cover yet.
 
 ## OpenType features
 
-Every feature Inter has works in every member, with labels in the font: tabular and proportional figures, fractions, superiors and inferiors, ordinals, the slashed zero, case-sensitive forms, 16 character variants and 8 stylistic sets. Katagami adds small capitals (`smcp`, `c2sc`) and, in Katagami Mono, code ligatures for `->`, `=>`, `!=`, `==` and `>=` that keep every character in its own cell (`dlig`). The [features page](https://katagami.kevinliu.studio/features) shows each one off and on.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/readme/features-dark.png">
+  <img src="docs/readme/features-light.png" alt="Eight OpenType features, each off and on: fractions, small capitals, slashed zero, single-story a, disambiguation, circled characters, scientific inferiors and code ligatures">
+</picture>
+
+Every member carries Inter's features with their labels: tabular and proportional figures, fractions, superiors and inferiors, ordinals, the slashed zero, case-sensitive forms, 16 character variants and 8 stylistic sets. Katagami adds small capitals (`smcp`, `c2sc`). Katagami Mono adds code ligatures for `->`, `=>`, `!=`, `==` and `>=` (`dlig`), and each character in a ligature keeps its own cell. The [features page](https://katagami.kevinliu.studio/features) shows every feature off and on, with the CSS to turn it on.
 
 ## Use it
 
-Download the fonts from the [download page](https://katagami.kevinliu.studio/download) or from `fonts/` here. On the web, link the stylesheet; each script is its own file, so a page loads only what it shows.
+**On a computer.** Download the zip from the [download page](https://katagami.kevinliu.studio/download), or take the files from `fonts/` here, and install the `.ttf` files the way your system installs fonts. The download page has the steps for macOS, Windows and Linux.
+
+**On the web.** Link the stylesheet, then name the family in your CSS. Each member is one family split by script, so a page downloads only the scripts it shows, and the files are served with `Access-Control-Allow-Origin: *`.
 
 ```html
 <link rel="stylesheet" href="https://katagami.kevinliu.studio/fonts/katagami.css">
@@ -44,63 +96,90 @@ Download the fonts from the [download page](https://katagami.kevinliu.studio/dow
 
 ```css
 body { font-family: "Katagami Sans", system-ui, sans-serif; }
+article { font-family: "Katagami Serif", ui-serif, serif; }
 code { font-family: "Katagami Mono", ui-monospace, monospace; }
+.price { font-feature-settings: "tnum"; }
 ```
+
+**On any page you are reading.** [Font-ify](https://katagami.kevinliu.studio/convert) shows any website set in Katagami next to the original, and its bookmarklet does the same on the page you are on.
 
 ## How it is made
 
-Katagami is generated. The build scripts in `tools/` take Inter's sources, apply each member's transforms to its Thin, Regular and Black masters with the points kept compatible, and compile variable fonts with fontmake. Nothing is drawn by hand yet. [SPEC.md](SPEC.md) records every decision and its numbers:
+Katagami is generated. Nothing is drawn by hand yet: build scripts take Inter's sources, apply each member's transforms to its Thin, Regular and Black masters with every point kept compatible, and compile variable fonts with fontmake.
 
-- **Sans** squares bowls toward their corners (upper 0.36, lower 0.32), condenses round letters so o matches n, cuts terminals level and makes punctuation square.
-- **Round** squares about two thirds as far as Sans and rounds every sharp vertex at 0.22 stems.
+```mermaid
+flowchart LR
+  inter["Inter sources<br/>Thin, Regular, Black"] --> sans["build_sans.py<br/>each member's transforms"]
+  sans --> fontmake["fontmake<br/>variable TrueType"]
+  fontmake --> world["build_world.py<br/>19 scripts merged"]
+  noto["Noto Sans<br/>19 scripts"] --> world
+  sans -- "Sans masters" --> mono["build_mono.py<br/>1280-unit cell"]
+  mono --> fontmake2["fontmake"]
+  notocjk["Noto Sans SC, TC, JP, KR"] --> cjk["build_cjk.py"]
+  world --> fonts[("fonts/")]
+  fontmake2 --> fonts
+  cjk --> fonts
+  fonts --> site["build_site.py, build_map.py,<br/>build_seo.py, og.mjs"]
+  site --> web["katagami.kevinliu.studio"]
+```
+
+- **Sans** squares bowls toward their corners (0.36 for capitals, 0.32 for lowercase), condenses round letters so o matches n, cuts terminals level and makes punctuation square.
+- **Round** squares about two thirds as far as Sans and rounds every sharp corner at 0.22 stems.
 - **Text** lowers the x-height to 0.71 of the caps, sets everything 4 percent smaller, tightens spacing, widens round letters and capitals, and condenses letters to 0.97 of their ink width with stems kept.
-- **Serif** is Text with rectangular serifs cut onto its stroke ends: each runs 0.65 of a stem past the stroke, ends square at 0.6 of the H crossbar's thickness, and meets the stroke's own side in a short bracket. Lowercase heads are triangular, the arms of E, F, L, T and Z take short vertical serifs, and the level cuts of c, a and s stay as they are in Text. Every point keeps its x and moves 0.3 of the way to its height in the next lighter master, which thins the horizontals.
-- **Mono** fits Sans to a 1280-unit cell, holds the stems, stretches the arms of f, t, r and J into the cell, and draws the box-drawing block from Unicode names.
+- **Serif** is Text with rectangular serifs cut onto its stroke ends, after the design notes of Signifier. Each serif runs 0.65 of a stem past the stroke, ends square at 0.6 of the H crossbar's thickness, and meets the stroke's own side in a short bracket. Lowercase heads are triangular, the arms of E, F, L, T and Z take short vertical serifs, and every point moves 0.3 of the way to its height in the next lighter master, which thins the horizontals.
+- **Mono** fits Sans to a 1280-unit cell, keeps the stems, stretches the arms of f, t, r and J into the cell, and draws the box-drawing block from Unicode names.
 - **Thin** keeps a floor: where squaring would thin a stroke below 0.8 of Inter's, the curve is eased back.
 
 ## Building
 
-Requires Python 3.11 or later and git.
+Python 3.11 or later and git are required.
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 tools/build.sh          # every member and the CJK companions
-tools/build.sh sans     # one member: sans, round, text, serif, mono or cjk
+tools/build.sh serif    # one member: sans, round, text, serif, mono or cjk
 ```
 
-The build fetches Inter's sources at a pinned commit into `vendor/inter` and Noto Sans into `vendor/noto`. Each proportional member takes 15 to 40 minutes on a busy machine, most of it in fontmake and the script merge, and Mono takes a few minutes after Sans.
+The build fetches Inter's sources at a pinned commit into `vendor/inter` and Noto Sans into `vendor/noto`. A proportional member takes 15 to 40 minutes on a busy machine, most of it in fontmake and the script merge. Mono takes a few minutes after Sans.
 
-After a build, `tools/build_site.py` writes the website's web fonts, data, download zip and pages into a checkout of [Katagami-Website](https://github.com/Kevin-Liu-01/Katagami-Website) next to this repo (or at `KATAGAMI_SITE`), and `tools/build_map.py` writes the map data. `tools/build_site.py --pages` rewraps the pages only. Then `tools/build_seo.py` writes the library pages and the files for search and answer engines, and `node tools/og.mjs` draws the social cards.
+After a build, these commands write the website into a checkout of [Katagami-Website](https://github.com/Kevin-Liu-01/Katagami-Website) next to this repository, or at `KATAGAMI_SITE`:
 
-## Layout
+| Command | What it writes |
+|---|---|
+| `.venv/bin/python tools/build_site.py` | the web fonts, `data.js`, the download zip and every page (`--pages` rewraps the pages only) |
+| `.venv/bin/python tools/build_map.py` | the map's grids and coverage figures |
+| `.venv/bin/python tools/build_seo.py` | the library pages, their Markdown twins, `llms.txt`, the sitemap and `robots.txt` |
+| `node tools/og.mjs` | the 1200 by 630 social cards |
+| `node tools/readme.mjs` | the images in this README and the website's, drawn from the site served at `BASE`; `python3 tools/readme_shrink.py` then reduces them |
+
+## Repository
 
 | Path | Contents |
 |---|---|
 | `fonts/` | the built fonts: one variable TTF per member and the four CJK companions |
 | `tools/kerf_build/profiles.py` | the parameters of Sans, Round, Text and Serif |
-| `tools/build_sans.py` | Inter's masters to a proportional member's masters, including Serif's serifs and contrast |
+| `tools/build_sans.py` | Inter's masters to a proportional member's, including Serif's serifs and contrast |
 | `tools/build_mono.py` | Katagami Sans's masters to Katagami Mono's |
-| `tools/build_world.py` | merges the 19 scripts into a proportional member and restores its metrics and feature labels |
+| `tools/build_world.py` | merges the 19 scripts into a member and restores its metrics and feature labels |
 | `tools/build_cjk.py` | the Katagami CJK SC, TC, JP and KR companions |
 | `tools/kerf_build/outline.py` | point-preserving transforms: squaring, emboldening, stroke measurement, rounded corners |
 | `tools/kerf_build/fontops.py` | glyph swaps, resizing, spacing, composite re-seating, naming |
 | `tools/kerf_build/boxdraw.py` | box drawing and block elements |
-| `tools/build_site.py` | the website's fonts, data, downloads and pages |
-| `tools/build_map.py` | the map data and coverage figures |
-| `tools/build_seo.py` | the library pages kept out of the navigation (a page per member, comparisons, guides, explainers, a page per script and per language), their Markdown twins, `llms.txt`, `llms-full.txt`, the sitemap and `robots.txt` |
-| `tools/seo/typefaces.json` | facts about the typefaces the comparisons name, each with its sources |
-| `tools/og.mjs` | the 1200 by 630 social cards, set in Katagami |
+| `tools/build_site.py`, `tools/build_map.py`, `tools/build_seo.py` | the website: fonts, data, pages, map, library pages and the files for search and answer engines |
+| `tools/seo/typefaces.json` | facts about the typefaces the comparison pages name, each with its sources |
+| `tools/og.mjs`, `tools/readme.mjs` | the social cards and the README images |
 | `tools/logo.py` | the mark: a square cut three times, whose leftover piece is the K |
+| `docs/` | the logo and the README images |
 | `SPEC.md` | every design decision and its numbers |
 
 ## Status
 
-Version 0.1 is a generated draft. Next come hand corrections (a flat-topped t, a straight Q tail, a squarer 2), italics, hinting with fontbakery checks, and Greek and Cyrillic in the mono.
+Version 0.1 is a generated draft. Next come hand corrections (a flat-topped t, a straight Q tail, a squarer 2), italics, hinting checked with fontbakery, and Greek and Cyrillic in the mono.
 
 ## Credits
 
-Katagami starts from [Inter](https://github.com/rsms/inter) by Rasmus Andersson, and its merged scripts and CJK companions come from [Noto](https://github.com/notofonts), both under the SIL Open Font License. Camber (Eduardo Manso, Emtype Foundry), Berkeley Mono (U.S. Graphics), PP Mori (Pangram Pangram) and NewsSerif (Henning Skibbe, Character Type) were measured as references for proportion, curve shape, the mono cell and the serifs, and the serif shapes follow the design notes of Signifier (Kris Sowersby, Klim Type Foundry). Katagami contains none of their outlines.
+Katagami starts from [Inter](https://github.com/rsms/inter) by Rasmus Andersson. Its merged scripts and CJK companions come from [Noto](https://github.com/notofonts), and both are under the SIL Open Font License. Camber (Eduardo Manso, Emtype Foundry), Berkeley Mono (U.S. Graphics), PP Mori (Pangram Pangram) and NewsSerif (Henning Skibbe, Character Type) were measured as references for proportion, curve shape, the mono cell and the first serifs. The serif shapes follow the design notes of Signifier (Kris Sowersby, Klim Type Foundry). Katagami contains none of their outlines.
 
 The name comes from katagami (型紙, "pattern paper"), the Japanese paper stencils cut to dye patterns on cloth.
 

@@ -141,9 +141,17 @@ def chars(font: TTFont) -> list[list]:
 
 
 def metrics(font: TTFont) -> dict:
-    os2, hhea = font["OS/2"], font["hhea"]
+    os2, hhea, glyf, cmap = font["OS/2"], font["hhea"], font["glyf"], font.getBestCmap()
+    def reach(ch: str, top: bool, default: int) -> int:
+        """How high l reaches or how low p does at the default weight: the drawn ascender and descender."""
+        if ord(ch) not in cmap:
+            return default
+        g = glyf[cmap[ord(ch)]]
+        g.recalcBounds(glyf)
+        return g.yMax if top else g.yMin
     return {"upm": font["head"].unitsPerEm, "ascender": hhea.ascent, "descender": hhea.descent,
             "capHeight": os2.sCapHeight, "xHeight": os2.sxHeight,
+            "ascenderLine": reach("l", True, hhea.ascent), "descenderLine": reach("p", False, hhea.descent),
             "glyphs": len(font.getGlyphOrder()), "characters": len(font.getBestCmap()),
             "weights": [a.minValue for a in font["fvar"].axes] + [a.maxValue for a in font["fvar"].axes]}
 

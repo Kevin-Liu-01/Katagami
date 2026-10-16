@@ -10,6 +10,7 @@ offcut. What remains reads as a K. Writes:
     docs/logo/katagami-mark.svg        the mark, ink
     docs/logo/katagami-mark-cut.svg    the mark with the cut lines in red, as on the specimen
     docs/logo/katagami-logo.svg        the mark and the word Katagami set in Katagami Sans SemiBold
+    docs/logo/katagami-logo-dark.svg   the same in the dark theme's ink, for dark backgrounds
     Katagami-Website/favicon.svg       the mark, following the browser's light or dark theme
     Katagami-Website/favicon.png, apple-touch-icon.png   the mark on the paper colour
 """
@@ -28,6 +29,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SITE = Path(os.environ.get("KATAGAMI_SITE", ROOT.parent / "Katagami-Website"))
 OUT = ROOT / "docs" / "logo"
 INK, PAPER, CUT = "#111214", "#f1f2ef", "#d92d20"
+DARK_INK = "#ebece9"  # the website's ink in its dark theme
 INK_DARK = "#ebece9"
 
 # The square is 100 units. The vertical kerf is 7 wide, left of centre; the two
@@ -120,6 +122,7 @@ def main() -> None:
     (OUT / "katagami-mark.svg").write_text(mark_svg())
     (OUT / "katagami-mark-cut.svg").write_text(mark_svg(cut_lines=True))
     (OUT / "katagami-logo.svg").write_text(logo_svg())
+    (OUT / "katagami-logo-dark.svg").write_text(logo_svg().replace(f'fill="{INK}"', f'fill="{DARK_INK}"', 1))
     (SITE / "favicon.svg").write_text(mark_svg(theme=True, size=32))
     png(SITE / "favicon.png", 64, 0.08)
     png(SITE / "apple-touch-icon.png", 180, 0.2)
