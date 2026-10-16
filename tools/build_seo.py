@@ -136,12 +136,20 @@ def render(blocks: list) -> tuple[str, str]:
             h.append(f"<p>{inline(b[1])}</p>")
             m.append(md_link(b[1]))
         elif kind == "list":
-            h.append("<ul>" + "".join(f"<li>{inline(i)}</li>" for i in b[1]) + "</ul>")
+            # ("list", items, "cols") lays a long list out in columns
+            cls = ' class="lib-cols"' if len(b) > 2 and b[2] == "cols" else ""
+            h.append(f"<ul{cls}>" + "".join(f"<li>{inline(i)}</li>" for i in b[1]) + "</ul>")
             m.append("\n".join(f"- {md_link(i)}" for i in b[1]))
         elif kind == "table":
             head, rows = b[1], b[2]
-            h.append('<div class="t-scroll"><table><thead><tr>' + "".join(f"<th>{inline(c)}</th>" for c in head) + "</tr></thead><tbody>"
-                     + "".join("<tr>" + "".join(f"<td>{inline(str(c))}</td>" for c in r) + "</tr>" for r in rows) + "</tbody></table></div>")
+            table = lambda rs: ("<table><thead><tr>" + "".join(f"<th>{inline(c)}</th>" for c in head) + "</tr></thead><tbody>"
+                                + "".join("<tr>" + "".join(f"<td>{inline(str(c))}</td>" for c in r) + "</tr>" for r in rs) + "</tbody></table>")
+            # ("table", head, rows, n) sets a narrow table in up to n side-by-side columns, six rows or more each
+            if len(b) > 3:
+                per = max(6, -(-len(rows) // b[3]))
+                h.append('<div class="lib-split">' + "".join(table(rows[i:i + per]) for i in range(0, len(rows), per)) + "</div>")
+            else:
+                h.append(f'<div class="t-scroll">{table(rows)}</div>')
             m.append("| " + " | ".join(head) + " |\n|" + "---|" * len(head) + "\n"
                      + "\n".join("| " + " | ".join(md_link(str(c)).replace("|", "\\|") for c in r) + " |" for r in rows))
         elif kind == "code":
@@ -231,7 +239,6 @@ def member_pages(F: dict, C: dict, M: dict) -> None:
                 ["Scripts drawn or merged", str(len(f["scripts"]))], ["OpenType features you can switch", str(len(f["features"]))],
                 ["File", f"`{f['file']}`, {mb(f['size'])}"], ["License", "SIL Open Font License 1.1"], ["Version", "0.1"]]
         feats = [f"`{t}` {lab or FEATURE_NAMES.get(t, '')}".rstrip() for t, lab in f["features"].items()]
-        scripts = ", ".join(f"{n} ({c:,})" for n, c in f["scripts"].items())
         cjk = "" if key == "mono" else " Chinese, Japanese and Korean come from the four Katagami CJK companions, which the web stylesheet assigns to this member."
         compare = [c for c in COMPARE_PAGES if key in c["members"]]
         blocks = [
@@ -239,12 +246,13 @@ def member_pages(F: dict, C: dict, M: dict) -> None:
             ("specimen", FACE[key], "The quick brown fox jumps over the lazy dog.", 30, 400),
             ("h2", "At a glance"), ("table", ["", f["family"]], rows),
             ("h2", "Design"), ("list", design),
-            ("h2", "Coverage"), ("p", f"{f['family']} has {f['characters']:,} characters across these scripts: {scripts}.{cjk} See [where it writes](/map) and [every glyph](/glyphs)."),
+            ("h2", "Coverage"), ("p", f"{f['family']} has {f['characters']:,} characters and covers {len(f['scripts'])} scripts.{cjk} See [where it writes](/map) and [every glyph](/glyphs)."),
+            ("table", ["Script", "Characters"], [[n, f"{c:,}"] for n, c in f["scripts"].items()], 3),
             ("h2", "Use it on the web"), ("p", "Link the stylesheet, then set the family. Each script is its own file, so a page loads only what it shows."),
             ("code", "html", WEB_SNIPPET), ("code", "css", f"body {{ font-family: \"{f['family']}\", {'ui-monospace, monospace' if key == 'mono' else 'system-ui, sans-serif'}; }}"),
             ("p", f"Or [download the fonts](/download): `{f['file']}` is one variable file with every weight."),
             ("h2", "OpenType features"), ("p", "Turn each on with `font-feature-settings`. The [features page](/features) shows each one off and on."),
-            ("list", feats),
+            ("list", feats, "cols"),
             ("h2", "Questions"),
             ("faq", [(f"Is {f['family']} free for commercial use?", f"Yes. {f['family']} is released under the SIL Open Font License 1.1, which allows use in any product, commercial or not, and changes. Keep the license with the files when you share them."),
                      (f"Which weights does {f['family']} have?", f"Every weight from {w0} to {w1} on one variable axis, with named styles from {f['instances'][0]} to {f['instances'][-1]}."),
@@ -681,37 +689,49 @@ def library_page() -> None:
 
 # ---------- output ----------
 
-LIB_CSS = """/* The library pages: a head, then one reading column with an aside. */
+LIB_CSS = """/* The library pages: a head, then one reading column. Space follows the
+   site's scale: 96px between sections (56px on a phone), 32px between blocks
+   (24px), 16px from a heading to its content and between paragraphs. */
 .lib-crumbs { display: flex; flex-wrap: wrap; gap: 6px; font-size: 0.8125rem; color: var(--ink-2); margin-bottom: 18px; }
 .lib-crumbs a { color: var(--ink-2); text-decoration: none; }
 .lib-crumbs a:hover { color: var(--cut); }
 .lib-crumbs span + span::before { content: "/"; margin-right: 6px; color: var(--rule); }
 .lib-head h1 { font-size: clamp(2.5rem, 6vw, 4.75rem); line-height: 0.98; letter-spacing: -0.035em; font-weight: 650; max-width: 18ch; }
-.lib-head p { margin-top: 18px; font-size: 1.1875rem; line-height: 1.5; color: var(--ink-2); max-width: 60ch; }
-.lib-body { display: grid; gap: 18px; padding-block: 8px 72px; max-width: 920px; }
-.lib-body h2 { font-size: var(--step-2); letter-spacing: -0.02em; margin-top: 28px; }
+.lib-head p { margin-top: 16px; font-size: 1.1875rem; line-height: 1.5; color: var(--ink-2); max-width: 60ch; }
+.lib-body { padding-block: 8px clamp(56px, 6.67vw, 96px); max-width: 920px; }
+.lib-body > * { margin-block: 0; }
+.lib-body > * + * { margin-top: clamp(24px, 2.22vw, 32px); }
+.lib-body > h2 { font-size: var(--step-2); letter-spacing: -0.02em; margin-top: clamp(56px, 6.67vw, 96px); }
+.lib-body > h2:first-child { margin-top: 0; }
+.lib-body > h2 + *, .lib-body > p + p, .lib-body > .specimen + .specimen, .lib-body > pre + pre { margin-top: 16px; }
 .lib-body p, .lib-body li { font-size: 1.0625rem; line-height: 1.6; max-width: 68ch; }
-.lib-body ul { margin: 0; padding-left: 1.2rem; display: grid; gap: 6px; }
+.lib-body ul { padding-left: 1.2rem; display: grid; gap: 8px; }
+.lib-body ul.lib-cols { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 32px; }
 .lib-body code { font-family: var(--mono); font-size: 0.875em; background: var(--panel); padding: 1px 5px; border-radius: 4px; }
-.lib-body .specimen { margin: 0; line-height: 1.15; letter-spacing: -0.01em; overflow-wrap: anywhere; max-width: none; }
+.lib-body .specimen { line-height: 1.15; letter-spacing: -0.01em; overflow-wrap: anywhere; max-width: none; }
 .t-scroll { overflow-x: auto; }
 .lib-body table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
 .lib-body th, .lib-body td { text-align: left; vertical-align: top; padding: 10px 16px 10px 0; }
 .lib-body th { font-weight: 500; font-size: 0.8125rem; color: var(--ink-2); }
 .lib-body tbody tr + tr td { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ink) 7%, transparent); }
 .lib-body td:first-child { color: var(--ink-2); }
-.lib-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 10px; }
-.lib-card { display: grid; gap: 6px; padding: 16px 18px; border-radius: 8px; background: var(--panel); text-decoration: none; color: var(--ink); }
+.lib-split { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 40px; align-items: start; }
+.lib-split th:last-child, .lib-split td:last-child { text-align: right; padding-right: 0; font-variant-numeric: tabular-nums; }
+.lib-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 16px; }
+.lib-card { display: grid; gap: 8px; align-content: start; padding: 18px 20px; border-radius: 8px; background: var(--panel); text-decoration: none; color: var(--ink); }
 .lib-card:hover { background: color-mix(in srgb, var(--ink) 8%, var(--panel)); color: var(--ink); }
 .lib-card b { font-weight: 600; }
 .lib-card span { font-size: 0.875rem; color: var(--ink-2); line-height: 1.45; }
-.lib-faq { display: grid; gap: 8px; }
-.lib-faq details { background: var(--panel); border-radius: 8px; padding: 14px 18px; }
+.lib-faq { display: grid; gap: 16px; }
+.lib-faq details { background: var(--panel); border-radius: 8px; padding: 16px 20px; }
 .lib-faq summary { font-weight: 600; cursor: pointer; }
 .lib-faq p { margin-top: 8px; color: var(--ink-2); }
 .lib-sources { font-size: 0.8125rem; color: var(--ink-2); }
-.lib-sources ul { margin-top: 6px; }
+.lib-sources ul { margin: 6px 0 0; }
 .lib-sources a { overflow-wrap: anywhere; }
+@media (max-width: 900px) { .lib-body ul.lib-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .lib-split { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; } }
+@media (max-width: 560px) { .lib-body ul.lib-cols { grid-template-columns: 1fr; } }
 """
 
 

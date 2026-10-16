@@ -147,11 +147,15 @@ U+2500 to U+259F are drawn by `tools/kerf_build/boxdraw.py`, not taken from Inte
 - Rounded corners use a radius of 0.42 cell and the same handle fraction (0.73) as the squared letters.
 - Shades are square dot grids at 25, 50 and 75 percent coverage.
 
+### Braille and agent symbols
+
+`tools/kerf_build/terminal.py` draws all 256 Braille patterns (U+2800 to U+28FF) as square dots the size of the period on a 2 by 4 grid spread evenly over the full line height, and the status symbols coding agents print in the terminal (⏺ ⎿ ✔ ✘ ✕ ◉ ▸ ⏵ ⏸ ⏹ ✢ ✳ ✶ ✻ ✽), each sized and weighted from its neighbours in every master.
+
 ## Coverage in v0.1
 
 | | Katagami Sans, Round, Text | Katagami Mono |
 |---|---|---|
-| Glyphs | about 11,240, of which about 3,340 are drawn by Katagami | about 3,500, all fitted to the cell |
+| Glyphs | about 11,240, of which about 3,340 are drawn by Katagami | about 3,780, all fitted to the cell |
 | Scripts | Latin, Greek and Cyrillic drawn; 19 more merged from Noto Sans; Chinese, Japanese and Korean through Katagami CJK | Latin, Greek, Cyrillic |
 | Features | Inter's full set plus small capitals | Inter's set without capital spacing or n:1 ligatures, plus small capitals and code ligatures |
 | People covered (map) | 99.9 percent, 223 of 234 languages | 44.4 percent, 172 of 234 |

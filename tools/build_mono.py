@@ -8,7 +8,8 @@ Katagami Sans -> Katagami Mono:
      f t r j J stretch their arms around a fixed stem, the rest is centred
   4. dotless i is redrawn with a flag and a foot slab; l and dotless j get a
      flag; zero gets a centre bar
-  5. box drawing and block elements are drawn on the cell grid
+  5. box drawing and block elements are drawn on the cell grid, and so are
+     Braille patterns and the status symbols terminal agents print
   6. composites re-seated; kerning dropped
   7. Katagami Sans's OpenType features (all of Inter's, plus small capitals) with
      capital spacing left out, and code ligatures as an opt-in dlig: each
@@ -35,6 +36,7 @@ from ufoLib2.objects import Contour, Glyph, Point
 
 sys.path.insert(0, str(Path(__file__).parent))
 from kerf_build.boxdraw import draw_box_glyphs  # noqa: E402
+from kerf_build.terminal import draw_terminal_glyphs  # noqa: E402
 from kerf_build.fontops import FILTERS_KEY, ROOT, assign_categories, composites_to_flatten, decompose, reflow_composites, set_names, snapshot, swap_glyph_outlines  # noqa: E402
 from kerf_build.outline import XMap, embolden_x  # noqa: E402
 from build_sans import relabel_features  # noqa: E402
@@ -491,6 +493,7 @@ def main() -> None:
         for g in f:
             g.width = 0 if g.name in zero_width else CELL
         draw_box_glyphs(f, CELL, stem, bar)
+        draw_terminal_glyphs(f, CELL, bar)
         code_ligatures(f)
         f.info.postscriptIsFixedPitch = True
         f.info.openTypeOS2Panose = [2, 11, 5, 9, 2, 2, 3, 2, 2, 4]

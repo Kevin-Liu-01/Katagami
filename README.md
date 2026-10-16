@@ -37,7 +37,7 @@ The drawing above is the first thing on [the website](https://katagami.kevinliu.
 | **Katagami Round** | Softer interfaces: bowls squared less, every corner rounded at 0.22 stems | 100 to 900 | 11,243 | `fonts/round/KatagamiRound[wght].ttf` |
 | **Katagami Text** | Long reading: an x-height 0.71 of the caps, set 4 percent smaller and tighter | 100 to 900 | 11,243 | `fonts/text/KatagamiText[wght].ttf` |
 | **Katagami Serif** | Reading with serifs: Text with rectangular serifs, triangular heads and a light contrast | 100 to 900 | 11,243 | `fonts/serif/KatagamiSerif[wght].ttf` |
-| **Katagami Mono** | Code and terminals: a 0.625 em cell, every confusable character drawn apart, opt-in code ligatures | 100 to 700 | 3,507 | `fonts/mono/KatagamiMono[wght].ttf` |
+| **Katagami Mono** | Code and terminals: a 0.625 em cell, every confusable character drawn apart, opt-in code ligatures | 100 to 700 | 3,778 | `fonts/mono/KatagamiMono[wght].ttf` |
 
 ## Weights
 
@@ -127,7 +127,7 @@ flowchart LR
 - **Round** squares about two thirds as far as Sans and rounds every sharp corner at 0.22 stems.
 - **Text** lowers the x-height to 0.71 of the caps, sets everything 4 percent smaller, tightens spacing, widens round letters and capitals, and condenses letters to 0.97 of their ink width with stems kept.
 - **Serif** is Text with rectangular serifs cut onto its stroke ends, after the design notes of Signifier. Each serif runs 0.65 of a stem past the stroke, ends square at 0.6 of the H crossbar's thickness, and meets the stroke's own side in a short bracket. Lowercase heads are triangular, the arms of E, F, L, T and Z take short vertical serifs, and every point moves 0.3 of the way to its height in the next lighter master, which thins the horizontals.
-- **Mono** fits Sans to a 1280-unit cell, keeps the stems, stretches the arms of f, t, r and J into the cell, and draws the box-drawing block from Unicode names.
+- **Mono** fits Sans to a 1280-unit cell, keeps the stems, stretches the arms of f, t, r and J into the cell, and draws the box-drawing block from Unicode names. It also draws all 256 Braille patterns and the status symbols coding agents print in the terminal, such as ⏺, ⎿, ✔ and ✻, so spinners and panels never fall back to another font. It also draws all 256 Braille patterns (U+2800 to U+28FF) and the status symbols coding agents print in the terminal, such as ⏺, ⎿, ✔ and ✻.
 - **Thin** keeps a floor: where squaring would thin a stroke below 0.8 of Inter's, the curve is eased back.
 
 ## Building
@@ -166,6 +166,7 @@ After a build, these commands write the website into a checkout of [Katagami-Web
 | `tools/kerf_build/outline.py` | point-preserving transforms: squaring, emboldening, stroke measurement, rounded corners |
 | `tools/kerf_build/fontops.py` | glyph swaps, resizing, spacing, composite re-seating, naming |
 | `tools/kerf_build/boxdraw.py` | box drawing and block elements |
+| `tools/kerf_build/terminal.py` | Braille patterns and the status symbols coding agents print |
 | `tools/build_site.py`, `tools/build_map.py`, `tools/build_seo.py` | the website: fonts, data, pages, map, library pages and the files for search and answer engines |
 | `tools/seo/typefaces.json` | facts about the typefaces the comparison pages name, each with its sources |
 | `tools/og.mjs`, `tools/readme.mjs` | the social cards and the README images |
