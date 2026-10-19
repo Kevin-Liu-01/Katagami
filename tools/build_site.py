@@ -576,6 +576,10 @@ def page_graph(meta: dict, facts: dict, crumbs: list | None = None, extra: list 
             "about": {"@id": f"{SITE_URL}/#katagami"}, "dateModified": facts["date"],
             "primaryImageOfPage": f"{SITE_URL}/og/{meta.get('image', 'home')}.png"}
     graph = [*base_graph(facts), page]
+    if meta["path"] == "/":
+        # the home page names the organization and its logo for search results
+        graph.append({"@type": "Organization", "@id": f"{SITE_URL}/#organization", "name": "Katagami", "url": f"{SITE_URL}/",
+                      "logo": f"{SITE_URL}/apple-touch-icon.png"})
     if crumbs:
         trail = [("Katagami", "/"), *crumbs]
         graph.append({"@type": "BreadcrumbList", "@id": f"{url}#crumbs", "itemListElement": [
