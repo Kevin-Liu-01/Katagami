@@ -8,19 +8,21 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SITE = process.env.KATAGAMI_SITE || path.resolve(ROOT, "../Katagami-Website");
+// a Next app serves the site's files from public/
+const PUB = fs.existsSync(path.join(SITE, "next.config.ts")) ? path.join(SITE, "public") : SITE;
 const PW = process.env.KATAGAMI_PLAYWRIGHT || "/Users/kevinliu/repos/Prototemplate/node_modules/playwright-core/index.mjs";
 const CHROME = process.env.CHROME || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const { chromium } = await import(PW);
 
 const cards = JSON.parse(fs.readFileSync(path.join(ROOT, "build/og.json"), "utf8"));
-const font = (file) => `url("file://${path.join(SITE, "fonts", file)}")`;
+const font = (file) => `url("file://${path.join(PUB, "fonts", file)}")`;
 const FACES = { sans: "KatagamiSans.woff2", round: "KatagamiRound.woff2", text: "KatagamiText.woff2", serif: "KatagamiSerif.woff2", mono: "KatagamiMono.woff2" };
 const faces = Object.entries(FACES).map(([k, f]) => `@font-face{font-family:"K-${k}";src:${font(f)};font-weight:100 900}`).join("\n");
 const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
 // blue for the pages about facts and coverage, red for the rest
 const BLUE = new Set(["map", "glyphs", "compare", "script", "language", "features"]);
 
-const out = path.join(SITE, "og");
+const out = path.join(PUB, "og");
 const tmp = path.join(ROOT, "build", "og-card.html");
 fs.mkdirSync(out, { recursive: true });
 const b = await chromium.launch({ executablePath: CHROME });

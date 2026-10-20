@@ -27,6 +27,7 @@ from fontTools.varLib.instancer import instantiateVariableFont
 
 ROOT = Path(__file__).resolve().parents[1]
 SITE = Path(os.environ.get("KATAGAMI_SITE", ROOT.parent / "Katagami-Website"))
+SITE = SITE / "public" if (SITE / "next.config.ts").exists() else SITE  # a Next app serves these from public/
 OUT = ROOT / "docs" / "logo"
 INK, PAPER, CUT = "#111214", "#f1f2ef", "#d92d20"
 DARK_INK = "#ebece9"  # the website's ink in its dark theme

@@ -23,7 +23,7 @@ from pathlib import Path
 from fontTools.ttLib import TTFont
 
 sys.path.insert(0, str(Path(__file__).parent))
-from build_site import (CJK, FAMILY, FONTS, MEMBER_PATHS, OPTIONAL, PAGE_META, REPO, SITE, SITE_URL,  # noqa: E402
+from build_site import (CJK, FAMILY, FONTS, MEMBER_PATHS, OPTIONAL, PAGE_META, PUBLIC, REPO, SITE, SITE_URL, emit,  # noqa: E402
                         asset_stamps, page_graph, site_facts, wrap)
 from build_world import SCRIPTS  # noqa: E402
 
@@ -763,7 +763,7 @@ LIB_CSS = """/* The library pages: a head, then one reading column. Space follow
 
 def write() -> None:
     facts, stamps = site_facts(), None
-    (SITE / "library.css").write_text(LIB_CSS)
+    (PUBLIC / "library.css").write_text(LIB_CSS)
     stamps = asset_stamps()
     urls = [(meta[0], "/" + target.removesuffix(".html").replace("index", "")) for target, meta in PAGE_META.items()]
     for p in PAGES:
@@ -782,11 +782,10 @@ def write() -> None:
         if faqs:
             extra.append({"@type": "FAQPage", "@id": f"{SITE_URL}{p['path']}#faq", "mainEntity": faqs})
         meta["graph"] = page_graph(meta, facts, p["crumbs"], extra)
-        out = SITE / (p["path"].lstrip("/") + ".html")
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(wrap(fragment, p["path"], meta, facts, stamps))
+        emit(p["path"], fragment, meta, facts, stamps)
         twin = f"# {p['h1']}\n\n{md_link(p['lede'])}\n\n{md}\n\n---\n\nSource: {SITE_URL}{p['path']}\n"
-        (SITE / (p["path"].lstrip("/") + ".md")).write_text(twin)
+        (PUBLIC / (p["path"].lstrip("/") + ".md")).parent.mkdir(parents=True, exist_ok=True)
+        (PUBLIC / (p["path"].lstrip("/") + ".md")).write_text(twin)
         p["md"] = twin
         urls.append((p["title"], p["path"]))
     write_twins_for_main(facts)
@@ -796,14 +795,14 @@ def write() -> None:
         prio = "1.0" if path == "/" else "0.8" if path.count("/") == 1 and not path.startswith(("/languages/", "/scripts/")) else "0.5"
         sitemap.append(f"  <url><loc>{SITE_URL}{path}</loc><lastmod>{TODAY}</lastmod><priority>{prio}</priority></url>")
     sitemap.append("</urlset>")
-    (SITE / "sitemap.xml").write_text("\n".join(sitemap) + "\n")
+    (PUBLIC / "sitemap.xml").write_text("\n".join(sitemap) + "\n")
     bots = ["GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-User", "Claude-SearchBot", "PerplexityBot", "Perplexity-User",
             "Google-Extended", "Applebot-Extended", "CCBot", "Amazonbot", "DuckAssistBot", "meta-externalagent", "MistralAI-User", "cohere-ai"]
-    (SITE / "robots.txt").write_text("# Katagami is free and open source. Search and answer engines may crawl every path except the relay.\n"
+    (PUBLIC / "robots.txt").write_text("# Katagami is free and open source. Search and answer engines may crawl every path except the relay.\n"
                                      "User-agent: *\nAllow: /\nDisallow: /api/\n\n"
                                      + "".join(f"User-agent: {b}\nAllow: /\nDisallow: /api/\n\n" for b in bots)
                                      + f"Sitemap: {SITE_URL}/sitemap.xml\n")
-    (SITE / "site.webmanifest").write_text(json.dumps({"name": "Katagami", "short_name": "Katagami", "start_url": "/", "display": "standalone",
+    (PUBLIC / "site.webmanifest").write_text(json.dumps({"name": "Katagami", "short_name": "Katagami", "start_url": "/", "display": "standalone",
                                                        "background_color": "#f1f2ef", "theme_color": "#f1f2ef",
                                                        "icons": [{"src": "/favicon.png", "sizes": "64x64", "type": "image/png"},
                                                                  {"src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png"},
@@ -842,7 +841,7 @@ def write_twins_for_main(facts: dict) -> None:
         "download": f"# Download Katagami\n\n{PAGE_META['download.html'][1]}\n\nThe zip with every font is at {SITE_URL}/download/Katagami-0.1.zip.\n\n" + "\n".join(f"- {F[k]['family']}: `{F[k]['file']}`, {mb(F[k]['size'])}" for k in MEMBERS) + f"\n\nOn the web, link the stylesheet.\n\n```html\n{WEB_SNIPPET}\n```\n",
     })
     for name, text in MAIN_TWINS.items():
-        (SITE / f"{name}.md").write_text(text + f"\n---\n\nSource: {SITE_URL}/{'' if name == 'index' else name}\n")
+        (PUBLIC / f"{name}.md").write_text(text + f"\n---\n\nSource: {SITE_URL}/{'' if name == 'index' else name}\n")
 
 
 def write_llms(facts: dict) -> None:
@@ -853,9 +852,9 @@ def write_llms(facts: dict) -> None:
     main = "## Main pages\n\n" + "\n".join(f"- [{m[0]}]({SITE_URL}/{'index' if t == 'index.html' else t.removesuffix('.html')}.md): {m[1]}" for t, m in PAGE_META.items()) + "\n"
     groups = [section(g, [p for p in PAGES if p["group"] == g]) for g in ("Members", "Compare", "Guides", "Learn", "Scripts")]
     tail = f"## Languages\n\n- [Languages in Katagami]({SITE_URL}/languages.md): The map has {sum(1 for p in PAGES if p['group'] == 'Languages')} languages, and each one has its own page.\n"
-    (SITE / "llms.txt").write_text(head + main + "\n" + "\n".join(groups) + "\n" + tail)
+    (PUBLIC / "llms.txt").write_text(head + main + "\n" + "\n".join(groups) + "\n" + tail)
     full = [head, *[t for t in MAIN_TWINS.values()], *[p["md"] for p in PAGES if p["group"] != "Languages"]]
-    (SITE / "llms-full.txt").write_text("\n\n".join(full))
+    (PUBLIC / "llms-full.txt").write_text("\n\n".join(full))
 
 
 FACTS: dict = {}
@@ -863,7 +862,7 @@ FACTS: dict = {}
 
 def main() -> None:
     F, C = member_facts(), companion_facts()
-    M = json.loads((SITE / "map" / "map.json").read_text())
+    M = json.loads((PUBLIC / "map" / "map.json").read_text())
     T = {t["name"]: t for t in json.loads(TYPEFACES.read_text())} if TYPEFACES.exists() else {}
     faq_html = (SITE / "faq-page.html").read_text()
     from build_site import faq_entities  # noqa: E402
