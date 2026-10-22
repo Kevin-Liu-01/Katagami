@@ -127,7 +127,7 @@ flowchart LR
 - **Round** squares about two thirds as far as Sans and rounds every sharp corner at 0.22 stems.
 - **Text** lowers the x-height to 0.71 of the caps, sets everything 4 percent smaller, tightens spacing, widens round letters and capitals, and condenses letters to 0.97 of their ink width with stems kept.
 - **Serif** is Text with rectangular serifs cut onto its stroke ends, after the design notes of Signifier. Each serif runs 0.65 of a stem past the stroke, ends square at 0.6 of the H crossbar's thickness, and meets the stroke's own side in a short bracket. Lowercase heads are triangular, the arms of E, F, L, T and Z take short vertical serifs, and every point moves 0.3 of the way to its height in the next lighter master, which thins the horizontals.
-- **Mono** fits Sans to a 1280-unit cell, keeps the stems, stretches the arms of f, t, r and J into the cell, and draws the box-drawing block from Unicode names. It also draws all 256 Braille patterns and the status symbols coding agents print in the terminal, such as ⏺, ⎿, ✔ and ✻, so spinners and panels never fall back to another font. It also draws all 256 Braille patterns (U+2800 to U+28FF) and the status symbols coding agents print in the terminal, such as ⏺, ⎿, ✔ and ✻.
+- **Mono** fits Sans to a 1280-unit cell, keeps the stems, stretches the arms of f, t, r and J into the cell, and draws the box-drawing block from Unicode names. It also draws all 256 Braille patterns, U+2800 to U+28FF, and the status symbols coding agents print in the terminal, such as ⏺, ⎿, ✔ and ✻, so spinners and panels never fall back to another font.
 - **Thin** keeps a floor: where squaring would thin a stroke below 0.8 of Inter's, the curve is eased back.
 
 ## Building
@@ -143,13 +143,13 @@ tools/build.sh serif    # one member: sans, round, text, serif, mono or cjk
 
 The build fetches Inter's sources at a pinned commit into `vendor/inter` and Noto Sans into `vendor/noto`. A proportional member takes 15 to 40 minutes on a busy machine, most of it in fontmake and the script merge. Mono takes a few minutes after Sans.
 
-After a build, these commands write the website into a checkout of [Katagami-Website](https://github.com/Kevin-Liu-01/Katagami-Website) next to this repository, or at `KATAGAMI_SITE`:
+After a build, these commands write the website into a checkout of [Katagami-Website](https://github.com/Kevin-Liu-01/Katagami-Website) next to this repository, or at `KATAGAMI_SITE`. The website is a Next.js app that renders the page records these commands write.
 
 | Command | What it writes |
 |---|---|
-| `.venv/bin/python tools/build_site.py` | the web fonts, `data.js`, the download zip and every page (`--pages` rewraps the pages only) |
+| `.venv/bin/python tools/build_site.py` | the web fonts, `data.js` and the download zip in `public/`, and a record in `content/pages/` for every page; `--pages` writes only the records |
 | `.venv/bin/python tools/build_map.py` | the map's grids and coverage figures |
-| `.venv/bin/python tools/build_seo.py` | the library pages, their Markdown twins, `llms.txt`, the sitemap and `robots.txt` |
+| `.venv/bin/python tools/build_seo.py` | the library page records, the Markdown twins, `llms.txt`, the sitemap and `robots.txt` |
 | `node tools/og.mjs` | the 1200 by 630 social cards |
 | `node tools/readme.mjs` | the images in this README and the website's, drawn from the site served at `BASE`; `python3 tools/readme_shrink.py` then reduces them |
 
