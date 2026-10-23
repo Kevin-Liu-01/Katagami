@@ -269,12 +269,18 @@ def assign_categories(font) -> None:
 
     The minimal Glyphs -> UFO conversion drops Glyphs' categories, and ufo2ft
     then guesses from anchors: Inter's j has a `_right` anchor and would
-    become a zero-advance mark. Marks are the zero-width glyphs that attach.
+    become a zero-advance mark. Marks are the zero-width glyphs that attach,
+    and the zero-width glyphs Unicode calls combining or enclosing marks.
     """
-    font.lib["public.openTypeCategories"] = {
-        g.name: "mark" if g.width == 0 and any(a.name.startswith("_") for a in g.anchors) else "base"
-        for g in font
-    }
+    import unicodedata
+
+    def mark(g) -> bool:
+        if g.width:
+            return False
+        # enclosing and combining marks without anchors (the Cyrillic U+0488 and U+0489) are marks too
+        return any(a.name.startswith("_") for a in g.anchors) or any(unicodedata.category(chr(u)) in ("Mn", "Me") for u in g.unicodes)
+
+    font.lib["public.openTypeCategories"] = {g.name: "mark" if mark(g) else "base" for g in font}
 
 
 def swap_glyph_outlines(font, a: str, b: str) -> None:
