@@ -172,7 +172,9 @@ def render(blocks: list) -> tuple[str, str]:
         elif kind == "specimen":
             face, text, size = b[1], b[2], b[3] if len(b) > 3 else 44
             weight = b[4] if len(b) > 4 else 400
-            h.append(f'<p class="specimen" dir="auto" style="font-family:{face};font-size:{size}px;font-weight:{weight}">{html.escape(text)}</p>')
+            # a strip stays one line tall whatever font draws it, so a script's file arriving late moves nothing
+            cls = "specimen strip" if len(b) > 5 and b[5] == "strip" else "specimen"
+            h.append(f'<p class="{cls}" dir="auto" style="font-family:{face};font-size:{size}px;font-weight:{weight}">{html.escape(text)}</p>')
             m.append(f"> {text}")
         elif kind == "cards":
             h.append('<div class="lib-cards">' + "".join(
@@ -653,7 +655,7 @@ def script_and_language_pages(F: dict, C: dict, M: dict) -> None:
         SCRIPT_INDEX.append({"name": name, "path": path, "covered": ok, "card": card})
         blocks = []
         if letters and ok:
-            blocks.append(("specimen", FACE["sans"], letters[:60], 40, 400))
+            blocks.append(("specimen", FACE["sans"], letters[:60], 40, 400, "strip"))
         blocks += [("h2", "Coverage"), ("table", ["Member", name], counts),
                    ("p", f"On the web, the stylesheet loads the file for {name} only on pages that show it." if ok else
                          f"Pages that use {name} fall back to the next font in the stack.")]
@@ -687,7 +689,7 @@ def script_and_language_pages(F: dict, C: dict, M: dict) -> None:
                   f"Katagami does not cover {l['en']} yet. The fonts do not have its {sname} letters.")
         blocks = []
         if ms:
-            blocks += [("specimen", FACE[ms[0]], own, 64, 600), ("specimen", FACE[ms[0]], letters, 30, 400)]
+            blocks += [("specimen", FACE[ms[0]], own, 64, 600, "strip"), ("specimen", FACE[ms[0]], letters, 30, 400, "strip")]
         blocks += [("h2", "Overview"),
                    ("table", ["", l["en"]], [["Own name", own], ["Script", f"[{sname}](/scripts/{slug(sname)})"], ["Speakers", compact(l["speakers"])],
                                              ["Letters on the map", str(len(letters.split()))], ["Covered by", ", ".join(FAMILY[k] for k in ms) or "not yet"]]),
@@ -746,6 +748,8 @@ LIB_CSS = """/* The library pages: a head, then one reading column. Space follow
 .lib-body ul.lib-cols { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 32px; }
 .lib-body code { font-family: var(--mono); font-size: 0.875em; background: var(--panel); padding: 1px 5px; border-radius: 4px; }
 .lib-body .specimen { line-height: 1.15; letter-spacing: -0.01em; overflow-wrap: anywhere; max-width: none; }
+.lib-body .specimen.strip { line-height: 1.6; white-space: nowrap; overflow-wrap: normal; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.lib-body .specimen.strip::-webkit-scrollbar { display: none; }
 .t-scroll { overflow-x: auto; }
 .lib-body table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
 .lib-body th, .lib-body td { text-align: left; vertical-align: top; padding: 10px 16px 10px 0; }
