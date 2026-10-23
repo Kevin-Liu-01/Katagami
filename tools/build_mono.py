@@ -7,7 +7,8 @@ Katagami Sans -> Katagami Mono:
      toward even ink widths with stems held, wide ones fill most of the cell,
      f t r j J stretch their arms around a fixed stem, the rest is centred
   4. dotless i is redrawn with a flag and a foot slab; l and dotless j get a
-     flag; zero gets a centre bar
+     flag; zero gets a centre bar. Greek and Cyrillic are fitted by the same
+     rules as Latin, their rounds and wide letters with the Latin ones
   5. box drawing and block elements are drawn on the cell grid, and so are
      Braille patterns and the status symbols terminal agents print
   6. composites re-seated; kerning dropped
@@ -66,12 +67,17 @@ MAX_INK = {"upper": 0.76, "lower": 0.72, "other": 0.76}  # share of the cell, fo
 TARGET = {"lower": 0.69, "lower_round": 0.74, "upper": 0.70, "upper_round": 0.75, "figure": 0.72}
 # no master's ink may pass these shares of the cell (Bold is wider than Regular)
 FILL_MAX = {"wide": 0.96, "other": 0.92}
-ROUND_LOWER = set("ocebdpqgas")
-ROUND_UPPER = set("OQCGDS")
+# Greek and Cyrillic letters are fitted by the same rules: their round letters
+# with the Latin rounds, their wide letters with m and w, iota with i.
+ROUND_LOWER = set("ocebdpqgas") | set("οσςθαδεϑ") | set("оеэєсбзё")
+ROUND_UPPER = set("OQCGDS") | set("ΟΘΩϴ") | set("ОСЭЄЗ")
 # wide letters fill most of the cell instead of being squeezed (Berkeley: m 0.84, w 0.97)
-WIDE = {"m": 0.84, "w": 0.94, "M": 0.82, "W": 0.94, "æ": 0.88, "œ": 0.88, "Æ": 0.88, "Œ": 0.88}
+WIDE = {"m": 0.84, "w": 0.94, "M": 0.82, "W": 0.94, "æ": 0.88, "œ": 0.88, "Æ": 0.88, "Œ": 0.88,
+        "ψ": 0.84, "ω": 0.86, "φ": 0.80, "Ψ": 0.86, "Φ": 0.84,
+        "ж": 0.94, "ш": 0.86, "щ": 0.90, "ю": 0.88, "ы": 0.88, "љ": 0.90, "њ": 0.90, "ф": 0.84, "м": 0.84,
+        "Ж": 0.94, "Ш": 0.86, "Щ": 0.90, "Ю": 0.88, "Ы": 0.88, "Љ": 0.90, "Њ": 0.90, "Ф": 0.84}
 KEEP_NATURAL = 0.25
-NATURAL = set("iljIJ1ıȷ")  # narrow by identity; J and dotless j get arms instead
+NATURAL = set("iljIJ1ıȷ") | set("ιΙ")  # narrow by identity; J and dotless j get arms instead
 # f, t, r, dotless j and J keep their stem and stretch only what lies left and
 # right of it, so arms and crossbars reach into the cell like Berkeley Mono's.
 # (share of the cell, height of the stem slice as a share of x-height or cap,
@@ -243,6 +249,11 @@ def plan_scales(ref) -> dict[str, float]:
             continue
         ch = base_letter(g)
         cat = unicodedata.category(chr(g.unicodes[0])) if g.unicodes else ""
+        base = g.name[:-3] if g.name.endswith(".sc") else ""
+        if not g.unicodes and base in ref and ref[base].unicodes:
+            # Inter draws Cyrillic н, м, т and я as small capitals (h.sc, m.sc, t.sc, r.sc):
+            # fit them as the lowercase they stand for
+            ch, cat = base_letter(ref[base]), "Ll"
         if ch in ARMS or ch in NATURAL:
             target = min(ink, MAX_INK["lower"] * CELL)
         elif ch in WIDE:
