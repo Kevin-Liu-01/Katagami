@@ -8,6 +8,8 @@ Katagami is a type family with five members built from one source:
 - **Katagami Serif**, Katagami Text with flat slab serifs.
 - **Katagami Mono**, a monospace for code, terminals and tables, fitted from Katagami Sans.
 
+Each member has an Italic, built by the same transforms from Inter's Italic.
+
 Katagami Sans starts from the outlines of [Inter](https://github.com/rsms/inter) (SIL OFL 1.1) and moves them toward the squared geometry of Camber (Eduardo Manso, Emtype Foundry). Katagami Mono is built from Katagami Sans and takes its approach to the monospace cell from the machine-readable faces of the 1970s, the same tradition Berkeley Mono (US Graphics) draws on.
 
 Camber and Berkeley Mono are commercial fonts. Katagami contains none of their outlines. They were measured as references: Camber from the webfont on its foundry's specimen page, Berkeley Mono from a licensed copy. Every outline in Katagami is either a transformed Inter outline or drawn by the build scripts in `tools/`.
@@ -91,6 +93,14 @@ The y's quarter turns use the member's handle fraction: 0.60 plus 0.40 times the
 
 Inter's alternate figures become the defaults: a 1 with a long flag (cv01), an open 4 (cv02), a 6 and 9 with straight stems into their bowls (cv03, cv04) and a flat-topped 3 (cv09). Each feature now switches back to Inter's form and is relabelled to say so ("Closed four", "Inter digits" for ss01). The f is Inter's compact f (cv12).
 
+## Hand corrections
+
+Three letters are corrected by targeted transforms, in every master of the members they apply to. Each keeps its point count, so the masters stay compatible.
+
+- **A flat-topped t** (Katagami Sans and Round): the stem stops at the top of the crossbar, so the top of the t is one level line, as Camber's is. The stem part is shared by t and the compact t (`cv13`), so both change. The t's anchors above the cut, and the marks of ť, ṫ and ẗ, come down by the same amount (`flat_t`, `set_t_top`). Text and Serif keep their own t, whose stem rises above the bar and is cut at a slant. Katagami Mono raises the stem again to Inter's height, 0.24 x-heights above the bar: in code a flat t reads as the Greek τ, and every character in the mono must stay distinct.
+- **A straight Q tail** (every member): Inter's tail crosses the bowl through two extra points on each side. The width transforms move those points apart and bent the tail by up to 7 degrees in Black. Each run of points that bends by less than 12 degrees is put back on the line between its ends (`straighten_q`, `straighten_runs`); Mono straightens its Q again after fitting it to the cell.
+- **A squarer 2** (Katagami Sans 0.35, Round 0.25, `two_square`): the 2's bowl and the spine that turns from it into the diagonal move that much further toward their corners. The spine is not a quarter turn, so it is planned with tangents as little as 37 degrees apart, where other arcs need 60.
+
 ## Joins
 
 Inter's heavy weights cut deep notches where bowls join stems, which leaves a hairline in bold a and u. Each such notch (a corner where a curve meets a stem edge that runs to the baseline or x-height: a, u, n, m, h, b, p, r) moves 45 percent of the way toward the baseline or x-height, with its step and handle. The handle stays between the corner and the far end of its curve, so the bowl flattens into the join instead of dipping below the baseline. The fill is scaled by weight: none in the Thin master and the full share in Regular and Black, so the light weights in between get part of it. Inter's Thin joins barely notch, and moving their corners left a lump where the curve meets the stem.
@@ -113,6 +123,17 @@ The weight axis runs 100 to 900 in Katagami Sans and 100 to 700 in Katagami Mono
 | 700 Bold | 670 | 740 |
 | 800 ExtraBold | 780 | 840 |
 
+## Italics
+
+Every member has an Italic: one variable font beside its roman, `fonts/sans/KatagamiSans-Italic[wght].ttf` and so on, with the same weights (100 to 900, Mono 100 to 700), named instances, line metrics and features.
+
+- **Source.** The four proportional Italics start from Inter Italic's Thin, Regular and Black masters (`src/Inter-Italic.glyphspackage` at the same pinned commit). Inter Italic slants 9.4 degrees and draws a single-storey a and an f with a descender; Katagami keeps both.
+- **Upright, then slanted.** Every transform assumes upright stems, so each Italic master is first stood upright: every point moves by x - (y - 559) tan 9.4, about half of Inter's x-height, the pivot Inter slants around. The member's transforms then run as they do on the roman, and the result is slanted again about the member's own half x-height. Squaring, level cuts, the tails, widths, the corrections and the serifs are the roman's, at the italic angle. A shear is affine, so handle fractions and the squaring planned from them do not change. Composites with flipped or scaled components are decomposed first, because a shear would turn their matrices into skews.
+- **Katagami Mono Italic** stands Katagami Sans Italic upright the same way, fits it to the cell as the roman and slants it again. Box drawing, block elements, Braille and the agent symbols are drawn after the slant, upright, so their lines still join from cell to cell.
+- **Katagami Serif Italic.** The serifs are cut in the upright frame and slanted with the letter, so their ends follow the italic angle and their backs stay level. Capitals keep every serif. The lowercase takes entry and exit strokes instead (`italic_ends`): the leftmost top end keeps its serif on the left side only, the entry, and head serifs stay; the rightmost foot on the baseline keeps its serif on the right side only, the exit, unless ink above the middle of the x-height reaches 0.6 stems past it (the arm of r), where the pen leaves from the arm. Every other lowercase top and baseline foot takes none. Feet on the descender (p, q) keep both sides.
+- **Names and linking.** Name 1 is the family (Katagami Sans), name 2 Regular or Italic, and the named instances run Thin Italic to Black Italic. The STAT table of each file has a weight axis value for every named weight (Regular elidable and linked to Bold) and an `ital` axis: 0, Roman, elidable and linked to 1, in the roman; 1, Italic, in the Italic. Inter Italic has no slant axis, so Katagami has none. fsSelection sets ITALIC, macStyle its italic bit, post.italicAngle is -9.4 and the caret slopes with it. The Italic takes the roman's hhea, typo and Windows metrics, so both set the same line height. `tools/finish.py` writes all of this.
+- **Other scripts.** The Italics carry Latin, Greek and Cyrillic, about 3,250 glyphs each, and no merged scripts. Italic Arabic, Devanagari or Thai is not a convention, and copying the 28 merged scripts into each Italic would double the download. A page that sets italic text in another script falls back to the roman's script files, which the website declares a second time with `font-style: italic`.
+
 ## Katagami Mono
 
 ### Fitting glyphs to the cell
@@ -124,6 +145,10 @@ Every outline is fitted to the 1280-unit cell. Each decision is made on the Regu
 - **Arms, around a fixed stem.** f, t, r, dotless j and J keep their stem and stretch only what lies to its left and right, so arms and crossbars reach into the cell: f 0.70, t 0.68, r 0.58, dotless j 0.54, J 0.64.
 - **Narrow by identity.** i, l, I and 1 keep their own width; their flags and slabs fill the cell.
 - Glyphs built from parts, such as the colon or t, are decomposed first and fitted as one outline. Accented letters keep their components and marks follow their base.
+
+### Greek and Cyrillic
+
+Greek and Cyrillic are fitted to the cell by the same rules as Latin. Their round letters move toward the round targets with o and O (ο σ ς θ α δ ε, о е э є с б з; Ο Θ Ω, О С Э Є З), and their wide letters fill most of the cell as m and w do instead of being squeezed to the lowercase width: ж and Ж 0.94, щ and Щ 0.90, ю, ы, љ and њ and their capitals 0.88 to 0.90, ш and Ш 0.86, ф, Ф, ψ and Φ 0.84, Ψ 0.86, ω 0.86. Iota keeps its own width, as i does. Inter draws the Cyrillic н, м, т and я as small capitals (h.sc, m.sc, t.sc, r.sc); they are fitted as the lowercase letters they stand for, so м is as wide as m and н as n. Letters Inter builds from Latin ones (а, е, о, р, с, у, х, І, Ј) follow their Latin base.
 
 ### Disambiguation
 
@@ -151,16 +176,16 @@ U+2500 to U+259F are drawn by `tools/kerf_build/boxdraw.py`, not taken from Inte
 
 `tools/kerf_build/terminal.py` draws all 256 Braille patterns (U+2800 to U+28FF) as square dots the size of the period on a 2 by 4 grid spread evenly over the full line height, and the status symbols coding agents print in the terminal (⏺ ⎿ ✔ ✘ ✕ ◉ ▸ ⏵ ⏸ ⏹ ✢ ✳ ✶ ✻ ✽), each sized and weighted from its neighbours in every master.
 
-## Coverage in v0.1
+## Coverage in v0.2
 
-| | Katagami Sans, Round, Text | Katagami Mono |
-|---|---|---|
-| Glyphs | about 11,240, of which about 3,340 are drawn by Katagami | about 3,780, all fitted to the cell |
-| Scripts | Latin, Greek and Cyrillic drawn; 19 more merged from Noto Sans; Chinese, Japanese and Korean through Katagami CJK | Latin, Greek, Cyrillic |
-| Features | Inter's full set plus small capitals | Inter's set without capital spacing or n:1 ligatures, plus small capitals and code ligatures |
-| People covered (map) | 99.9 percent, 223 of 234 languages | 44.4 percent, 172 of 234 |
+| | Katagami Sans, Round, Text, Serif | Their Italics | Katagami Mono and Mono Italic |
+|---|---|---|---|
+| Glyphs | 14,913 in Sans and 14,914 in the others, of which about 3,340 are drawn by Katagami | about 3,255 | 3,778 and 3,695, all fitted to the cell |
+| Characters | 8,251 | 2,816 | 3,283 and 3,247 |
+| Scripts | Latin, Greek and Cyrillic drawn; 28 more merged from Noto; Chinese, Japanese and Korean through Katagami CJK | Latin, Greek, Cyrillic | Latin, Greek, Cyrillic |
+| Features | Inter's full set plus small capitals | the same | Inter's set without capital spacing or n:1 ligatures, plus small capitals and code ligatures |
 
-The map counts a language as covered when the family has at least 90 percent of the letters it draws for it, and for Chinese, Japanese and Korean the whole national standard. Shares are rounded down. The eleven languages still missing are written in nine scripts the family does not carry yet: Tifinagh (Tamazight), Ol Chiki (Santali), Coptic, Tibetan, Hanifi Rohingya, N'Ko, Thaana, Vai and Canadian syllabics.
+The map counts a language as covered when the family has at least 90 percent of the letters it draws for it, and for Chinese, Japanese and Korean the whole national standard. In v0.1 it listed eleven languages the family did not cover, written in nine scripts: Tifinagh (Tamazight), Ol Chiki (Santali), Coptic, Tibetan, Hanifi Rohingya, N'Ko, Thaana, Vai and Canadian syllabics. v0.2 merges all nine (see Other scripts); the map's figures are recomputed by `tools/build_map.py`.
 
 ## Katagami Round
 
@@ -192,12 +217,12 @@ Katagami Serif is Katagami Text with rectangular serifs, after Signifier (Kris S
 
 - **Plan:** every serif is found on Regular before any is cut, and the same serifs are added in the same order to Thin, Regular and Black, so the masters stay compatible.
 - **Contrast:** every point keeps its x and moves 0.3 of the way from its y to the same point's y in the next lighter master (Regular toward Thin, Black toward Regular), so stems keep Text's width and horizontal strokes get thinner (`serif_contrast`). Moving toward the neighbouring master keeps the joins of diagonals in M, N and K where they were.
-- **Where serifs go:** on a straight, flat stroke end at the baseline, the x-height, the cap height or the glyph's own top or bottom. A side takes a serif when the straight segment at that corner is a stroke at least 1.2 stems long and steeper than 45 degrees (`find_stem_ends`). Feet, capital stems and the ends of diagonals take one on each side. An apex or vertex whose two sides spread away from it (the top of A, the bottom of v) takes none. A flat end longer than 2.6 stems is a bar (the bottoms of E and L), and it takes one serif, under its stem.
-- **Shape:** a serif runs out along its line 0.65 of the stroke's width past each side at Regular (`serif_reach`) and ends square at its full thickness, 0.6 of the master's H crossbar (`serif_depth`). Its back runs flat toward the stroke and meets the stroke's own side in a bracket that covers 0.4 of the reach and climbs 0.5 of the thickness (`BRACKET`), so a diagonal's serif meets the diagonal along it. Toward Thin and Black the reach scales with the stem width to the power 0.15. Every serif is its own contour, overlapping its stroke, and the glyph carries the TrueType overlap flag.
-- **Heads:** the top of a lowercase vertical stem takes one triangular serif, on the left: its tip drops 0.35 stems below the line (`serif_head`), the stem's top left corner moves down onto the same line, and the underside curves into the stem.
+- **Where serifs go:** on a straight, flat stroke end at the baseline, the x-height, the cap height or the glyph's own top or bottom. A side takes a serif when the straight segment at that corner is a stroke at least 1.2 stems long and steeper than 45 degrees (`find_stem_ends`). Feet, capital stems and the ends of diagonals take one on each side. The Italic's lowercase takes entry and exit strokes instead (see Italics). An apex or vertex whose two sides spread away from it (the top of A, the bottom of v) takes none. A flat end longer than 2.6 stems is a bar (the bottoms of E and L), and it takes one serif, under its stem.
+- **Shape:** a serif runs out along its line 0.65 of the stroke's width past each side at Regular (`serif_reach`), the width measured on the stroke end and at most 1.1 stems (`SERIF_WIDTH_CAP`), so a diagonal's wide cut gets no longer a serif than a stem. It ends square at its full thickness, 0.6 of the master's H crossbar (`serif_depth`) at Regular, 1.65 times that at Thin, so Thin's serifs are as thick as its hairlines, and 0.8 times it at Black, about a third of Black's stem, so Black reads as a bold text face and not a slab (`SERIF_DEPTH_SCALE`). Its back runs flat toward the stroke and meets the stroke's own side in a bracket that covers 0.35 of the reach and climbs 0.45 of the thickness (`BRACKET`), but never more than half of a short side, such as the inside of x, A and K (`BRACKET_SIDE`), where a taller bracket bulged past the stroke. Toward Thin and Black the reach scales with the stem width to the power 0.3 (`SERIF_REACH_POWER`). Every serif is its own contour, overlapping its stroke, and the glyph carries the TrueType overlap flag.
+- **Heads:** the top of a lowercase vertical stem takes one triangular serif, on the left: its tip drops 0.35 Regular stems below the line, scaled like the reach (`serif_head`, `HEAD_BY_REACH`), the stem's top left corner moves down onto the same line, and the underside curves into the stem. Measured on each master's own stem, Black's heads had dropped twice as far as Regular's and read as flags.
 - **Arms:** the free ends of bars on a metric line (the arms of E, F, L, T and Z, z, and Greek and Cyrillic Γ, Ε, Ζ, Τ, Г, Е and Т) take a vertical serif 0.55 stems long (`serif_beak`) and 0.4 stems wide (`ARM_WIDTH`). Its outer edge is flush with the end, its end is square, and its straight inner edge meets the bar in the same bracket as the other serifs.
 - **Counters:** two serifs that face each other on one line (the feet of n, m, h and u) share the space between them and leave at least half a Regular stem of white. A serif cut short keeps its thickness.
-- **Widths:** a side whose serif reaches past the letter's ink widens until the tip is a quarter of a Regular stem from the edge of the advance. Composites move with their base glyphs.
+- **Widths:** in a sans skeleton the diagonals of v, w, x, y, k, A, V, W, X and Y run to the edges of the advance, so their serifs would reach past the sidebearing by most of their length. Widening them for all of it made v, x and y 22 percent wider than in Text and opened holes beside them. So each letter whose serif tips would come closer than 0.15 Regular stems to the edge of its advance is first narrowed, its stems kept, by 0.75 of the widening it would need (`fit_serifs`, `SERIF_FIT`, measured on Regular and applied to every master). The serifs are then cut and the letter widens by the rest, until its tips are 0.15 stems from the edge (`TIP_CLEAR`). v, x and y end 8 percent wider than in Text, A and V 6 percent, and n, h, o and H keep their widths. Composites move with their base glyphs.
 
 ## Alternates and their accented forms
 
@@ -215,18 +240,40 @@ Katagami Mono keeps every glyph of Katagami Sans, fitted to the cell, so it has 
 
 ## Other scripts
 
-Katagami draws Latin, Greek and Cyrillic. Katagami Sans, Round and Text also set 19 more scripts with the outlines and OpenType layout of Google's Noto Sans fonts (SIL OFL 1.1), merged in by `tools/build_world.py` the way Pretendard joins Inter and Source Han Sans: Devanagari, Arabic, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala, Thai, Lao, Myanmar, Ethiopic, Hebrew, Armenian, Georgian and Khmer.
+Katagami draws Latin, Greek and Cyrillic. Katagami Sans, Round, Text and Serif also set 28 more scripts with the outlines and OpenType layout of Google's Noto fonts (SIL OFL 1.1), merged in by `tools/build_world.py` the way Pretendard joins Inter and Source Han Sans: Devanagari, Arabic, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala, Thai, Lao, Myanmar, Ethiopic, Hebrew, Armenian, Georgian and Khmer since v0.1, and since v0.2 Tifinagh, Ol Chiki, Coptic, Tibetan, Hanifi Rohingya, N'Ko, Thaana, Vai and Canadian Aboriginal syllabics. The nine came from google/fonts at commit e7db6ca. Tibetan exists only as Noto Serif Tibetan, so Katagami's Tibetan is Noto's serif design in every member.
 
 - Each Noto font is subset to its script's Unicode blocks with its layout closure, so it brings no Latin, digits or punctuation of its own.
 - It is instanced at Katagami's master weights (100, 400, 900) and scaled from Noto's 1000-unit em to 2048 times Katagami's x-height over Noto Sans's (536 per 1000), so its letters sit at the member's size.
 - Each Katagami master is merged with the scripts at its weight, and the three merged masters are built back into one variable font with the member's weight axis, named instances and line spacing. The Windows clipping box grows to the tallest script.
+- Four of the nine come in one weight (Tifinagh, Coptic, N'Ko and Vai in Regular) and two in 400 to 700 (Ol Chiki and Hanifi Rohingya). A master weight Noto does not draw is made from the nearest one it does: every outline is emboldened or thinned by the difference in Noto Sans's stem at the two weights (32, 92, 152 and 192 units per 1000 at 100, 400, 700 and 900, measured on Noto Sans Hebrew's vav) as FreeType emboldens, each point moving along the bisector of its two edges, so the point structure stays and the three masters interpolate. Advances grow by the same amount and the outlines move right by half of it, so sidebearings stay.
+- N'Ko, Thaana and Hanifi Rohingya are written right to left, and N'Ko and Hanifi Rohingya join. Their lookups stay under their own script tags (`nko `, `thaa`, `rohg`), so HarfBuzz shapes them in the merged font with the same glyphs, in the same order and direction, as in Noto's own font.
 - These glyphs are Noto's design at Katagami's size and weight; they are not redrawn in Katagami's style.
 
 Chinese, Japanese and Korean would pass the 65,535-glyph limit, so they are companion files, Katagami CJK SC, TC, JP and KR (`tools/build_cjk.py`), as Pretendard JP is. Each is Noto Sans SC, TC, JP or KR subset to a national standard (GB 2312's 6,763 hanzi; Big5's 13,053 hanzi with bopomofo; JIS X 0208's 6,355 kanji with the kana; all 11,172 Hangul syllables), scaled to 2048 units and given Katagami's line metrics. The website sets them in the same CSS family as each proportional member with unicode-range. Simplified and Traditional Chinese share most code points; SC is tried first for those, and the TC web file carries only the characters SC lacks.
 
+## Quality checks
+
+`tools/finish.py` runs last on every built file. Fontbakery 1.1.0's Google Fonts profile (`fontbakery check-googlefonts`) was run on v0.1's romans and on v0.2's romans and Italics, each member's two files together.
+
+| Check | v0.1 | v0.2 |
+|---|---|---|
+| `opentype/font_version`: head and name 5 agree | FAIL: the script merge left Noto's 3.011 in head | PASS |
+| `smart_dropout` and `googlefonts/gasp`: what an unhinted font needs | FAIL | PASS: a gasp table that smooths at every size and a prep program with smart dropout control |
+| `googlefonts/STAT/axisregistry` | FAIL: no axis values | PASS |
+| `name/family_and_style_max_length` | ERROR: the check crashed on the empty STAT | PASS |
+| `base_has_width`: U+0488 and U+0489 were zero-width bases | FAIL | PASS: zero-width combining and enclosing marks are GDEF marks |
+| `family/win_ascent_and_descent` (Mono) | FAIL: box drawing reached past usWinAscent | PASS |
+| Italic linking: `opentype/STAT/ital_axis`, `googlefonts/family/italics_have_roman_counterparts`, `family/vertical_metrics`, `opentype/italic_angle`, `opentype/caret_slope`, `opentype/fsselection`, `opentype/mac_style`, `googlefonts/font_names` | no Italics | PASS for all five members |
+| `googlefonts/name/version_format` | FAIL | FAIL: Google Fonts wants 1.000 or more, and Katagami is at 0.200 |
+| `case_mapping`, `googlefonts/glyph_coverage`, `googlefonts/glyphsets/shape_languages` | FAIL | FAIL: glyphs Inter does not have, such as capital lambda with stroke (U+A7DC) and 30 more case pairs, and the combining double acute (U+030B), vertical line below (U+0329) and macron below (U+0331) |
+| `transformed_components` (proportional romans) | FAIL | FAIL: Inter's flipped and scaled components; decomposing them at compile time would fix it |
+| `dotted_circle` (proportional romans) | FAIL | FAIL: the merged complex scripts need a dotted circle, U+25CC, that Inter lacks |
+
+In v0.1 the four proportional romans each had 1 ERROR, 11 FAIL and 17 WARN, and Mono 1 ERROR, 9 FAIL and 14 WARN. In v0.2 Mono and Mono Italic together have no ERROR and 4 FAIL each (the version format and the three coverage checks); the targeted run of the checks above passes every one of them on all ten files except the version format. The WARNs left are an unregistered vendor ID (KERF), no `meta` table, the OFL body text, Inter's long glyph names, overlapping segments and interpolation notes in a few glyphs, and alternates no feature reaches.
+
 ## Not done yet
 
-- Hand corrections. Every glyph is the output of a transform; none has been redrawn by eye.
-- Italics.
-- Hinting, and fontbakery checks.
-- A flat-topped t and the straight Q tail measured on Camber.
+- Hand corrections beyond the t, Q and 2. Every other glyph is the output of a transform; none has been redrawn by eye.
+- Hinting. The fonts are unhinted, with the gasp and prep tables an unhinted font needs.
+- The 28 merged scripts in Katagami's own style. They are Noto's design at Katagami's size and weight; redrawing them is design work for each script.
+- The glyphs fontbakery's Google Fonts glyph sets still ask for (see Quality checks).
