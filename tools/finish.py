@@ -17,8 +17,8 @@ in place, after fontmake (and, for the roman, the script merge):
      linked to Bold) and an ital axis whose value is 0 (Roman, elidable,
      linked to Italic) or 1 (Italic), so a roman and its Italic link as one family.
   5. Line metrics: the Italic takes the roman's hhea and typo metrics, so both
-     set the same line height; each file's Windows clipping box is its own
-     tallest and deepest glyph.
+     set the same line height, and both files clip at the tallest and deepest
+     glyph of the two.
   6. Unhinted: a gasp table that asks for smoothing at every size, and a prep
      program that turns on smart dropout control (as gftools fix-unhinted does).
 """
@@ -104,13 +104,14 @@ def metrics_from(font: TTFont, roman: TTFont) -> None:
     os2.sTypoAscender, os2.sTypoDescender, os2.sTypoLineGap = src_os2.sTypoAscender, src_os2.sTypoDescender, src_os2.sTypoLineGap
 
 
-def clipping(font: TTFont) -> None:
-    """The Windows clipping box is the font's own: its tallest and deepest glyph,
-    and never less than the typo metrics. USE_TYPO_METRICS keeps it out of the
-    line spacing, so an Italic without the merged scripts clips at its own size."""
-    os2, head = font["OS/2"], font["head"]
-    os2.usWinAscent = max(head.yMax, os2.sTypoAscender)
-    os2.usWinDescent = max(-head.yMin, -os2.sTypoDescender)
+def clipping(font: TTFont, family: list[TTFont]) -> None:
+    """The Windows clipping box covers the tallest and deepest glyph of the
+    roman and the Italic together, and never less than the typo metrics, so
+    both files of a member have the same vertical metrics. USE_TYPO_METRICS
+    keeps it out of the line spacing."""
+    os2 = font["OS/2"]
+    os2.usWinAscent = max([f["head"].yMax for f in family] + [os2.sTypoAscender])
+    os2.usWinDescent = max([-f["head"].yMin for f in family] + [-os2.sTypoDescender])
 
 
 def prune_names(font: TTFont) -> None:
@@ -151,6 +152,7 @@ def finish(key: str, only: str | None = None) -> None:
     roman_path = ROOT / "fonts" / key / f"{stem}[wght].ttf"
     italic_path = ROOT / "fonts" / key / f"{stem}-Italic[wght].ttf"
     roman = TTFont(roman_path) if roman_path.exists() else None
+    family_fonts = [TTFont(p) for p in (roman_path, italic_path) if p.exists()]
     for path, italic in ((roman_path, False), (italic_path, True)):
         if not path.exists() or only and only != ("italic" if italic else "roman"):
             continue
@@ -161,7 +163,7 @@ def finish(key: str, only: str | None = None) -> None:
         stat(font, italic)
         if italic and roman is not None:
             metrics_from(font, roman)
-        clipping(font)
+        clipping(font, family_fonts)
         unhinted(font)
         prune_names(font)  # what an earlier STAT or a second run left behind
         font.save(path)
