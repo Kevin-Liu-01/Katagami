@@ -18,12 +18,14 @@ The site lives in its own repo, Katagami-Website, checked out next to this one
 
 Run after tools/build.sh, then commit and push Katagami-Website; Vercel deploys it.
 After editing only a page fragment, `tools/build_site.py --pages` rewraps the pages.
+After a change to the Curves plate's data, `tools/build_site.py --data` writes data.js alone.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import subprocess
@@ -36,6 +38,7 @@ import sys
 
 import ufoLib2
 from fontTools import subset
+from fontTools.misc.bezierTools import calcBounds, calcCubicBounds, calcCubicParameters, cubicPointAtT, solveCubic
 from fontTools.ttLib import TTFont
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -59,12 +62,14 @@ VERSION = f"{_VERSION[0]}.{_VERSION[1]:03d}".rstrip("0").rstrip(".")  # "0.2"
 ZIP = f"Katagami-{VERSION}.zip"
 SCRIPT_COUNT = 3 + len(SCRIPTS)  # Latin, Greek and Cyrillic drawn, the rest merged
 OUTLINE_CHARS = {"K": "K", "a": "a", "t": "t", "g": "g", "m": "m", "i": "i"}
-COMPARE = "on"  # the Curves plate draws these in Sans, Round and Text
 KERF_UFO = ROOT / "build/sans/KatagamiSans-Regular.ufo"
 MONO_UFO = ROOT / "build/mono/KatagamiMono-Regular.ufo"
 ROUND_UFO = ROOT / "build/round/KatagamiRound-Regular.ufo"
 TEXT_UFO = ROOT / "build/text/KatagamiText-Regular.ufo"
 SERIF_UFO = ROOT / "build/serif/KatagamiSerif-Regular.ufo"
+INTER_UFO = ROOT / "build/ufo/Inter-Regular.ufo"
+# the Curves plate draws and measures o and n in Inter and in each member, in this order
+CURVE_SOURCES = {"inter": INTER_UFO, "sans": KERF_UFO, "round": ROUND_UFO, "text": TEXT_UFO, "serif": SERIF_UFO, "mono": MONO_UFO}
 FAMILY = {"sans": "Katagami Sans", "round": "Katagami Round", "text": "Katagami Text", "serif": "Katagami Serif", "mono": "Katagami Mono"}
 WEIGHTS = {"sans": "100 900", "round": "100 900", "text": "100 900", "serif": "100 900", "mono": "100 700"}
 # Companion file -> the ranges it serves in every proportional family. Where two
@@ -272,10 +277,99 @@ def outlines() -> dict:
     return out
 
 
-def member_outlines() -> dict:
-    """The COMPARE letters at Regular in Sans, Round and Text."""
-    fonts = {k: ufoLib2.Font.open(p) for k, p in (("sans", KERF_UFO), ("round", ROUND_UFO), ("text", TEXT_UFO))}
-    return {ch: {k: {"adv": f[ch].width, "contours": flatten(f, ch)} for k, f in fonts.items()} for ch in COMPARE}
+def segments(contour: list) -> list:
+    """A flattened contour's segments, each its points from one on-curve point to the next."""
+    s = next(i for i, p in enumerate(contour) if p[2] != "o")
+    pts = contour[s:] + contour[:s]
+    out, run = [], [tuple(pts[0][:2])]
+    for x, y, t in pts[1:] + pts[:1]:
+        run.append((x, y))
+        if t != "o":
+            assert len(run) in (2, 4), "the Curves plate reads lines and cubic curves only"
+            out.append(run)
+            run = [(x, y)]
+    return out
+
+
+def box(contour: list) -> tuple:
+    """xMin, yMin, xMax, yMax of a contour's outline, its curves' extremes included."""
+    rects = [calcCubicBounds(*s) if len(s) == 4 else calcBounds(s) for s in segments(contour)]
+    return tuple(f(r[i] for r in rects) for i, f in ((0, min), (1, min), (2, max), (3, max)))
+
+
+def crossings(contour: list, y: float) -> list:
+    """The x of each point where a contour crosses the level line at height y, from left to right."""
+    xs = []
+    for s in segments(contour):
+        if len(s) == 2:
+            (x0, y0), (x1, y1) = s
+            if min(y0, y1) <= y < max(y0, y1):
+                xs.append(x0 + (x1 - x0) * (y - y0) / (y1 - y0))
+            continue
+        (ax, ay), (bx, by), (cx, cy), (dx, dy) = calcCubicParameters(*s)
+        xs += [((ax * t + bx) * t + cx) * t + dx for t in solveCubic(ay, by, cy, dy - y) if 0 <= t < 1]
+    return sorted(xs)
+
+
+def superellipse_n(arc: list) -> float:
+    """The exponent n of the superellipse x^n + y^n = 1 that fits a quarter arc in the unit square
+    best, by least squares on the radius at 127 points along the arc."""
+    pts = [cubicPointAtT(*arc, i / 128) for i in range(1, 128)]
+    polar = [(math.hypot(x, y), math.atan2(y, x)) for x, y in pts]
+    err = lambda n: sum((r - (abs(math.cos(a)) ** n + abs(math.sin(a)) ** n) ** (-1 / n)) ** 2 for r, a in polar)  # noqa: E731
+    lo, hi, g = 1.0, 8.0, (math.sqrt(5) - 1) / 2
+    for _ in range(60):
+        m1, m2 = hi - g * (hi - lo), lo + g * (hi - lo)
+        lo, hi = (lo, m2) if err(m1) < err(m2) else (m1, hi)
+    return (lo + hi) / 2
+
+
+def quarter(contour: list) -> dict:
+    """A contour's top-right quarter arc: the handle fraction f, the superellipse exponent n that fits
+    it, and its two handles once the arc is mapped into a unit square from (1, 0) to (0, 1)."""
+    seg = max((s for s in segments(contour) if len(s) == 4), key=lambda s: s[0][0] + s[0][1] + s[3][0] + s[3][1])
+    r, hr, ht, t = seg if seg[0][0] > seg[3][0] else seg[::-1]
+    # k is the corner where the tangents at the right end r and the top end t meet
+    (ax, ay), (bx, by) = (hr[0] - r[0], hr[1] - r[1]), (ht[0] - t[0], ht[1] - t[1])
+    a = ((t[0] - r[0]) * by - (t[1] - r[1]) * bx) / (ax * by - ay * bx)
+    k = (r[0] + a * ax, r[1] + a * ay)
+    f = (math.dist(r, hr) / math.dist(r, k) + math.dist(t, ht) / math.dist(t, k)) / 2
+    # c is the corner opposite k; the unit square runs from c to r along u and from c to t along v
+    c = (r[0] + t[0] - k[0], r[1] + t[1] - k[1])
+    (ux, uy), (vx, vy) = (r[0] - c[0], r[1] - c[1]), (t[0] - c[0], t[1] - c[1])
+    det = ux * vy - uy * vx
+    unit = [(((p[0] - c[0]) * vy - (p[1] - c[1]) * vx) / det, (ux * (p[1] - c[1]) - uy * (p[0] - c[0])) / det) for p in (r, hr, ht, t)]
+    return {"f": round(f, 4), "n": round(superellipse_n(unit), 3), "arc": [[round(x, 4), round(y, 4)] for x, y in unit[1:3]]}
+
+
+def curve_facts(font) -> dict:
+    """The o and n of one source at Regular, drawn and measured in font units."""
+    o, n = flatten(font, "o"), flatten(font, "n")
+    size = lambda c: (lambda b: (b[2] - b[0]) * (b[3] - b[1]))(box(c))  # noqa: E731
+    outer, counter = sorted(o, key=size, reverse=True)[:2]
+    (ox0, oy0, ox1, oy1), (cx0, cy0, cx1, cy1) = box(outer), box(counter)
+    xh = font.info.xHeight
+    # n's left stem, across the level line a third of the way up the x-height
+    edge = crossings(max(n, key=size), xh / 3)
+    # the thinner of o's top and bottom strokes, and the thicker of its sides
+    thin, thick = min(oy1 - cy1, cy0 - oy0), max(cx0 - ox0, ox1 - cx1)
+    return {"o": {"adv": font["o"].width, "contours": o}, "n": {"adv": font["n"].width, "contours": n},
+            "outer": quarter(outer), "counter": quarter(counter), "wh": round((ox1 - ox0) / (oy1 - oy0), 4),
+            "stem": round(edge[1] - edge[0], 1), "thin": round(thin, 1), "thick": round(thick, 1), "contrast": round(thin / thick, 4),
+            "over": [round(oy1 - xh, 1), round(-oy0, 1)], "xHeight": xh, "capHeight": font.info.capHeight}
+
+
+def member_curves() -> dict:
+    """The Curves plate: a circle's quarter arc, then Inter and each member at Regular. Mono adds its cell."""
+    kappa = 4 / 3 * (math.sqrt(2) - 1)
+    out = {"circle": {"f": round(kappa, 4), "n": round(superellipse_n([(1, 0), (1, kappa), (kappa, 1), (0, 1)]), 3),
+                      "arc": [[1, round(kappa, 4)], [round(kappa, 4), 1]]}}
+    for key, path in CURVE_SOURCES.items():
+        font = ufoLib2.Font.open(path)
+        out[key] = curve_facts(font)
+        if key == "mono":
+            out[key]["cell"] = font["zero"].width
+    return out
 
 
 def unicode_range(unicodes, avoid=frozenset()) -> str:
@@ -745,8 +839,8 @@ def write_downloads() -> None:
                                                 "members": files, "italics": italics, "cjk": cjk}, separators=(",", ":")))
 
 
-def main() -> None:
-    (PUBLIC / "fonts").mkdir(parents=True, exist_ok=True)
+def site_data() -> dict:
+    """window.KERF: each member's metrics, characters and features, the hero's outlines and the Curves plate."""
     data = {"version": VERSION, "names": {}}
     for key, path in FONTS.items():
         font = TTFont(path)
@@ -760,15 +854,24 @@ def main() -> None:
             ihmtx, icmap = ifont["hmtx"], ifont.getBestCmap()
             adv = {cp: ihmtx[g][0] for cp, g in icmap.items() if cp in roman and ihmtx[g][0] != roman[cp]}
             data[key]["italic"] = {"metrics": metrics(ifont), "adv": adv}
+    data["mono"]["metrics"]["cell"] = TTFont(FONTS["mono"])["hmtx"]["zero"][0]
+    data["outlines"] = outlines()
+    data["curves"] = member_curves()
+    return data
+
+
+def write_data() -> None:
+    (PUBLIC / "data.js").write_text("window.KERF = " + json.dumps(site_data(), separators=(",", ":")) + ";\n")
+
+
+def main() -> None:
+    (PUBLIC / "fonts").mkdir(parents=True, exist_ok=True)
     faces = web_fonts()
     write_faces(faces)
     for name in stale_slices(faces):
         print(f"removed stale fonts/{name}")
-    data["mono"]["metrics"]["cell"] = TTFont(FONTS["mono"])["hmtx"]["zero"][0]
     write_downloads()
-    data["outlines"] = outlines()
-    data["members"] = member_outlines()
-    (PUBLIC / "data.js").write_text("window.KERF = " + json.dumps(data, separators=(",", ":")) + ";\n")
+    write_data()
 
     write_pages()
     for p in sorted(PUBLIC.rglob("*")):
@@ -778,5 +881,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    # --pages rewraps the hand-written pages only, for a change to their markup
-    write_pages() if "--pages" in sys.argv else main()
+    # --pages rewraps the hand-written pages only, for a change to their markup;
+    # --data writes data.js alone and leaves the web fonts, downloads and pages as they are
+    write_pages() if "--pages" in sys.argv else write_data() if "--data" in sys.argv else main()
