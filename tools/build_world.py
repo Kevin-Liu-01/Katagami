@@ -25,6 +25,7 @@ weight, not redrawn in Katagami's style.
 from __future__ import annotations
 
 import copy
+import math
 import sys
 import tempfile
 from pathlib import Path
@@ -67,14 +68,97 @@ SCRIPTS = {
     "Armenian": [(0x0530, 0x058F), (0xFB13, 0xFB17)],
     "Georgian": [(0x10A0, 0x10FF), (0x2D00, 0x2D2F), (0x1C90, 0x1CBF)],
     "Khmer": [(0x1780, 0x17FF), (0x19E0, 0x19FF)],
+    # v0.2: the nine scripts of the eleven languages the map listed as missing
+    "Tifinagh": [(0x2D30, 0x2D7F)],
+    "OlChiki": [(0x1C50, 0x1C7F)],
+    "Coptic": [(0x2C80, 0x2CFF), (0x03E2, 0x03EF), (0x102E0, 0x102FF)],
+    "Tibetan": [(0x0F00, 0x0FFF)],  # only Noto Serif Tibetan exists
+    "HanifiRohingya": [(0x10D00, 0x10D3F)],
+    "NKo": [(0x07C0, 0x07FF)],
+    "Thaana": [(0x0780, 0x07BF)],
+    "Vai": [(0xA500, 0xA63F)],
+    "CanadianAboriginal": [(0x1400, 0x167F), (0x18B0, 0x18FF), (0x11AB0, 0x11ABF)],
 }
+SERIF_ONLY = {"Tibetan"}  # Noto draws these only in its serif
+# Noto Sans's vertical stem at each weight, per 1000 units (measured on Noto Sans
+# Hebrew's vav). A script whose Noto font stops short of a Katagami master's weight
+# (Tifinagh, Coptic, N'Ko and Vai come in Regular only; Ol Chiki and Hanifi
+# Rohingya in 400 to 700) is emboldened or thinned from its nearest weight by the
+# difference in stem, so every script follows the weight axis.
+NOTO_STEM = {100: 32, 200: 46, 300: 66, 400: 92, 500: 112, 600: 132, 700: 152, 800: 172, 900: 192}
 
 
 def noto_file(script: str) -> Path:
-    found = sorted(NOTO.glob(f"NotoSans{script}[[]*.ttf"))
+    stem = f"Noto{'Serif' if script in SERIF_ONLY else 'Sans'}{script}"
+    found = sorted(NOTO.glob(f"{stem}[[]*.ttf")) or sorted(NOTO.glob(f"{stem}-Regular.ttf"))
     if not found:
-        raise FileNotFoundError(f"{NOTO}/NotoSans{script}[...].ttf; run tools/build.sh to fetch Noto")
+        raise FileNotFoundError(f"{NOTO}/{stem}[...].ttf; run tools/build.sh to fetch Noto")
     return found[0]
+
+
+def embolden(font: TTFont, strength: float) -> None:
+    """Thicken (or, below zero, thin) every simple glyph by `strength` units on
+    each axis, as FreeType's FT_Outline_EmboldenXY does: each point moves along
+    the bisector of its two edges, so the point structure stays and the three
+    masters still interpolate. Ink and advances grow by `strength`, and the
+    outlines move right by half of it, so sidebearings stay."""
+    if not strength:
+        return
+    glyf, hmtx = font["glyf"], font["hmtx"]
+    half = strength / 2
+    order = font.getGlyphOrder()
+    for name in order:
+        g = glyf[name]
+        if g.isComposite() or g.numberOfContours <= 0:
+            continue
+        coords = list(g.coordinates)
+        ends = list(g.endPtsOfContours)
+        area = 0.0
+        start = 0
+        for end in ends:
+            pts = coords[start:end + 1]
+            area += sum(pts[k - 1][0] * pts[k][1] - pts[k][0] * pts[k - 1][1] for k in range(len(pts)))
+            start = end + 1
+        truetype = area < 0  # outer contours clockwise
+        new = []
+        start = 0
+        for end in ends:
+            pts = coords[start:end + 1]
+            n = len(pts)
+            for k in range(n):
+                prv, cur, nxt = pts[k - 1], pts[k], pts[(k + 1) % n]
+                vin = (cur[0] - prv[0], cur[1] - prv[1])
+                vout = (nxt[0] - cur[0], nxt[1] - cur[1])
+                l_in, l_out = math.hypot(*vin), math.hypot(*vout)
+                sx = sy = 0.0
+                if n >= 3 and l_in > 1e-6 and l_out > 1e-6:
+                    ix, iy, ox, oy = vin[0] / l_in, vin[1] / l_in, vout[0] / l_out, vout[1] / l_out
+                    d = ix * ox + iy * oy
+                    if d > -0.9375:
+                        d += 1
+                        lx, ly = iy + oy, ix + ox
+                        if truetype:
+                            lx = -lx
+                        else:
+                            ly = -ly
+                        q = ox * iy - oy * ix
+                        if truetype:
+                            q = -q
+                        lim = min(l_in, l_out)
+                        scale = half / d if half * q <= lim * d else lim / q
+                        sx, sy = lx * scale, ly * scale
+                new.append((cur[0] + sx + half, cur[1] + sy))
+            start = end + 1
+        g.coordinates = type(g.coordinates)([(round(x), round(y)) for x, y in new])
+        g.recalcBounds(glyf)
+        width, _ = hmtx[name]
+        hmtx[name] = (max(0, round(width + strength)) if width else 0, g.xMin)
+    for name in order:
+        g = glyf[name]
+        if g.isComposite():
+            g.recalcBounds(glyf)
+            width, _ = hmtx[name]
+            hmtx[name] = (max(0, round(width + strength)) if width else 0, g.xMin)
 
 
 def script_masters(script: str, factor: float, have: set[int], work: Path) -> dict[str, Path]:
@@ -90,7 +174,7 @@ def script_masters(script: str, factor: float, have: set[int], work: Path) -> di
     opts.notdef_outline = False
     opts.hinting = False
     # vertical metrics (Ethiopic has them), hinting and metadata: Katagami has none of these
-    opts.drop_tables += ["STAT", "vhea", "vmtx", "VVAR", "gasp", "prep", "meta"]
+    opts.drop_tables += ["STAT", "vhea", "vmtx", "VVAR", "gasp", "prep", "meta", "hdmx", "LTSH", "VDMX", "DSIG", "kern"]
     sub = subset.Subsetter(opts)
     sub.populate(unicodes=unicodes)
     sub.subset(font)
@@ -100,11 +184,18 @@ def script_masters(script: str, factor: float, have: set[int], work: Path) -> di
         if tag in font and getattr(font[tag].table, "FeatureVariations", None) is not None:
             font[tag].table.FeatureVariations = None
             font[tag].table.Version = 0x00010000
-    axes = {a.axisTag for a in font["fvar"].axes}
+    axes = {a.axisTag: (a.minValue, a.maxValue) for a in font["fvar"].axes} if "fvar" in font else {}
+    lo, hi = axes.get("wght", (400, 400))
     out = {}
     for style, wght in MASTERS.items():
-        location = {"wght": wght} | ({"wdth": 100} if "wdth" in axes else {})
-        static = instantiateVariableFont(TTFont(_save(font, work / f"{script}.ttf")), location)
+        near = min(max(wght, lo), hi)
+        if axes:
+            location = {"wght": near} | ({"wdth": 100} if "wdth" in axes else {})
+            static = instantiateVariableFont(TTFont(_save(font, work / f"{script}.ttf")), location)
+        else:
+            static = TTFont(_save(font, work / f"{script}.ttf"))
+        # a weight Noto does not draw, from the nearest one it does
+        embolden(static, (NOTO_STEM[wght] - NOTO_STEM[near]) * static["head"].unitsPerEm / 1000)
         scale_upem(static, round(2048 * factor))  # Noto's units times 2048 / its em, times factor
         static["head"].unitsPerEm = 2048
         out[style] = _save(static, work / f"{script}-{style}.ttf")
