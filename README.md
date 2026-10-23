@@ -68,7 +68,7 @@ The five members share these decisions. [SPEC.md](SPEC.md) records each one with
 
 - **Drawn:** Latin, Greek and Cyrillic.
 - **Merged:** Arabic, Hebrew, Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala, Thai, Lao, Myanmar, Khmer, Georgian, Armenian, Ethiopic, Tifinagh, Ol Chiki, Coptic, Tibetan, Hanifi Rohingya, N'Ko, Thaana, Vai and Canadian Aboriginal syllabics, merged from Noto and scaled to Katagami's x-height. Tibetan comes from Noto Serif Tibetan, the only Noto Tibetan. Each proportional member maps 8,251 characters.
-- **Italics:** the Italics set Latin, Greek and Cyrillic. Italic text in another script uses the roman's letters, which the web stylesheet declares for italic too.
+- **Italics:** the Italics set Latin, Greek and Cyrillic. For italic text in another script, a stylesheet declares the roman's script files a second time with `font-style: italic`, so the roman's letters set it.
 - **Companions:** Katagami CJK SC (7,768 characters), TC (14,154), JP (7,359) and KR (12,422), built from Noto Sans SC, TC, JP and KR. The web stylesheet assigns them to Sans, Round, Text and Serif.
 
 <picture>
