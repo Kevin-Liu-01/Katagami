@@ -1,6 +1,11 @@
 """Build a proportional Katagami member from Inter's Thin, Regular and Black masters.
 
-    python tools/build_sans.py [sans|round]
+    python tools/build_sans.py sans|round|text|serif [--italic]
+
+With --italic the member's Italic is built from Inter Italic's masters. They
+are stood upright first (sheared back by Inter's 9.4 degrees about half the
+x-height), so every transform below meets vertical stems as it does in the
+roman, and slanted again at the end about the member's own half x-height.
 
 Inter -> profile, in order (each step only where the profile asks for it):
   1. Inter alternates promoted to the default (square punctuation, profile picks)
@@ -25,8 +30,8 @@ from fontTools.designspaceLib import AxisDescriptor, DesignSpaceDocument, Instan
 
 sys.path.insert(0, str(Path(__file__).parent))
 from kerf_build.fontops import (  # noqa: E402
-    MASTERS, ROOT, assign_categories, erase_open_corners, load_inter_masters, promote_alternates, reflow_composites, resize_glyph, respace,
-    set_names, snapshot, stem, swap_glyph_outlines,
+    MASTERS, ROOT, assign_categories, decompose_transformed, erase_open_corners, italic_style, load_inter_masters, promote_alternates,
+    reflow_composites, resize_glyph, respace, set_names, shear, slant_tangent, snapshot, stem, swap_glyph_outlines,
 )
 from kerf_build.outline import (  # noqa: E402
     XMap,
@@ -729,7 +734,7 @@ def find_arm_ends(font, g, sw: float) -> list[tuple]:
         for i in range(n):
             j = (i + 1) % n
             a, q = pts[i], pts[j]
-            if a.type != "line" or q.type != "line" or abs(a.x - q.x) > 0.5 or not 0.3 * sw < abs(a.y - q.y) < 2 * sw:
+            if a.type != "line" or q.type != "line" or abs(a.x - q.x) > 2 or not 0.3 * sw < abs(a.y - q.y) < 2 * sw:
                 continue
             prev, nxt = pts[(i - 1) % n], pts[(j + 1) % n]
             if nxt.type != "line" or abs(prev.y - a.y) > 0.5 or abs(nxt.y - q.y) > 0.5:
@@ -748,11 +753,54 @@ def find_arm_ends(font, g, sw: float) -> list[tuple]:
 
 
 ARMS = set("EFLTZzΓΕΖΤГЕТ")
+EXIT_CLEAR = 0.6  # stems: ink above the x-height's middle that reaches this far past a foot (r's arm) takes its exit
 
 
-def plan_serifs(fonts) -> dict:
+def italic_ends(font, g, ends: list[tuple], sw: float, letters: set[str]) -> list[tuple]:
+    """An Italic's lowercase takes entry and exit strokes in place of serifs on both sides.
+
+    The pen enters a lowercase letter at its top left and leaves it at its
+    bottom right. So the leftmost top end keeps its serif on the left side only
+    (the entry), and head serifs stay; the glyph's rightmost foot on the
+    baseline keeps its serif on the right side only (the exit), unless ink
+    higher up reaches past it (the arm of r), where the pen leaves from the arm;
+    every other lowercase top and baseline foot takes none. Feet on the
+    descender (p, q) and capitals keep their serifs on both sides.
+    """
+    lower = unicodedata.category(chr(g.unicodes[0])) == "Ll" if g.unicodes else g.name.split(".")[0] in letters and g.name[:1].islower()
+    if not lower:
+        return ends
+    b = g.getBounds(font)
+    xh = font["x"].getBounds(font).yMax if "x" in font else font.info.xHeight
+    pts = lambda e: (g.contours[e[0]].points[e[1]], g.contours[e[0]].points[e[2]])  # noqa: E731
+    feet = [e for e in ends if not e[5] and abs(pts(e)[0].y) < 3]
+    tops = [e for e in ends if e[5]]
+    exit_foot = max(feet, key=lambda e: max(q.x for q in pts(e)), default=None)
+    if exit_foot is not None:
+        foot_right = max(q.x for q in pts(exit_foot))
+        upper = [q.x for c in g.contours for q in c.points if q.type and q.y > xh / 2]
+        if upper and max(upper) > foot_right + EXIT_CLEAR * sw:
+            exit_foot = None
+    entry = min(tops, key=lambda e: min(q.x for q in pts(e)), default=None)
+    out = []
+    for e in ends:
+        ci, i, j, left, right, top, width, head = e
+        if e in feet:
+            if e is not exit_foot or not right:
+                continue
+            left = False
+        elif top and not head:
+            if e is not entry or not left:
+                continue
+            right = False
+        out.append((ci, i, j, left, right, top, width, head))
+    return out
+
+
+def plan_serifs(fonts, italic: bool = False) -> dict:
     """Where Katagami Serif's serifs go, found on Regular before any of them is cut:
-    stem ends and the free ends of arms."""
+    stem ends and the free ends of arms. An Italic's lowercase takes entry and
+    exit strokes instead (`italic_ends`)."""
     ref = fonts["Regular"]
     sw = stem(ref)
     letters = {g.name for g in ref if g.unicodes and unicodedata.category(chr(g.unicodes[0]))[0] == "L"}
@@ -764,6 +812,8 @@ def plan_serifs(fonts) -> dict:
         g = ref[name]
         ch = char.get(base(g), "")
         ends = find_stem_ends(ref, g, sw, letters)
+        if italic:
+            ends = italic_ends(ref, g, ends, sw, letters)
         arms = find_arm_ends(ref, g, sw) if ch in ARMS else []
         if ends or arms:
             plan[name] = (ends, arms)
@@ -1151,7 +1201,8 @@ def adjust_widths(fonts, widths: dict[str, float], condense: float = 1.0) -> Non
         reflow_composites(f, maps, old)
 
 
-def write_designspace(p: Profile, out_dir: Path, paths: dict[str, Path]) -> Path:
+def write_designspace(p: Profile, out_dir: Path, paths: dict[str, Path], italic: bool = False) -> Path:
+    name = italic_style if italic else (lambda style: style)
     ds = DesignSpaceDocument()
     ax = AxisDescriptor()
     ax.tag, ax.name, ax.minimum, ax.default, ax.maximum = "wght", "Weight", 100, 400, 900
@@ -1161,21 +1212,25 @@ def write_designspace(p: Profile, out_dir: Path, paths: dict[str, Path]) -> Path
     for style, w in MASTERS.items():
         s = SourceDescriptor()
         s.path = str(paths[style])
-        s.familyName, s.styleName = p.family, style
+        s.familyName, s.styleName = p.family, name(style)
         s.location = {"Weight": design[w]}
         ds.addSource(s)
     for i, style in enumerate(INSTANCES):
         inst = InstanceDescriptor()
-        inst.familyName, inst.styleName = p.family, style
+        inst.familyName, inst.styleName = p.family, name(style)
         inst.location = {"Weight": design[(i + 1) * 100]}
         ds.addInstance(inst)
-    out = out_dir / f"{p.file_stem}.designspace"
+    out = out_dir / f"{p.file_stem}{'-Italic' if italic else ''}.designspace"
     ds.write(out)
     return out
 
 
-def build(p: Profile) -> Path:
-    fonts = load_inter_masters()
+def build(p: Profile, italic: bool = False) -> Path:
+    fonts = load_inter_masters(italic)
+    if italic:
+        slope = slant_tangent(fonts["Regular"])
+        decompose_transformed(fonts)
+        shear(fonts, -slope, fonts["Regular"].info.xHeight / 2)
     if p.square_punctuation:
         promote_square_punctuation(fonts)
     if p.promote:
@@ -1197,7 +1252,7 @@ def build(p: Profile) -> Path:
     lift_ascenders(fonts, p.ascender_lift)
     lower_xheight(fonts, p.xheight_scale)
     if p.serif_reach:
-        plan = plan_serifs(fonts)
+        plan = plan_serifs(fonts, italic)
         add_contrast(fonts, dict(p.serif_contrast))
         cut_serifs(fonts, plan, p.serif_reach, p.serif_depth, p.serif_head, p.serif_beak)
     small_caps(fonts)
@@ -1205,26 +1260,31 @@ def build(p: Profile) -> Path:
     set_space(fonts, p.space_width)
     scale_outlines(fonts, p.scale)
     corners = soften_vertices(fonts, p.corner_radius)
+    if italic:
+        shear(fonts, slope, fonts["Regular"].info.xHeight / 2)
     erase_open_corners(fonts)
 
-    out = ROOT / "build" / p.key
+    out = ROOT / "build" / (f"{p.key}-italic" if italic else p.key)
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
     shutil.copytree(FEATURES, out / "features")
     paths = {}
     for style, f in fonts.items():
-        set_names(f, p.family, style, MASTERS[style])
+        set_names(f, p.family, italic_style(style) if italic else style, MASTERS[style])
+        if italic:
+            f.info.styleMapStyleName = "italic" if style == "Regular" else None
         assign_categories(f)
         if corners:
             # which corners were rounded, so the site can give Sans and Mono the
             # same corners at zero radius and morph between them point for point
             f.lib["com.kerf.roundedCorners"] = corners
-        path = out / f"{p.file_stem}-{style}.ufo"
+        path = out / f"{p.file_stem}-{(italic_style(style) if italic else style).replace(' ', '')}.ufo"
         f.save(path, overwrite=True)
         paths[style] = path
-    return write_designspace(p, out, paths)
+    return write_designspace(p, out, paths, italic)
 
 
 if __name__ == "__main__":
-    print(build(PROFILES[sys.argv[1] if len(sys.argv) > 1 else "sans"]))
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    print(build(PROFILES[args[0] if args else "sans"], "--italic" in sys.argv))

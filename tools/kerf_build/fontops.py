@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import math
 
 from fontTools.pens.pointPen import SegmentToPointPen
 from fontTools.pens.recordingPen import DecomposingRecordingPen
@@ -15,14 +16,60 @@ from .outline import IDENTITY, XMap, embolden_x, scale_contours_x
 
 ROOT = Path(__file__).resolve().parents[2]
 INTER_UFO = ROOT / "build" / "ufo"
+INTER_ITALIC_UFO = ROOT / "build" / "ufo-italic"
 MASTERS = {"Thin": 100, "Regular": 400, "Black": 900}
+VERSION = (0, 100)  # major, minor: "Version 0.100"
+# The style name of each master in an Italic. The masters keep the roman keys
+# (Thin, Regular, Black) inside the build, so every transform reads them alike.
+ITALIC_STYLES = {"Thin": "Thin Italic", "Regular": "Italic", "Black": "Black Italic"}
 
 
-def load_inter_masters() -> dict[str, ufoLib2.Font]:
+def italic_style(style: str) -> str:
+    """Thin -> Thin Italic, Regular -> Italic, Bold -> Bold Italic."""
+    return "Italic" if style == "Regular" else f"{style} Italic"
+
+
+def load_inter_masters(italic: bool = False) -> dict[str, ufoLib2.Font]:
+    if italic:
+        return {
+            name: ufoLib2.Font.open(INTER_ITALIC_UFO / f"Inter-{ITALIC_STYLES[name].replace(' ', '')}.ufo", lazy=False)
+            for name in MASTERS
+        }
     return {
         name: ufoLib2.Font.open(INTER_UFO / f"Inter-{name}.ufo", lazy=False)
         for name in MASTERS
     }
+
+
+def slant_tangent(font) -> float:
+    """The italic's slant as dx per unit of height: tan 9.4 degrees for Inter Italic."""
+    return math.tan(math.radians(-(font.info.italicAngle or 0)))
+
+
+def shear(fonts: dict, t: float, y0: float) -> None:
+    """Shear every glyph by x += (y - y0) * t: t < 0 stands an italic upright,
+    t > 0 slants it again. Contours and anchors move as points and component
+    offsets as vectors, so composites stay whole. Components with a scaled or
+    flipped matrix must be decomposed first (`decompose_transformed`)."""
+    for f in fonts.values():
+        for g in f:
+            for c in g.contours:
+                for p in c.points:
+                    p.x += (p.y - y0) * t
+            for a in g.anchors:
+                a.x += (a.y - y0) * t
+            for comp in g.components:
+                xx, xy, yx, yy, dx, dy = comp.transformation
+                comp.transformation = (xx, xy, yx, yy, dx + dy * t, dy)
+
+
+def decompose_transformed(fonts: dict) -> None:
+    """Decompose every composite with a flipped, scaled or rotated component,
+    whose matrix a shear would turn into a skew."""
+    ref = next(iter(fonts.values()))
+    names = [g.name for g in ref if any(tuple(c.transformation)[:4] != (1, 0, 0, 1) for c in g.components)]
+    for f in fonts.values():
+        decompose(f, names)
 
 
 def stem(font: ufoLib2.Font) -> float:
@@ -283,8 +330,7 @@ def set_names(font, family: str, style: str, weight: int) -> None:
     i.openTypeNameLicenseURL = "https://openfontlicense.org"
     i.openTypeNameDescription = None
     i.openTypeNameSampleText = None
-    i.versionMajor = 0
-    i.versionMinor = 100
+    i.versionMajor, i.versionMinor = VERSION
     i.openTypeNameVersion = None
     i.openTypeHeadCreated = None
 
