@@ -25,6 +25,17 @@ for entry in "${NOTO[@]}"; do
   url=$(printf %s "$file" | sed 's/\[/%5B/; s/\]/%5D/; s/,/%2C/')
   [[ -f "vendor/noto/$file" ]] || curl -sfL -o "vendor/noto/$file" "https://raw.githubusercontent.com/google/fonts/main/ofl/$dir/$url"
 done
+# v0.2's nine scripts, at a pinned google/fonts commit; Tibetan exists only as Noto Serif Tibetan
+NOTO_COMMIT=e7db6ca603fd4862010383ff17ffd6cc4ffac1c0
+NOTO2=(notosanstifinagh/NotoSansTifinagh-Regular.ttf "notosansolchiki/NotoSansOlChiki[wght].ttf"
+       notosanscoptic/NotoSansCoptic-Regular.ttf "notoseriftibetan/NotoSerifTibetan[wght].ttf"
+       "notosanshanifirohingya/NotoSansHanifiRohingya[wght].ttf" notosansnko/NotoSansNKo-Regular.ttf
+       "notosansthaana/NotoSansThaana[wght].ttf" notosansvai/NotoSansVai-Regular.ttf
+       "notosanscanadianaboriginal/NotoSansCanadianAboriginal[wght].ttf")
+for entry in "${NOTO2[@]}"; do
+  file="${entry##*/}"; url=$(printf %s "$entry" | sed 's/\[/%5B/; s/\]/%5D/')
+  [[ -f "vendor/noto/$file" ]] || curl -sfL -o "vendor/noto/$file" "https://raw.githubusercontent.com/google/fonts/$NOTO_COMMIT/ofl/$url"
+done
 for cjk in SC TC JP KR; do
   file="NotoSans$cjk[wght].ttf"
   dir="notosans$(printf %s "$cjk" | tr '[:upper:]' '[:lower:]')"
