@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Build Katagami from Inter's sources. Usage: tools/build.sh [sans|mono|round|text|serif|cjk|all]
+# Build Katagami from Inter's sources.
+# Usage: tools/build.sh [sans|round|text|serif|mono|cjk|all]
+# A member builds its roman and its Italic; add -roman or -italic (serif-italic) for one of them.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PY=.venv/bin/python
@@ -33,47 +35,56 @@ done
 if [[ ! -d build/ufo ]]; then
   .venv/bin/glyphs2ufo vendor/inter/src/Inter-Roman.glyphspackage -m build/ufo --minimal
 fi
-
-if [[ "$which" == sans || "$which" == all ]]; then
-  $PY tools/build_sans.py sans
-  mkdir -p fonts/sans
-  .venv/bin/fontmake -m build/sans/KatagamiSans.designspace -o variable \
-    --output-path 'build/sans/KatagamiSans-core[wght].ttf' --flatten-components
-  $PY tools/build_world.py sans
+if [[ ! -d build/ufo-italic ]]; then
+  .venv/bin/glyphs2ufo vendor/inter/src/Inter-Italic.glyphspackage -m build/ufo-italic --minimal
 fi
+
+# wants KEY PART: true when this run builds KEY's roman or italic
+wants() { [[ "$which" == all || "$which" == "$1" || "$which" == "$1-$2" ]]; }
+
+# proportional KEY STEM: Inter's masters into the member, fontmake, then the script merge (roman)
+proportional() {
+  local key=$1 stem=$2
+  mkdir -p "fonts/$key"
+  if wants "$key" roman; then
+    $PY tools/build_sans.py "$key"
+    .venv/bin/fontmake -m "build/$key/$stem.designspace" -o variable \
+      --output-path "build/$key/$stem-core[wght].ttf" --flatten-components
+    $PY tools/build_world.py "$key"
+  fi
+  if wants "$key" italic; then
+    $PY tools/build_sans.py "$key" --italic
+    .venv/bin/fontmake -m "build/$key-italic/$stem-Italic.designspace" -o variable \
+      --output-path "fonts/$key/$stem-Italic[wght].ttf" --flatten-components
+  fi
+  if wants "$key" roman || wants "$key" italic; then
+    $PY tools/finish.py "$key"
+  fi
+}
+
+proportional sans KatagamiSans
 
 if [[ "$which" == cjk || "$which" == all ]]; then
   $PY tools/build_cjk.py
 fi
 
-if [[ "$which" == mono || "$which" == all ]]; then
+mkdir -p fonts/mono
+if wants mono roman; then
   $PY tools/build_mono.py
-  mkdir -p fonts/mono
   .venv/bin/fontmake -m build/mono/KatagamiMono.designspace -o variable \
     --output-path 'fonts/mono/KatagamiMono[wght].ttf' --flatten-components
   $PY tools/build_mono.py --finish 'fonts/mono/KatagamiMono[wght].ttf'
 fi
-
-if [[ "$which" == round || "$which" == all ]]; then
-  $PY tools/build_sans.py round
-  mkdir -p fonts/round
-  .venv/bin/fontmake -m build/round/KatagamiRound.designspace -o variable \
-    --output-path 'build/round/KatagamiRound-core[wght].ttf' --flatten-components
-  $PY tools/build_world.py round
+if wants mono italic; then
+  $PY tools/build_mono.py --italic
+  .venv/bin/fontmake -m build/mono-italic/KatagamiMono-Italic.designspace -o variable \
+    --output-path 'fonts/mono/KatagamiMono-Italic[wght].ttf' --flatten-components
+  $PY tools/build_mono.py --finish 'fonts/mono/KatagamiMono-Italic[wght].ttf'
+fi
+if wants mono roman || wants mono italic; then
+  $PY tools/finish.py mono
 fi
 
-if [[ "$which" == text || "$which" == all ]]; then
-  $PY tools/build_sans.py text
-  mkdir -p fonts/text
-  .venv/bin/fontmake -m build/text/KatagamiText.designspace -o variable \
-    --output-path 'build/text/KatagamiText-core[wght].ttf' --flatten-components
-  $PY tools/build_world.py text
-fi
-
-if [[ "$which" == serif || "$which" == all ]]; then
-  $PY tools/build_sans.py serif
-  mkdir -p fonts/serif
-  .venv/bin/fontmake -m build/serif/KatagamiSerif.designspace -o variable \
-    --output-path 'build/serif/KatagamiSerif-core[wght].ttf' --flatten-components
-  $PY tools/build_world.py serif
-fi
+proportional round KatagamiRound
+proportional text KatagamiText
+proportional serif KatagamiSerif

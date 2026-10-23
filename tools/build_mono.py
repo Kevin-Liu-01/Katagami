@@ -18,6 +18,11 @@ After fontmake, `python tools/build_mono.py --finish <ttf>` empties the
 lookups that would set two characters as one glyph (Inter's arrows), so
 every character stays one cell wide.
 Every fitting decision is made once, on the Regular master.
+
+`python tools/build_mono.py --italic` builds Katagami Mono Italic the same way
+from Katagami Sans Italic's masters. They are stood upright first, fitted as
+above, and slanted again; box drawing, blocks, Braille and the agent symbols
+are drawn after that, upright, so they still join from cell to cell.
 """
 
 from __future__ import annotations
@@ -37,7 +42,10 @@ from ufoLib2.objects import Contour, Glyph, Point
 sys.path.insert(0, str(Path(__file__).parent))
 from kerf_build.boxdraw import draw_box_glyphs  # noqa: E402
 from kerf_build.terminal import draw_terminal_glyphs  # noqa: E402
-from kerf_build.fontops import FILTERS_KEY, ROOT, assign_categories, composites_to_flatten, decompose, reflow_composites, set_names, snapshot, swap_glyph_outlines  # noqa: E402
+from kerf_build.fontops import (  # noqa: E402
+    FILTERS_KEY, ROOT, assign_categories, composites_to_flatten, decompose, italic_style, reflow_composites, set_names, shear, slant_tangent,
+    snapshot, swap_glyph_outlines,
+)
 from kerf_build.outline import XMap, embolden_x  # noqa: E402
 from build_sans import relabel_features  # noqa: E402
 from fontTools.pens.recordingPen import DecomposingRecordingPen  # noqa: E402
@@ -45,6 +53,8 @@ from fontTools.pens.recordingPen import DecomposingRecordingPen  # noqa: E402
 FAMILY = "Katagami Mono"
 SANS = ROOT / "build" / "sans"
 OUT = ROOT / "build" / "mono"
+SANS_ITALIC = ROOT / "build" / "sans-italic"
+OUT_ITALIC = ROOT / "build" / "mono-italic"
 FEATURES = ROOT / "vendor" / "inter" / "src" / "features"
 
 CELL = 1280  # 0.625 em: Katagami's x-height sits at 0.87 of the cell, as Berkeley Mono's does at 0.6 em
@@ -93,15 +103,16 @@ LIGATURES = [
 SPACER = "kerf.spacer"
 
 
-def interpolate_bold() -> Path:
+def interpolate_bold(italic: bool = False) -> Path:
     """Katagami Sans at design weight 740, as a UFO with the masters' point structure."""
-    out = OUT / "instances"
+    out = (OUT_ITALIC if italic else OUT) / "instances"
+    src = SANS_ITALIC / "KatagamiSans-Italic.designspace" if italic else SANS / "KatagamiSans.designspace"
     subprocess.run(
-        [sys.executable, "-m", "fontmake", "-m", str(SANS / "KatagamiSans.designspace"),
-         "-i", "Katagami Sans Bold", "-o", "ufo", "--output-dir", str(out)],
+        [sys.executable, "-m", "fontmake", "-m", str(src),
+         "-i", f"Katagami Sans {'Bold Italic' if italic else 'Bold'}", "-o", "ufo", "--output-dir", str(out)],
         check=True, capture_output=True,
     )
-    return next(out.glob("*Bold.ufo"))
+    return next(out.glob("*Bold Italic.ufo" if italic else "*Bold.ufo"))
 
 
 def promote_alternates(fonts) -> None:
@@ -426,7 +437,8 @@ def bar_zero(font, stem: float) -> None:
                              (cx + w / 2, cy + h / 2), (cx - w / 2, cy + h / 2)]))
 
 
-def write_designspace(paths) -> Path:
+def write_designspace(paths, italic: bool = False) -> Path:
+    name = italic_style if italic else (lambda style: style)
     ds = DesignSpaceDocument()
     ax = AxisDescriptor()
     ax.tag, ax.name, ax.minimum, ax.default, ax.maximum = "wght", "Weight", 100, 400, 700
@@ -435,29 +447,35 @@ def write_designspace(paths) -> Path:
     for style, (_, design) in MASTER_STYLES.items():
         s = SourceDescriptor()
         s.path = str(paths[style])
-        s.familyName, s.styleName = FAMILY, style
+        s.familyName, s.styleName = FAMILY, name(style)
         s.location = {"Weight": design}
         ds.addSource(s)
     for i, style in enumerate(INSTANCES):
         inst = InstanceDescriptor()
-        inst.familyName, inst.styleName = FAMILY, style
+        inst.familyName, inst.styleName = FAMILY, name(style)
         inst.location = {"Weight": dict(WEIGHT_MAP)[(i + 1) * 100]}
         ds.addInstance(inst)
-    out = OUT / "KatagamiMono.designspace"
+    out = (OUT_ITALIC if italic else OUT) / f"KatagamiMono{'-Italic' if italic else ''}.designspace"
     ds.write(out)
     return out
 
 
-def main() -> None:
-    if OUT.exists():
-        shutil.rmtree(OUT)
-    OUT.mkdir(parents=True)
-    bold = interpolate_bold()
+def main(italic: bool = False) -> None:
+    out = OUT_ITALIC if italic else OUT
+    if out.exists():
+        shutil.rmtree(out)
+    out.mkdir(parents=True)
+    bold = interpolate_bold(italic)
+    sans = SANS_ITALIC if italic else SANS
     fonts = {
-        "Thin": ufoLib2.Font.open(SANS / "KatagamiSans-Thin.ufo", lazy=False),
-        "Regular": ufoLib2.Font.open(SANS / "KatagamiSans-Regular.ufo", lazy=False),
+        "Thin": ufoLib2.Font.open(sans / f"KatagamiSans-Thin{'Italic' if italic else ''}.ufo", lazy=False),
+        "Regular": ufoLib2.Font.open(sans / f"KatagamiSans-{'Italic' if italic else 'Regular'}.ufo", lazy=False),
         "Bold": ufoLib2.Font.open(bold, lazy=False),
     }
+    if italic:
+        # stand the Italic upright about half its x-height, as build_sans.py slanted it
+        slope, pivot = slant_tangent(fonts["Regular"]), fonts["Regular"].info.xHeight / 2
+        shear(fonts, -slope, pivot)
     promote_alternates(fonts)
     features = mono_features(fonts["Regular"].features.text, set(fonts["Regular"].keys()))
     flatten = composites_to_flatten(fonts["Regular"])
@@ -492,27 +510,33 @@ def main() -> None:
         keep_marks_in_cell(f)
         for g in f:
             g.width = 0 if g.name in zero_width else CELL
+        if italic:
+            code_ligatures(f)
+            shear({style: f}, slope, pivot)
         draw_box_glyphs(f, CELL, stem, bar)
         draw_terminal_glyphs(f, CELL, bar)
-        code_ligatures(f)
+        if not italic:
+            code_ligatures(f)
         f.info.postscriptIsFixedPitch = True
         f.info.openTypeOS2Panose = [2, 11, 5, 9, 2, 2, 3, 2, 2, 4]
-        set_names(f, FAMILY, style, MASTER_STYLES[style][0])
+        set_names(f, FAMILY, italic_style(style) if italic else style, MASTER_STYLES[style][0])
+        if italic:
+            f.info.styleMapStyleName = "italic" if style == "Regular" else None
         f.lib[FILTERS_KEY] = []  # Katagami Sans's corners are already erased where every master agrees
         assign_categories(f)
 
     relabel_features(fonts, PROMOTE)
-    shutil.copytree(FEATURES, OUT / "features")
+    shutil.copytree(FEATURES, out / "features")
     paths = {}
     for style, f in fonts.items():
-        p = OUT / f"KatagamiMono-{style}.ufo"
+        p = out / f"KatagamiMono-{(italic_style(style) if italic else style).replace(' ', '')}.ufo"
         f.save(p, overwrite=True)
         paths[style] = p
-    print(write_designspace(paths))
+    print(write_designspace(paths, italic))
 
 
 if __name__ == "__main__":
     if sys.argv[1:2] == ["--finish"]:
         strip_ligatures(Path(sys.argv[2]))
     else:
-        main()
+        main("--italic" in sys.argv)
