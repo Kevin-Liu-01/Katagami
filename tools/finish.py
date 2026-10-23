@@ -16,8 +16,9 @@ in place, after fontmake (and, for the roman, the script merge):
   4. STAT: a weight axis value for every named weight (Regular elidable and
      linked to Bold) and an ital axis whose value is 0 (Roman, elidable,
      linked to Italic) or 1 (Italic), so a roman and its Italic link as one family.
-  5. Line metrics: the Italic takes the roman's hhea, typo and Windows metrics,
-     so both set the same line height and clip the same way.
+  5. Line metrics: the Italic takes the roman's hhea and typo metrics, so both
+     set the same line height; each file's Windows clipping box is its own
+     tallest and deepest glyph.
   6. Unhinted: a gasp table that asks for smoothing at every size, and a prep
      program that turns on smart dropout control (as gftools fix-unhinted does).
 """
@@ -97,11 +98,19 @@ def stat(font: TTFont, italic: bool) -> None:
 
 
 def metrics_from(font: TTFont, roman: TTFont) -> None:
+    """The roman's line spacing (hhea and typo), so both set the same line height."""
     hhea, os2, src_hhea, src_os2 = font["hhea"], font["OS/2"], roman["hhea"], roman["OS/2"]
     hhea.ascent, hhea.descent, hhea.lineGap = src_hhea.ascent, src_hhea.descent, src_hhea.lineGap
     os2.sTypoAscender, os2.sTypoDescender, os2.sTypoLineGap = src_os2.sTypoAscender, src_os2.sTypoDescender, src_os2.sTypoLineGap
-    os2.usWinAscent = max(src_os2.usWinAscent, font["head"].yMax)
-    os2.usWinDescent = max(src_os2.usWinDescent, -font["head"].yMin)
+
+
+def clipping(font: TTFont) -> None:
+    """The Windows clipping box is the font's own: its tallest and deepest glyph,
+    and never less than the typo metrics. USE_TYPO_METRICS keeps it out of the
+    line spacing, so an Italic without the merged scripts clips at its own size."""
+    os2, head = font["OS/2"], font["head"]
+    os2.usWinAscent = max(head.yMax, os2.sTypoAscender)
+    os2.usWinDescent = max(-head.yMin, -os2.sTypoDescender)
 
 
 def prune_names(font: TTFont) -> None:
@@ -152,6 +161,7 @@ def finish(key: str, only: str | None = None) -> None:
         stat(font, italic)
         if italic and roman is not None:
             metrics_from(font, roman)
+        clipping(font)
         unhinted(font)
         prune_names(font)  # what an earlier STAT or a second run left behind
         font.save(path)

@@ -48,7 +48,7 @@ from kerf_build.fontops import (  # noqa: E402
     snapshot, swap_glyph_outlines,
 )
 from kerf_build.outline import XMap, embolden_x, straighten_runs  # noqa: E402
-from build_sans import relabel_features  # noqa: E402
+from build_sans import T_RISE, relabel_features, set_t_top  # noqa: E402
 from fontTools.pens.recordingPen import DecomposingRecordingPen  # noqa: E402
 
 FAMILY = "Katagami Mono"
@@ -488,6 +488,9 @@ def main(italic: bool = False) -> None:
         slope, pivot = slant_tangent(fonts["Regular"]), fonts["Regular"].info.xHeight / 2
         shear(fonts, -slope, pivot)
     promote_alternates(fonts)
+    # Katagami Sans's t is flat across the top; in code it would read as tau,
+    # so the mono's t keeps Inter's stem above the crossbar
+    set_t_top(fonts, T_RISE)
     features = mono_features(fonts["Regular"].features.text, set(fonts["Regular"].keys()))
     flatten = composites_to_flatten(fonts["Regular"])
     for f in fonts.values():

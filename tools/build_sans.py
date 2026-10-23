@@ -308,11 +308,14 @@ def slant_t(fonts, share: float) -> None:
         f[base].contours[0].points[i].y -= share * stem(f)
 
 
-def flat_t(fonts) -> None:
-    """A flat-topped t: the stem stops at the top of the crossbar, so the top of
-    the t is one level line. The stem part (shared by t and the compact t.1) is
-    cut down in every master; the t's anchors above the cut, and the marks of
-    accented t's that sit above it (ť, ṫ, ẗ), come down by the same amount."""
+T_RISE = 266 / 1118  # Inter's t: the stem rises this share of the x-height above the crossbar
+
+
+def set_t_top(fonts, rise: float) -> None:
+    """Cut t's stem `rise` x-heights above the top of its crossbar (0 makes the
+    t flat across the top). The stem part (shared by t and the compact t.1)
+    changes in every master; the t's anchors above the crossbar, and the marks
+    of accented t's that sit above it (ť, ṫ, ẗ), move by the same amount."""
     ref = fonts["Regular"]
     if not ref["t"].components:
         return
@@ -322,26 +325,32 @@ def flat_t(fonts) -> None:
         bar_top = max(q.y for c in f["t"].contours for q in c.points)
         pts = f[part].contours[0].points
         top = max(q.y for q in pts if q.type)
-        drop = top - bar_top
-        if drop <= 0:
+        delta = bar_top + rise * f.info.xHeight - top
+        if abs(delta) < 1:
             continue
         for q in pts:
             if q.type and abs(q.y - top) < 1:
-                q.y = bar_top
+                q.y += delta
         for name in ("t", "t.1", *users):
             if name not in f:
                 continue
             g = f[name]
             for a in g.anchors:
                 if a.y > bar_top:
-                    a.y -= drop
+                    a.y += delta
             if name in users:
                 for comp in g.components[1:]:
                     b = f[comp.baseGlyph].getBounds(f)
                     t = list(comp.transformation)
                     if b is not None and f[comp.baseGlyph].width == 0 and b.yMin + t[5] >= bar_top:
-                        t[5] -= drop
+                        t[5] += delta
                         comp.transformation = tuple(t)
+
+
+def flat_t(fonts) -> None:
+    """A flat-topped t: the stem stops at the top of the crossbar, so the top of
+    the t is one level line (Katagami Mono raises it again, `set_t_top`)."""
+    set_t_top(fonts, 0.0)
 
 
 TWO_NAMES = ("two", "two.sups", "two.subs", "two.numr", "two.dnom", "two.sinf")
