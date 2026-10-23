@@ -22,9 +22,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import sys
+
 from fontTools import subset
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.scaleUpem import scale_upem
+
+sys.path.insert(0, str(Path(__file__).parent))
+from kerf_build.fontops import VERSION  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 NOTO = ROOT / "vendor" / "noto"
@@ -79,6 +84,8 @@ def charset(region: str) -> set[int]:
 def rename(font: TTFont, family: str) -> None:
     ps = family.replace(" ", "")
     name = font["name"]
+    version = f"{VERSION[0]}.{VERSION[1]:03d}"
+    font["head"].fontRevision = float(version)
     for rec in list(name.names):
         if rec.nameID in (1, 16):
             rec.string = family
@@ -87,7 +94,9 @@ def rename(font: TTFont, family: str) -> None:
         elif rec.nameID == 6:
             rec.string = f"{ps}-{(name.getDebugName(2) or 'Regular').replace(' ', '')}"
         elif rec.nameID == 3:
-            rec.string = f"{ps};{font['head'].fontRevision:.3f}"
+            rec.string = f"{version};KERF;{ps}-{(name.getDebugName(2) or 'Regular').replace(' ', '')}"
+        elif rec.nameID == 5:
+            rec.string = f"Version {version}"
         elif rec.nameID == 25:
             rec.string = ps
     for rec in name.names:

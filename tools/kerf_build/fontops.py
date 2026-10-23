@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 INTER_UFO = ROOT / "build" / "ufo"
 INTER_ITALIC_UFO = ROOT / "build" / "ufo-italic"
 MASTERS = {"Thin": 100, "Regular": 400, "Black": 900}
-VERSION = (0, 100)  # major, minor: "Version 0.100"
+VERSION = (0, 200)  # major, minor: "Version 0.200"
 # The style name of each master in an Italic. The masters keep the roman keys
 # (Thin, Regular, Black) inside the build, so every transform reads them alike.
 ITALIC_STYLES = {"Thin": "Thin Italic", "Regular": "Italic", "Black": "Black Italic"}
