@@ -23,9 +23,11 @@ from pathlib import Path
 from fontTools.ttLib import TTFont
 
 sys.path.insert(0, str(Path(__file__).parent))
-from build_site import (CJK, FAMILY, FONTS, MEMBER_PATHS, OPTIONAL, PAGE_META, PUBLIC, REPO, SITE, SITE_URL, emit,  # noqa: E402
-                        asset_stamps, page_graph, site_facts, wrap)
-from build_world import SCRIPTS  # noqa: E402
+from build_site import (CJK, FAMILY, FONTS, ITALICS, MEMBER_PATHS, OPTIONAL, PAGE_META, PUBLIC, REPO, SCRIPT_COUNT, SITE, SITE_URL,  # noqa: E402
+                        VERSION, ZIP, emit, asset_stamps, page_graph, site_facts, wrap)
+from build_world import SCRIPTS, SERIF_ONLY  # noqa: E402
+
+MERGED = len(SCRIPTS)  # scripts merged from Noto
 
 ROOT = Path(__file__).resolve().parents[1]
 TYPEFACES = ROOT / "tools" / "seo" / "typefaces.json"
@@ -46,12 +48,13 @@ CYRILLIC = [(0x0400, 0x052F), (0x1C80, 0x1C8F), (0x2DE0, 0x2DFF), (0xA640, 0xA69
 DRAWN = {"Latin": (LATIN, {"Latn"}), "Greek": (GREEK, {"Grek"}), "Cyrillic": (CYRILLIC, {"Cyrl"})}
 CODES = {"Devanagari": "Deva", "Arabic": "Arab", "Bengali": "Beng", "Gurmukhi": "Guru", "Gujarati": "Gujr", "Oriya": "Orya",
          "Tamil": "Taml", "Telugu": "Telu", "Kannada": "Knda", "Malayalam": "Mlym", "Sinhala": "Sinh", "Thai": "Thai", "Lao": "Laoo",
-         "Myanmar": "Mymr", "Ethiopic": "Ethi", "Hebrew": "Hebr", "Armenian": "Armn", "Georgian": "Geor", "Khmer": "Khmr"}
-DISPLAY = {"Oriya": "Odia"}
+         "Myanmar": "Mymr", "Ethiopic": "Ethi", "Hebrew": "Hebr", "Armenian": "Armn", "Georgian": "Geor", "Khmer": "Khmr",
+         "Tifinagh": "Tfng", "OlChiki": "Olck", "Coptic": "Copt", "Tibetan": "Tibt", "HanifiRohingya": "Rohg", "NKo": "Nkoo",
+         "Thaana": "Thaa", "Vai": "Vaii", "CanadianAboriginal": "Cans"}
+DISPLAY = {"Oriya": "Odia", "OlChiki": "Ol Chiki", "HanifiRohingya": "Hanifi Rohingya", "NKo": "N'Ko", "CanadianAboriginal": "Canadian syllabics"}
 COMPANIONS = {"Chinese (Simplified)": ("KatagamiCJKSC", {"Hans"}), "Chinese (Traditional)": ("KatagamiCJKTC", {"Hant"}),
               "Japanese": ("KatagamiCJKJP", {"Jpan"}), "Korean": ("KatagamiCJKKR", {"Kore"})}
-NOT_YET = {"Tibetan": "Tibt", "Tifinagh": "Tfng", "Thaana": "Thaa", "N'Ko": "Nkoo", "Vai": "Vaii", "Ol Chiki": "Olck",
-           "Coptic": "Copt", "Hanifi Rohingya": "Rohg", "Canadian syllabics": "Cans"}
+NOT_YET: dict[str, str] = {}  # scripts on the map Katagami does not set yet: since v0.2, none
 SCRIPT_NAME_OF_CODE = {**{c: DISPLAY.get(n, n) for n, c in CODES.items()}, "Latn": "Latin", "Grek": "Greek", "Cyrl": "Cyrillic",
                        "Hans": "Chinese (Simplified)", "Hant": "Chinese (Traditional)", "Jpan": "Japanese", "Kore": "Korean",
                        **{c: n for n, c in NOT_YET.items()}}
@@ -84,6 +87,7 @@ def member_facts() -> dict:
         out[key] = {
             "family": FAMILY[key], "glyphs": len(f.getGlyphOrder()), "characters": len(cmap), "upm": f["head"].unitsPerEm,
             "cap": f["OS/2"].sCapHeight, "xh": f["OS/2"].sxHeight, "size": path.stat().st_size, "file": path.name,
+            "italic": ITALICS[key].name if ITALICS[key].exists() else "", "italic_size": ITALICS[key].stat().st_size if ITALICS[key].exists() else 0,
             "weights": [int(a.minValue) for a in f["fvar"].axes] + [int(a.maxValue) for a in f["fvar"].axes],
             "instances": [name.getDebugName(i.subfamilyNameID) for i in f["fvar"].instances],
             # a script counts once it has a working set of letters, not a stray sign or two
@@ -254,7 +258,8 @@ def member_pages(F: dict, C: dict, M: dict) -> None:
                 ["Characters", f"{f['characters']:,}"], ["Units per em", f"{f['upm']:,}"],
                 ["Cap height", f"{f['cap']} units, {f['cap'] / f['upm']:.3f} em"], ["x-height", f"{f['xh']} units, {f['xh'] / f['upm']:.3f} em"],
                 ["Scripts drawn or merged", str(len(f["scripts"]))], ["OpenType features you can switch", str(len(f["features"]))],
-                ["File", f"`{f['file']}`, {mb(f['size'])}"], ["License", "SIL Open Font License 1.1"], ["Version", "0.1"]]
+                ["File", f"`{f['file']}`, {mb(f['size'])}"], ["Italic", f"`{f['italic']}`, {mb(f['italic_size'])}"],
+                ["License", "SIL Open Font License 1.1"], ["Version", VERSION]]
         feats = [f"`{t}` {lab or FEATURE_NAMES.get(t, '')}".rstrip() for t, lab in f["features"].items()]
         cjk = "" if key == "mono" else " Chinese, Japanese and Korean come from the four Katagami CJK companions, which the web stylesheet assigns to this member."
         compare = [c for c in COMPARE_PAGES if key in c["members"]]
@@ -273,7 +278,7 @@ def member_pages(F: dict, C: dict, M: dict) -> None:
             ("h2", "Questions"),
             ("faq", [(f"Is {f['family']} free for commercial use?", f"{f['family']} is free for commercial use. It is released under the SIL Open Font License 1.1, which allows you to use and change it in commercial and non-commercial products. Keep the license with the files when you share them."),
                      (f"Which weights does {f['family']} have?", f"{f['family']} has every weight from {w0} to {w1} on one variable axis. Its named styles run from {f['instances'][0]} to {f['instances'][-1]}."),
-                     (f"Does {f['family']} have italics?", f"{f['family']} has no italics yet. Version 0.1 is upright, and italics come after hand corrections.")]),
+                     (f"Does {f['family']} have italics?", f"{f['family']} has an Italic, a variable font beside the roman with the same weights, built by the same transforms from Inter's Italic. The Italic sets Latin, Greek and Cyrillic, and italic text in other scripts sets the upright letters.")]),
         ]
         if compare:
             blocks += [("h2", "Comparisons"), ("cards", [(c["title"].split(":")[0], c["card"], c["path"]) for c in compare])]
@@ -285,7 +290,7 @@ def member_pages(F: dict, C: dict, M: dict) -> None:
                      "isPartOf": {"@id": f"{SITE_URL}/#katagami"}, "genre": "Typeface", "additionalType": "https://www.wikidata.org/wiki/Q17451",
                      "license": "https://openfontlicense.org/", "isAccessibleForFree": True, "applicationCategory": "DesignApplication",
                      "operatingSystem": "macOS, Windows, Linux, Web", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
-                     "softwareVersion": "0.1", "fileSize": mb(f["size"]), "downloadUrl": f"{SITE_URL}/download/Katagami-0.1.zip",
+                     "softwareVersion": VERSION, "fileSize": mb(f["size"]), "downloadUrl": f"{SITE_URL}/download/{ZIP}",
                      "author": {"@id": f"{SITE_URL}/#kevin"}}],
              group="Members", card=lede)
 
@@ -307,8 +312,8 @@ def katagami_row(keys: list, F: dict) -> dict:
     return {
         "name": f["family"] if one else "Katagami", "designers": "Kevin Liu", "foundry": "Self-published by Kevin Liu", "year": "2026",
         "license": "SIL Open Font License 1.1", "free_commercial": "Yes", "weights": f"{w0} to {w1}" if one else "100 to 900, and 100 to 700 in Mono",
-        "italics": "Not yet", "axes": "wght",
-        "scripts": (f"Latin, Greek, Cyrillic and 19 more scripts, {chars:,} characters, plus Chinese, Japanese and Korean companions"
+        "italics": "Yes" if one else "Yes, in every member", "axes": "wght",
+        "scripts": (f"Latin, Greek, Cyrillic and {MERGED} more scripts, {chars:,} characters, plus Chinese, Japanese and Korean companions"
                     if keys != ["mono"] else f"Latin, Greek, Cyrillic and box drawing, {chars:,} characters"),
         "features": {"mono": "Code ligatures in dlig that are off by default, disambiguated 0 O 1 l I, box drawing",
                      "serif": "Rectangular serifs, small capitals, tabular figures, fractions"}.get(keys[0]) if one else
@@ -321,14 +326,14 @@ def compare_specs() -> list[dict]:
     """What each comparison compares and the facts it adds beyond the table."""
     return [
         {"slug": "katagami-vs-inter", "other": "Inter", "members": ["sans", "round", "text", "serif"], "title": "Katagami vs Inter: differences, coverage and license",
-         "lede": "Katagami starts from Inter's open-source outlines, and both families are free under the SIL Open Font License. Katagami squares the curves and cuts terminals level. It adds a rounded member, a reading member, a serif and a mono, and it merges 19 more scripts.",
+         "lede": f"Katagami starts from Inter's open-source outlines, and both families are free under the SIL Open Font License. Katagami squares the curves and cuts terminals level. It adds a rounded member, a reading member, a serif and a mono, and it merges {MERGED} more scripts.",
          "notes": ["Katagami Sans's quarter arcs reach 0.73 of the way to their corners, and the arcs of a circle reach 0.552. The other Katagami members are rounder than Katagami Sans.",
                    "Katagami cuts the ends of c, e, s, a and g level, and Katagami Sans has square punctuation.",
                    "Katagami adds Chinese, Japanese and Korean through four companion fonts that the web stylesheet assigns to its proportional members.",
                    "Katagami has small capitals through `smcp` and `c2sc`. Inter 4.1 removed its incomplete small capitals.",
-                   "Katagami has a single weight axis. It has no optical size axis and no italics yet."]},
+                   "Katagami has a single weight axis and no optical size axis. Every member has an Italic, built like Inter's from its own Italic masters."]},
         {"slug": "katagami-vs-geist", "other": "Geist Sans", "members": ["sans", "round", "text", "serif"], "title": "Katagami vs Geist: two free type families compared",
-         "lede": "Geist and Katagami are both free families with a sans and a mono under the SIL Open Font License. Katagami adds a rounded sans, a reading face and a serif, and sets 22 scripts plus Chinese, Japanese and Korean.",
+         "lede": f"Geist and Katagami are both free families with a sans and a mono under the SIL Open Font License. Katagami adds a rounded sans, a reading face and a serif, and sets {SCRIPT_COUNT} scripts plus Chinese, Japanese and Korean.",
          "notes": ["Katagami Sans, Round, Text, Serif and Mono share one skeleton.",
                    "Katagami Mono has code ligatures, but they stay off until you turn on dlig."]},
         {"slug": "katagami-mono-vs-geist-mono", "other": "Geist Mono", "members": ["mono"], "title": "Katagami Mono vs Geist Mono: free monospace fonts compared",
@@ -364,7 +369,7 @@ def compare_specs() -> list[dict]:
         {"slug": "katagami-serif-vs-source-serif", "other": "Source Serif 4", "members": ["serif"], "title": "Katagami Serif vs Source Serif 4: free serifs compared",
          "lede": "Source Serif 4 and Katagami Serif are both free serifs under the SIL Open Font License.", "notes": []},
         {"slug": "katagami-vs-noto-sans", "other": "Noto Sans", "members": ["sans", "round", "text", "serif"], "title": "Katagami vs Noto Sans: multilingual coverage compared",
-         "lede": "The Noto project covers the scripts of Unicode across many fonts, and Noto Sans is its font for Latin, Greek and Cyrillic. Katagami draws its own Latin, Greek and Cyrillic. It merges 19 scripts from the Noto Sans fonts and scales them to Katagami's x-height.",
+         "lede": f"The Noto project covers the scripts of Unicode across many fonts, and Noto Sans is its font for Latin, Greek and Cyrillic. Katagami draws its own Latin, Greek and Cyrillic. It merges {MERGED} scripts from the Noto fonts and scales them to Katagami's x-height.",
          "notes": ["Katagami's Latin, Greek and Cyrillic are its own design. Its Devanagari, Arabic, Thai, Ethiopic and other merged scripts use Noto's outlines.",
                    "Katagami adds Chinese, Japanese and Korean through four companion fonts built from Noto Sans SC, TC, JP and KR."]},
     ]
@@ -438,7 +443,7 @@ def guide_pages(F: dict, C: dict, M: dict, T: dict) -> None:
                     "The family has enough weights for a hierarchy, and one variable file with every weight is best.", "The font covers the languages your product ships in.", "The license lets you embed the font in an app."]),
           ("h2", "Katagami Sans and Katagami Round"), ("specimen", FACE["sans"], "Settings, Billing, Members, 1,280.50", 34, 500),
           ("specimen", FACE["round"], "Invite team, Export CSV, Upgrade plan", 34, 500),
-          ("p", f"Katagami Sans has {sans['characters']:,} characters and weights 100 to 900 in one variable file. It has tabular figures and small capitals, and it sets 22 scripts plus Chinese, Japanese and Korean. Katagami Round is the softer member with rounded vertices. Both are free under the SIL Open Font License. The [Katagami Sans](/katagami-sans) and [Katagami Round](/katagami-round) pages have the full specifications."),
+          ("p", f"Katagami Sans has {sans['characters']:,} characters and weights 100 to 900 in one variable file. It has an Italic, tabular figures and small capitals, and it sets {SCRIPT_COUNT} scripts plus Chinese, Japanese and Korean. Katagami Round is the softer member with rounded vertices. Both are free under the SIL Open Font License. The [Katagami Sans](/katagami-sans) and [Katagami Round](/katagami-round) pages have the full specifications."),
           ("h2", "Comparison"),
           ("table", ["Font", "License", "Weights", "Variable axes", "Notable features"],
            [["Katagami Sans", "SIL Open Font License 1.1", "100 to 900", "wght", "Squared curves, small capitals, tabular figures, five members"],
@@ -460,13 +465,13 @@ def guide_pages(F: dict, C: dict, M: dict, T: dict) -> None:
             *[row(n) for n in ("Source Serif 4", "IBM Plex Serif", "NewsSerif", "Signifier")]])],
          [("Library", "/library"), ("Guides", "/library#guides"), ("Fonts for long reading", "/fonts-for/reading")], image="guide", group="Guides")
     st = M["stats"]["sans"]
-    page("/fonts-for/many-languages", "A free font for many languages: Katagami's coverage", "Katagami sets the main language of places where 99.9 percent of people live. It draws Latin, Greek and Cyrillic, merges 19 more scripts and sets Chinese, Japanese and Korean with companion fonts.",
+    page("/fonts-for/many-languages", "A free font for many languages: Katagami's coverage", f"Katagami sets the main language of places where {st['people']} percent of people live. It draws Latin, Greek and Cyrillic, merges {MERGED} more scripts and sets Chinese, Japanese and Korean with companion fonts.",
          "Fonts for many languages", f"Katagami sets {st['languages']} of the {st['of']} languages on its map in full. It sets the main language of places where {st['people']} percent of people live.",
          [("h2", "How the coverage works"),
-          ("list", ["Latin, Greek and Cyrillic are drawn in Katagami's own design.", "19 more scripts are merged from Noto Sans and scaled to Katagami's x-height.",
+          ("list", ["Latin, Greek and Cyrillic are drawn in Katagami's own design.", f"{MERGED} more scripts are merged from Noto and scaled to Katagami's x-height.",
                     "Chinese, Japanese and Korean come from four companion fonts.", "On the web, every script is its own file, so a page loads only the scripts it shows."]),
           ("h2", "Covered scripts"), ("cards", [(s["name"], s["card"], s["path"]) for s in SCRIPT_INDEX if s["covered"]]),
-          ("h2", "Scripts not covered yet"), ("cards", [(s["name"], s["card"], s["path"]) for s in SCRIPT_INDEX if not s["covered"]]),
+          *uncovered_blocks(),
           ("p", "The [map](/map) shows where each language is spoken, and every language has [its own page](/languages).")],
          [("Library", "/library"), ("Guides", "/library#guides"), ("Fonts for many languages", "/fonts-for/many-languages")], image="guide", group="Guides")
     page("/free-for-commercial-use", "Katagami is free for commercial use under the SIL Open Font License", "Katagami is free for commercial use under the SIL Open Font License 1.1. The license allows use in apps, websites and print, and it asks you to keep the license with the files and to rename changed versions.",
@@ -597,6 +602,13 @@ def agent_pages(F: dict) -> None:
 # ---------- scripts and languages ----------
 
 SCRIPT_INDEX: list[dict] = []
+NOTO_FONT = {DISPLAY.get(n, n): f"Noto Serif {n}" if n in SERIF_ONLY else "Noto Sans" for n in SCRIPTS}
+
+
+def uncovered_blocks() -> list:
+    """The scripts on the map Katagami does not set yet, as a heading and cards, or nothing."""
+    rest = [(s["name"], s["card"], s["path"]) for s in SCRIPT_INDEX if not s["covered"]]
+    return [("h2", "Scripts not covered yet"), ("cards", rest)] if rest else []
 
 
 def script_and_language_pages(F: dict, C: dict, M: dict) -> None:
@@ -631,7 +643,7 @@ def script_and_language_pages(F: dict, C: dict, M: dict) -> None:
         letters = sets[langs[tags[0]]["sets"][0]]["glyphs"].replace(" ", "") if tags else ""
         speakers = sum(langs[t]["speakers"] for t in tags)
         intro = {"drawn": f"Katagami draws {name} in its own design.",
-                 "merged": f"Katagami merges {name} from Noto Sans and scales it to Katagami's x-height.",
+                 "merged": f"Katagami merges {name} from {NOTO_FONT.get(name, 'Noto Sans')} and scales it to Katagami's x-height.",
                  "companion": f"Katagami sets {name} with a CJK companion font.",
                  "none": f"Katagami does not cover {name} yet."}[how]
         reach = (f"The map has one language written in {name}, and it has {compact(speakers)} speakers." if len(tags) == 1 else
@@ -656,10 +668,9 @@ def script_and_language_pages(F: dict, C: dict, M: dict) -> None:
              f"{card} Katagami is free under the SIL Open Font License." if ok else card,
              name, card, blocks, [("Library", "/library"), ("Scripts", "/scripts"), (name, path)],
              image="script", group="Scripts", card=card)
-    page("/scripts", "Scripts in Katagami", "Katagami draws Latin, Greek and Cyrillic, merges 19 more scripts and sets Chinese, Japanese and Korean with companion fonts. Each script has a page with its character counts, its languages and whether Katagami covers it.",
-         "Scripts", "Katagami draws Latin, Greek and Cyrillic, merges 19 more scripts and sets Chinese, Japanese and Korean with companion fonts.",
-         [("h2", "Covered scripts"), ("cards", [(s["name"], s["card"], s["path"]) for s in SCRIPT_INDEX if s["covered"]]),
-          ("h2", "Scripts not covered yet"), ("cards", [(s["name"], s["card"], s["path"]) for s in SCRIPT_INDEX if not s["covered"]])],
+    page("/scripts", "Scripts in Katagami", f"Katagami draws Latin, Greek and Cyrillic, merges {MERGED} more scripts and sets Chinese, Japanese and Korean with companion fonts. Each script has a page with its character counts, its languages and whether Katagami covers it.",
+         "Scripts", f"Katagami draws Latin, Greek and Cyrillic, merges {MERGED} more scripts and sets Chinese, Japanese and Korean with companion fonts.",
+         [("h2", "Covered scripts"), ("cards", [(s["name"], s["card"], s["path"]) for s in SCRIPT_INDEX if s["covered"]]), *uncovered_blocks()],
          [("Library", "/library"), ("Scripts", "/scripts")], image="script", schema="CollectionPage")
 
     for tag, l in langs.items():
@@ -815,7 +826,7 @@ def write() -> None:
                                                                     ("compare", "Comparisons", "Each comparison sets Katagami next to another typeface."),
                                                                     ("guide", "Guides", "The guides compare free fonts for code, interfaces, reading and many languages."),
                                                                     ("learn", "Explainers", "The explainers cover variable fonts, OpenType features, squared curves and katagami stencils."),
-                                                                    ("script", "Scripts", "Katagami draws or merges 22 scripts and sets Chinese, Japanese and Korean."),
+                                                                    ("script", "Scripts", f"Katagami draws or merges {SCRIPT_COUNT} scripts and sets Chinese, Japanese and Korean."),
                                                                     ("language", "Languages", f"Katagami's map has {len([p for p in PAGES if p['group'] == 'Languages'])} languages.")]]
     (ROOT / "build" / "og.json").write_text(json.dumps(og, ensure_ascii=False, indent=1))
     print(f"{len(PAGES)} library pages, {len(urls)} URLs in the sitemap, {len(og)} card images to draw")
@@ -831,14 +842,14 @@ def write_twins_for_main(facts: dict) -> None:
                         for k in MEMBERS)
     st = FACTS["map"]["stats"]["sans"]
     MAIN_TWINS.update({
-        "index": f"# Katagami\n\n{PAGE_META['index.html'][1]}\n\n## Members\n\n{members}\n\n## Coverage\n\nKatagami draws Latin, Greek and Cyrillic and merges 19 more scripts. Chinese, Japanese and Korean come from four companion fonts. Katagami sets the main language of places where {st['people']} percent of people live, and it sets {st['languages']} of the {st['of']} languages on the map in full.\n\n## Download and web setup\n\n```html\n{WEB_SNIPPET}\n```\n\n- Download: {SITE_URL}/download\n- Source: {REPO}\n- License: SIL Open Font License 1.1\n\n## More\n\n- Glyphs: {SITE_URL}/glyphs\n- Features: {SITE_URL}/features\n- Map: {SITE_URL}/map\n- Font-ify: {SITE_URL}/convert\n- Library: {SITE_URL}/library\n",
+        "index": f"# Katagami\n\n{PAGE_META['index.html'][1]}\n\n## Members\n\n{members}\n\n## Coverage\n\nKatagami draws Latin, Greek and Cyrillic and merges {MERGED} more scripts. Chinese, Japanese and Korean come from four companion fonts. Katagami sets the main language of places where {st['people']} percent of people live, and it sets {st['languages']} of the {st['of']} languages on the map in full.\n\n## Download and web setup\n\n```html\n{WEB_SNIPPET}\n```\n\n- Download: {SITE_URL}/download\n- Source: {REPO}\n- License: SIL Open Font License 1.1\n\n## More\n\n- Glyphs: {SITE_URL}/glyphs\n- Features: {SITE_URL}/features\n- Map: {SITE_URL}/map\n- Font-ify: {SITE_URL}/convert\n- Library: {SITE_URL}/library\n",
         "glyphs": f"# Katagami glyphs\n\n{PAGE_META['glyphs.html'][1]}\n\n" + "\n".join(f"- {F[k]['family']} has {F[k]['characters']:,} characters and {F[k]['glyphs']:,} glyphs." for k in MEMBERS) + f"\n\nA search can go in the address, as in {SITE_URL}/glyphs?q=omega.\n",
         "features": f"# Katagami OpenType features\n\n{PAGE_META['features.html'][1]}\n\n" + "\n".join(f"- `{t}` {lab}".rstrip() for t, lab in F["sans"]["features"].items()) + "\n\nTurn one on with `font-feature-settings: \"tnum\";`.\n",
         "map": f"# Where Katagami writes\n\n{PAGE_META['map.html'][1]}\n\n" + "\n".join(f"- {FAMILY[k]} covers {s['languages']} of {s['of']} languages, {s['people']} percent of people and {s['land']} percent of mapped land." for k, s in FACTS["map"]["stats"].items()) + f"\n\n- Every language: {SITE_URL}/languages\n- Every script: {SITE_URL}/scripts\n",
         "convert": f"# Font-ify\n\n{PAGE_META['convert.html'][1]}\n\nFont-ify replaces a monospace stack with Katagami Mono and a serif stack with Katagami Serif. Icon fonts and `var()` stacks stay as they are, and every other stack becomes the member you pick. The original stack stays behind Katagami as its fallback.\n\nA site opens directly from an address such as {SITE_URL}/convert?url=example.com.\n",
         "about": f"# About Katagami\n\n{PAGE_META['about.html'][1]}\n\nKevin Liu started Katagami on 7 October 2026 to make one type family that feels like a coherent system. It has a sans, a rounded sans, a reading face, a serif and a mono on one skeleton. Katagami starts from Inter's open-source outlines. Its merged scripts and CJK companions come from Noto. The name comes from katagami, the Japanese paper stencils that are cut to dye patterns on cloth. The Japanese word 型紙 means pattern paper.\n\nThe [katagami stencils page]({SITE_URL}/learn/katagami-stencils) has more about the stencils.\n",
         "faq": f"# Katagami FAQ\n\n" + "\n\n".join(f"## {q['name']}\n\n{q['acceptedAnswer']['text']}" for q in FACTS["faq"]) + "\n",
-        "download": f"# Download Katagami\n\n{PAGE_META['download.html'][1]}\n\nThe zip with every font is at {SITE_URL}/download/Katagami-0.1.zip.\n\n" + "\n".join(f"- {F[k]['family']}: `{F[k]['file']}`, {mb(F[k]['size'])}" for k in MEMBERS) + f"\n\nOn the web, link the stylesheet.\n\n```html\n{WEB_SNIPPET}\n```\n",
+        "download": f"# Download Katagami\n\n{PAGE_META['download.html'][1]}\n\nThe zip with every font is at {SITE_URL}/download/{ZIP}.\n\n" + "\n".join(f"- {F[k]['family']}: `{F[k]['file']}`, {mb(F[k]['size'])}; Italic `{F[k]['italic']}`, {mb(F[k]['italic_size'])}" for k in MEMBERS) + f"\n\nOn the web, link the stylesheet.\n\n```html\n{WEB_SNIPPET}\n```\n",
     })
     for name, text in MAIN_TWINS.items():
         (PUBLIC / f"{name}.md").write_text(text + f"\n---\n\nSource: {SITE_URL}/{'' if name == 'index' else name}\n")
@@ -847,7 +858,7 @@ def write_twins_for_main(facts: dict) -> None:
 def write_llms(facts: dict) -> None:
     def section(name, items):
         return f"## {GROUP_LABELS[name]}\n\n" + "\n".join(f"- [{p['title']}]({SITE_URL}{p['path']}.md): {p['description']}" for p in items) + "\n"
-    head = (f"# Katagami\n\n> {PAGE_META['index.html'][1]}\n\nKatagami is made by Kevin Liu, and the current version is 0.1. The source is at {REPO}. "
+    head = (f"# Katagami\n\n> {PAGE_META['index.html'][1]}\n\nKatagami is made by Kevin Liu, and the current version is {VERSION}. The source is at {REPO}. "
             f"Every page on {SITE_URL} has a Markdown twin at the same address with `.md`.\n\n")
     main = "## Main pages\n\n" + "\n".join(f"- [{m[0]}]({SITE_URL}/{'index' if t == 'index.html' else t.removesuffix('.html')}.md): {m[1]}" for t, m in PAGE_META.items()) + "\n"
     groups = [section(g, [p for p in PAGES if p["group"] == g]) for g in ("Members", "Compare", "Guides", "Learn", "Scripts")]

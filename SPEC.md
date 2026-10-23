@@ -185,7 +185,7 @@ U+2500 to U+259F are drawn by `tools/kerf_build/boxdraw.py`, not taken from Inte
 | Scripts | Latin, Greek and Cyrillic drawn; 28 more merged from Noto; Chinese, Japanese and Korean through Katagami CJK | Latin, Greek, Cyrillic | Latin, Greek, Cyrillic |
 | Features | Inter's full set plus small capitals | the same | Inter's set without capital spacing or n:1 ligatures, plus small capitals and code ligatures |
 
-The map counts a language as covered when the family has at least 90 percent of the letters it draws for it, and for Chinese, Japanese and Korean the whole national standard. In v0.1 it listed eleven languages the family did not cover, written in nine scripts: Tifinagh (Tamazight), Ol Chiki (Santali), Coptic, Tibetan, Hanifi Rohingya, N'Ko, Thaana, Vai and Canadian syllabics. v0.2 merges all nine (see Other scripts); the map's figures are recomputed by `tools/build_map.py`.
+The map counts a language as covered when the family has at least 90 percent of the letters it draws for it, and for Chinese, Japanese and Korean the whole national standard. In v0.1 it listed eleven languages the family did not cover, written in nine scripts: Tifinagh (Tamazight), Ol Chiki (Santali), Coptic, Tibetan, Hanifi Rohingya, N'Ko, Thaana, Vai and Canadian syllabics. v0.2 merges all nine (see Other scripts), and the map now counts all 234 languages as covered by Katagami Sans, Round, Text and Serif, and 172 by Katagami Mono.
 
 ## Katagami Round
 

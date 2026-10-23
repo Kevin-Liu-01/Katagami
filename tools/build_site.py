@@ -4,11 +4,14 @@ The site lives in its own repo, Katagami-Website, checked out next to this one
 (or wherever KATAGAMI_SITE points). This writes into it:
 
     fonts/KatagamiSans.woff2 ...        each member's Latin, Greek and Cyrillic core
+    fonts/KatagamiSans-Italic.woff2 ... each member's Italic (Latin, Greek and Cyrillic)
     fonts/KatagamiSans-thai.woff2 ...   one file per merged script, per member
     fonts/KatagamiCJK{SC,JP,KR}.woff2   the CJK companions
     fonts/katagami.css                  @font-face rules: each member is one family whose
                                     faces split by unicode-range, so a page downloads
-                                    only the scripts it shows
+                                    only the scripts it shows; the merged scripts and
+                                    CJK are declared for italic too, so italic text in
+                                    them sets the upright letters
     data.js     window.KERF: metrics, character tables, features, outlines
     index.html  page.html wrapped in a document, asset URLs stamped with hashes
     katagami-apply.js  its face table, between the generated-faces markers
@@ -37,6 +40,7 @@ from fontTools.ttLib import TTFont
 
 sys.path.insert(0, str(Path(__file__).parent))
 from build_world import SCRIPTS  # noqa: E402
+from kerf_build.fontops import VERSION as _VERSION  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SITE = Path(os.environ.get("KATAGAMI_SITE", ROOT.parent / "Katagami-Website"))
@@ -47,8 +51,13 @@ PUBLIC = SITE / "public" if NEXT else SITE
 FONTS = {"sans": ROOT / "fonts/sans/KatagamiSans[wght].ttf", "round": ROOT / "fonts/round/KatagamiRound[wght].ttf",
          "text": ROOT / "fonts/text/KatagamiText[wght].ttf", "serif": ROOT / "fonts/serif/KatagamiSerif[wght].ttf",
          "mono": ROOT / "fonts/mono/KatagamiMono[wght].ttf"}
+ITALICS = {key: path.with_name(path.name.replace("[wght]", "-Italic[wght]")) for key, path in FONTS.items()}
 WOFF2 = {"sans": "KatagamiSans.woff2", "round": "KatagamiRound.woff2", "text": "KatagamiText.woff2",
          "serif": "KatagamiSerif.woff2", "mono": "KatagamiMono.woff2"}
+WOFF2_ITALIC = {key: name.replace(".woff2", "-Italic.woff2") for key, name in WOFF2.items()}
+VERSION = f"{_VERSION[0]}.{_VERSION[1]:03d}".rstrip("0").rstrip(".")  # "0.2"
+ZIP = f"Katagami-{VERSION}.zip"
+SCRIPT_COUNT = 3 + len(SCRIPTS)  # Latin, Greek and Cyrillic drawn, the rest merged
 OUTLINE_CHARS = {"K": "K", "a": "a", "t": "t", "g": "g", "m": "m", "i": "i"}
 COMPARE = "on"  # the Curves plate draws these in Sans, Round and Text
 KERF_UFO = ROOT / "build/sans/KatagamiSans-Regular.ufo"
@@ -310,25 +319,37 @@ def stamp(rel: str) -> str:
 
 
 def web_fonts() -> list[list]:
-    """Write every member's slices and the CJK companions; return the faces
-    as [family, file, weights, unicode-range] with stamped file names."""
+    """Write every member's slices, its Italic and the CJK companions; return the
+    faces as [family, file, weights, unicode-range, style] with stamped file names.
+
+    The Italics carry Latin, Greek and Cyrillic. Each merged script's slice and
+    each CJK companion is declared a second time with font-style: italic, so
+    italic text in those scripts sets the upright letters instead of falling to
+    another family or being slanted by the browser."""
     faces = []
     scripted = set(SCRIPT_OF)
+    stamped = lambda name: stamp(f"fonts/{name}").removeprefix("fonts/")  # noqa: E731
     for key, path in FONTS.items():
         cmap = set(TTFont(path).getBestCmap())
         core = cmap - scripted
         stem = WOFF2[key].removesuffix(".woff2")
         woff2_slice(path, core, PUBLIC / "fonts" / WOFF2[key])
-        faces.append([FAMILY[key], stamp(f"fonts/{WOFF2[key]}").removeprefix("fonts/"), WEIGHTS[key],
-                      unicode_range(core, avoid=scripted)])
+        faces.append([FAMILY[key], stamped(WOFF2[key]), WEIGHTS[key], unicode_range(core, avoid=scripted), "normal"])
+        italic = ITALICS[key]
+        if italic.exists():
+            icore = set(TTFont(italic).getBestCmap()) - scripted
+            woff2_slice(italic, icore, PUBLIC / "fonts" / WOFF2_ITALIC[key])
+            faces.append([FAMILY[key], stamped(WOFF2_ITALIC[key]), WEIGHTS[key], unicode_range(icore, avoid=scripted), "italic"])
         for script, ranges in SCRIPTS.items():
             have = {u for lo, hi in ranges for u in range(lo, hi + 1)} & cmap
             if not have:
                 continue
             name = f"{stem}-{script.lower()}.woff2"
             woff2_slice(path, have, PUBLIC / "fonts" / name)
-            faces.append([FAMILY[key], stamp(f"fonts/{name}").removeprefix("fonts/"), WEIGHTS[key],
-                          unicode_range(have, avoid=cmap - have)])
+            ur = unicode_range(have, avoid=cmap - have)
+            faces.append([FAMILY[key], stamped(name), WEIGHTS[key], ur, "normal"])
+            if italic.exists():
+                faces.append([FAMILY[key], stamped(name), WEIGHTS[key], ur, "italic"])
     for name, ranges in CJK.items():
         src = ROOT / "fonts" / "cjk" / f"{name}[wght].ttf"
         if not src.exists():
@@ -343,13 +364,25 @@ def web_fonts() -> list[list]:
             font.save(out)
         css = ",".join(f"U+{a:X}-{b:X}" for a, b in ranges)
         for key in ("sans", "round", "text", "serif"):
-            faces.append([FAMILY[key], stamp(f"fonts/{name}.woff2").removeprefix("fonts/"), "100 900", css])
+            for style in ("normal", "italic"):
+                faces.append([FAMILY[key], stamped(f"{name}.woff2"), "100 900", css, style])
     return faces
 
 
+def stale_slices(faces: list[list]) -> list[str]:
+    """Delete the font files in the site's fonts/ that no face uses any more."""
+    used = {f[1].split("?")[0] for f in faces}
+    gone = []
+    for p in sorted((PUBLIC / "fonts").glob("*.woff2")):
+        if p.name not in used:
+            p.unlink()
+            gone.append(p.name)
+    return gone
+
+
 def write_faces(faces: list[list]) -> None:
-    rule = lambda fam, file, w, ur, base: (f'@font-face{{font-family:"{fam}";src:url("{base}{file}") format("woff2");'  # noqa: E731
-                                           f"font-weight:{w};font-display:swap;unicode-range:{ur}}}")
+    rule = lambda fam, file, w, ur, style, base: (f'@font-face{{font-family:"{fam}";src:url("{base}{file}") format("woff2");'  # noqa: E731
+                                                  f"font-weight:{w};font-style:{style};font-display:swap;unicode-range:{ur}}}")
     (PUBLIC / "fonts" / "katagami.css").write_text("/* Katagami web fonts, generated by tools/build_site.py in the Katagami repo */\n"
                                               + "\n".join(rule(*f, "") for f in faces) + "\n")
     apply = PUBLIC / "katagami-apply.js"
@@ -363,8 +396,8 @@ def write_faces(faces: list[list]) -> None:
 
 def site_facts() -> dict:
     """Numbers the header and footer print, read from the built data and the repository."""
-    facts = {"characters": 0, "glyphs": 0, "features": 0, "people": "", "commit": "", "date": time.strftime("%Y-%m-%d"), "zip": ""}
-    zip_path = PUBLIC / "download" / "Katagami-0.1.zip"
+    facts = {"version": VERSION, "characters": 0, "glyphs": 0, "features": 0, "people": "", "commit": "", "date": time.strftime("%Y-%m-%d"), "zip": ""}
+    zip_path = PUBLIC / "download" / ZIP
     if zip_path.exists():
         facts["zip"] = f"{zip_path.stat().st_size / 1048576:.1f} MB"  # the unit the download page uses
     data_js = PUBLIC / "data.js"
@@ -372,7 +405,8 @@ def site_facts() -> dict:
         text = data_js.read_text()
         data = json.loads(text[text.index("{"):text.rindex("}") + 1])
         facts["characters"] = data["sans"]["metrics"]["characters"]
-        facts["glyphs"] = sum(data[k]["metrics"]["glyphs"] for k in FONTS if k in data)
+        # every glyph in the build: the five romans and their Italics
+        facts["glyphs"] = sum(data[k]["metrics"]["glyphs"] + data[k].get("italic", {}).get("metrics", {}).get("glyphs", 0) for k in FONTS if k in data)
         facts["features"] = len({f["tag"] for f in data["sans"]["features"] if OPTIONAL.match(f["tag"])})
     map_json = PUBLIC / "map" / "map.json"
     if map_json.exists():
@@ -390,7 +424,7 @@ def nav_html(here: str, facts: dict) -> str:
     links = "".join(f'<a href="{h}"{cur(h)}>{t}</a>' for h, t in LINKS)
     hints = {"/glyphs": f"{facts['characters']:,} characters", "/features": f"{facts['features']} features",
              "/map": f"{facts['people']}% of people" if facts["people"] else "", "/about": "Why I made it", "/faq": "",
-             "/convert": "Any site in Katagami", "/download": "v0.1 under the OFL"}
+             "/convert": "Any site in Katagami", "/download": f"v{VERSION} under the OFL"}
     sheet = "".join(f'<a href="{h}"{cur(h)}>{t}<span>{hints.get(h, "")}</span></a>'
                     for h, t in [*LINKS, ("/convert", "Font-ify"), ("/download", "Download")])
     keys = ("sans", "round", "text", "serif", "mono")
@@ -399,7 +433,7 @@ def nav_html(here: str, facts: dict) -> str:
     modes = '<button type="button" data-mode="human" aria-pressed="true">Human</button><button type="button" data-mode="machine" aria-pressed="false">Machine</button>'
     return f"""<header class="top">
   <div class="wrap">
-    <a class="brand" href="/">{MARK}<b>Katagami</b><span>v0.1</span></a>
+    <a class="brand" href="/">{MARK}<b>Katagami</b><span>v{VERSION}</span></a>
     <nav aria-label="Pages">
       <div class="links">{links}</div>
       <button type="button" class="find" data-cmdk aria-label="Search pages, glyphs and actions" aria-keyshortcuts="Meta+K Control+K">{SEARCH}<span>Search</span><kbd>⌘K</kbd></button>
@@ -442,7 +476,7 @@ def footer_html(facts: dict) -> str:
         <p>The SIL Open Font License 1.1 lets you use, change and ship the fonts in any product, paid or free.</p>
       </div>
       <div class="f-acts">
-        <a class="f-dl" href="/download">{TRAY}<span>Download v0.1</span><small>{facts["zip"]}</small></a>
+        <a class="f-dl" href="/download">{TRAY}<span>Download v{VERSION}</span><small>{facts["zip"]}</small></a>
         <div class="f-css"><code>&lt;link rel="stylesheet" href="{css}"&gt;</code><button type="button" data-copy='<link rel="stylesheet" href="{css}">'>Copy</button></div>
       </div>
     </section>
@@ -450,7 +484,7 @@ def footer_html(facts: dict) -> str:
       <nav class="f-col f-members" aria-label="Members"><h3>Members</h3>{members}</nav>
       <nav class="f-col f-hinted" aria-label="Explore"><h3>Explore</h3>{explore}</nav>
       <nav class="f-col" aria-label="Project"><h3>Project</h3><a href="/about">About</a><a href="/faq">FAQ</a><a href="/download">Download</a><a href="/library">Library</a><a href="{REPO}">GitHub</a><a href="{REPO}/blob/main/OFL.txt">License</a></nav>
-      <div class="f-col f-build"><h3>This build</h3><p>Version 0.1</p><p>{facts["glyphs"]:,} glyphs</p><p>Built {facts["date"]}</p>{commit}</div>
+      <div class="f-col f-build"><h3>This build</h3><p>Version {VERSION}</p><p>{facts["glyphs"]:,} glyphs</p><p>Built {facts["date"]}</p>{commit}</div>
     </div>
     <div class="f-type">
       <div class="f-controls">
@@ -472,7 +506,7 @@ SITE_URL = "https://katagami.kevinliu.studio"
 # each served page: (title, description, Open Graph image, schema.org page type)
 PAGE_META = {
     "index.html": ("Katagami: a free variable type family in five members",
-                   "Katagami is a free, open-source type family with five members: Sans, Round, Text, Serif and Mono. Each member is a variable font with weights from 100 to 900, and the family sets 22 scripts plus Chinese, Japanese and Korean.",
+                   f"Katagami is a free, open-source type family with five members: Sans, Round, Text, Serif and Mono. Each member is a variable roman and Italic with weights from 100 to 900, and the family sets {SCRIPT_COUNT} scripts plus Chinese, Japanese and Korean.",
                    "home", "WebPage"),
     "glyphs.html": ("Katagami glyphs: every character in five fonts",
                     "Search every character in Katagami Sans, Round, Text, Serif and Mono by character, Unicode name or code point, and see each glyph on its metric lines.",
@@ -481,7 +515,7 @@ PAGE_META = {
                       "This page shows every OpenType feature in Katagami off and on, from tabular figures and fractions to small capitals, stylistic sets and code ligatures. Each feature comes with the CSS that turns it on.",
                       "features", "WebPage"),
     "map.html": ("Where Katagami writes: a world map of languages in letters",
-                 "The map draws the world in letters. Each land cell shows a letter of the language spoken there in Katagami, which sets the main language of places where 99.9 percent of people live.",
+                 "The map draws the world in letters. Each land cell shows a letter of the language spoken there in Katagami, which sets the main language of every place on the map.",
                  "map", "WebPage"),
     "convert.html": ("Font-ify: see any website in Katagami",
                      "Type an address and see the page with every font swapped for Katagami, side by side with the original. The rewrite runs in your browser.",
@@ -493,7 +527,7 @@ PAGE_META = {
                  "These answers cover commercial use under the SIL Open Font License, which member to use, web fonts, OpenType features, languages and how the fonts are made.",
                  "faq", "FAQPage"),
     "download.html": ("Download Katagami: free variable fonts under the OFL",
-                      "Katagami 0.1 has five variable TrueType fonts and four CJK companions. The page has install steps for macOS, Windows and Linux and a stylesheet for the web.",
+                      f"Katagami {VERSION} has five variable TrueType fonts, each with an Italic, and four CJK companions. The page has install steps for macOS, Windows and Linux and a stylesheet for the web.",
                       "download", "WebPage"),
 }
 MEMBER_PATHS = {"sans": "/katagami-sans", "round": "/katagami-round", "text": "/katagami-text", "serif": "/katagami-serif", "mono": "/katagami-mono"}
@@ -501,7 +535,7 @@ MEMBER_PATHS = {"sans": "/katagami-sans", "round": "/katagami-round", "text": "/
 
 def asset_stamps() -> dict:
     assets = ["data.js", "katagami-apply.js", "site.css", "site.js", "library.css", "glyph-wall.js", "glyph-wall.css", "map/map.json", "download/files.json",
-              "fonts/katagami.css", *(f"fonts/{name}" for name in WOFF2.values())]
+              "fonts/katagami.css", *(f"fonts/{name}" for name in (*WOFF2.values(), *WOFF2_ITALIC.values()))]
     return {rel: hashlib.sha256((PUBLIC / rel).read_bytes()).hexdigest()[:10] for rel in assets if (PUBLIC / rel).exists()}
 
 
@@ -518,10 +552,10 @@ def base_graph(facts: dict) -> list:
               "alternateName": ["Katagami type family", "型紙"], "additionalType": "https://www.wikidata.org/wiki/Q17451",
               "genre": "Typeface", "url": f"{SITE_URL}/",
               "description": PAGE_META["index.html"][1], "author": {"@id": person["@id"]}, "creator": {"@id": person["@id"]},
-              "license": "https://openfontlicense.org/", "isAccessibleForFree": True, "softwareVersion": "0.1",
+              "license": "https://openfontlicense.org/", "isAccessibleForFree": True, "softwareVersion": VERSION,
               "dateCreated": "2026-10-07", "dateModified": facts["date"], "applicationCategory": "DesignApplication",
               "operatingSystem": "macOS, Windows, Linux, Web", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
-              "downloadUrl": f"{SITE_URL}/download/Katagami-0.1.zip", "sameAs": [REPO],
+              "downloadUrl": f"{SITE_URL}/download/{ZIP}", "sameAs": [REPO],
               "keywords": "free font, variable font, open source font, OFL font, sans serif, serif, monospace font, multilingual font",
               "hasPart": [{"@type": "CreativeWork", "name": FAMILY[k], "url": f"{SITE_URL}{MEMBER_PATHS[k]}"} for k in MEMBER_PATHS]}
     return [site, person, family]
@@ -675,38 +709,61 @@ CJK_FILES = [ROOT / "fonts" / "cjk" / f"{name}[wght].ttf" for name in CJK]
 
 
 def write_downloads() -> None:
-    """The zip of the five members with the license, and files.json, which the
-    download page lists: every font file with its size and a link."""
+    """The zip of the five members, roman and Italic, the four CJK companions and
+    the license, and files.json, which the download page lists: every font file
+    with its size and a link. An older version's zip is removed."""
     out = PUBLIC / "download"
     out.mkdir(exist_ok=True)
-    zpath = out / "Katagami-0.1.zip"
-    members = [(key, FONTS[key]) for key in ("sans", "round", "text", "serif", "mono")]
-    if not all(fresh(path, zpath) for _, path in members):
+    for old in out.glob("Katagami-*.zip"):
+        if old.name != ZIP:
+            old.unlink()
+    zpath = out / ZIP
+    keys = ("sans", "round", "text", "serif", "mono")
+    fonts = [path for key in keys for path in (FONTS[key], ITALICS[key]) if path.exists()]
+    cjk_files = [path for path in CJK_FILES if path.exists()]
+    folder = f"Katagami-{VERSION}"
+    if not all(fresh(path, zpath) for path in (*fonts, *cjk_files)):
         with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
             # fixed timestamps, so the same fonts make the same zip
-            for arc, src in [*((f"Katagami-0.1/{path.name}", path) for _, path in members),
-                             ("Katagami-0.1/OFL.txt", ROOT / "OFL.txt")]:
+            for arc, src in [*((f"{folder}/{path.name}", path) for path in fonts),
+                             *((f"{folder}/cjk/{path.name}", path) for path in cjk_files),
+                             (f"{folder}/OFL.txt", ROOT / "OFL.txt")]:
                 info = zipfile.ZipInfo(arc, date_time=(2026, 1, 1, 0, 0, 0))
                 info.compress_type = zipfile.ZIP_DEFLATED
                 z.writestr(info, src.read_bytes())
     raw = lambda path: f"{REPO}/raw/main/{path.relative_to(ROOT).as_posix().replace('[', '%5B').replace(']', '%5D')}"  # noqa: E731
-    files = [{"key": key, "family": FAMILY[key], "file": path.name, "weights": WEIGHTS[key].replace(" ", " to "),
-              "glyphs": len(TTFont(path).getGlyphOrder()), "bytes": path.stat().st_size, "url": raw(path)} for key, path in members]
+    entry = lambda key, path, style: {"key": key, "family": FAMILY[key], "style": style, "file": path.name,  # noqa: E731
+                                      "weights": WEIGHTS[key].replace(" ", " to "), "glyphs": len(TTFont(path).getGlyphOrder()),
+                                      "bytes": path.stat().st_size, "url": raw(path)}
+    files = [entry(key, FONTS[key], "Roman") for key in keys]
+    italics = [entry(key, ITALICS[key], "Italic") for key in keys if ITALICS[key].exists()]
     cjk = [{"family": f"Katagami CJK {path.stem[11:13]}", "file": path.name, "bytes": path.stat().st_size, "url": raw(path)}
-           for path in CJK_FILES if path.exists()]
-    (out / "files.json").write_text(json.dumps({"version": "0.1", "zip": {"file": zpath.name, "bytes": zpath.stat().st_size},
-                                                "members": files, "cjk": cjk}, separators=(",", ":")))
+           for path in cjk_files]
+    with zipfile.ZipFile(zpath) as z:
+        listing = [i.filename for i in z.infolist()]
+    (out / "files.json").write_text(json.dumps({"version": VERSION, "zip": {"file": zpath.name, "bytes": zpath.stat().st_size, "files": listing},
+                                                "members": files, "italics": italics, "cjk": cjk}, separators=(",", ":")))
 
 
 def main() -> None:
     (PUBLIC / "fonts").mkdir(parents=True, exist_ok=True)
-    data = {"version": "0.1", "names": {}}
+    data = {"version": VERSION, "names": {}}
     for key, path in FONTS.items():
         font = TTFont(path)
         data[key] = {"metrics": metrics(font), "chars": chars(font), "features": features(font)}
         for cp, *_ in data[key]["chars"]:
             data["names"][cp] = unicodedata.name(chr(cp), "").title()
-    write_faces(web_fonts())
+        if ITALICS[key].exists():
+            # the Italic's metrics, and its advance where it differs from the roman's
+            ifont = TTFont(ITALICS[key])
+            roman = {c[0]: c[2] for c in data[key]["chars"]}
+            ihmtx, icmap = ifont["hmtx"], ifont.getBestCmap()
+            adv = {cp: ihmtx[g][0] for cp, g in icmap.items() if cp in roman and ihmtx[g][0] != roman[cp]}
+            data[key]["italic"] = {"metrics": metrics(ifont), "adv": adv}
+    faces = web_fonts()
+    write_faces(faces)
+    for name in stale_slices(faces):
+        print(f"removed stale fonts/{name}")
     data["mono"]["metrics"]["cell"] = TTFont(FONTS["mono"])["hmtx"]["zero"][0]
     write_downloads()
     data["outlines"] = outlines()

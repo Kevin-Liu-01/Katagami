@@ -76,7 +76,7 @@ The five members share these decisions. [SPEC.md](SPEC.md) records each one with
   <img src="docs/readme/map-light.png" alt="A world map in which every land cell is a letter of the language spoken there, set in Katagami">
 </picture>
 
-Together they set the main language of places where 99.9 percent of people live, and 223 of the 234 languages on the [map](https://katagami.kevinliu.studio/map) in full. The map draws each land cell as a letter of the language spoken there and lists the 11 languages Katagami does not cover yet.
+Together they set the main language of every place on the [map](https://katagami.kevinliu.studio/map), and all 234 of its languages in full. The map draws each land cell as a letter of the language spoken there.
 
 ## OpenType features
 
