@@ -269,6 +269,33 @@ def restore_feature_labels(core: Path, path: Path) -> None:
     font.save(path)
 
 
+def restore_gpos_labels(path: Path, scripts: list[str]) -> None:
+    """Give GPOS features with labels (Noto Sans Canadian Aboriginal's ss01 and
+    ss02, its mid-line and low-line finals) their names back. The merge keeps
+    their FeatureParams but the name IDs they used belong to Katagami's name
+    table, so each label is read from the Noto font and gets a new ID."""
+    labels = {}
+    for script in scripts:
+        src = TTFont(noto_file(script))
+        if "GPOS" not in src:
+            continue
+        for rec in src["GPOS"].table.FeatureList.FeatureRecord:
+            nid = rec.Feature.FeatureParams is not None and getattr(rec.Feature.FeatureParams, "UINameID", None)
+            if nid:
+                labels.setdefault(rec.FeatureTag, src["name"].getDebugName(nid))
+    font = TTFont(path)
+    if "GPOS" not in font:
+        return
+    changed = False
+    for rec in font["GPOS"].table.FeatureList.FeatureRecord:
+        params = rec.Feature.FeatureParams
+        if params is not None and getattr(params, "UINameID", None) and rec.FeatureTag in labels:
+            params.UINameID = font["name"].addName(labels[rec.FeatureTag], platforms=((3, 1, 0x409),), minNameID=256)
+            changed = True
+    if changed:
+        font.save(path)
+
+
 def build(key: str, only: list[str] | None = None) -> Path:
     p = PROFILES[key]
     core = ROOT / "build" / key / f"{p.file_stem}-core[wght].ttf"
@@ -309,6 +336,7 @@ def build(key: str, only: list[str] | None = None) -> Path:
         font.save(target)
     stamp_copyright(target)
     restore_feature_labels(core, target)
+    restore_gpos_labels(target, scripts)
     out = TTFont(target)
     print(f"{target.relative_to(ROOT)}: {len(out.getGlyphOrder())} glyphs, {len(out.getBestCmap())} characters, "
           f"{target.stat().st_size / 1e6:.1f} MB")

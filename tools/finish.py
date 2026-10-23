@@ -117,7 +117,7 @@ def clipping(font: TTFont, family: list[TTFont]) -> None:
 def prune_names(font: TTFont) -> None:
     """Drop name records from 256 up that nothing points at any more. Only the
     tables that hold name IDs here are read (fvar, STAT and the feature labels
-    in GSUB), so glyf and gvar stay compiled and the font saves quickly."""
+    in GSUB and GPOS), so glyf and gvar stay compiled and the font saves quickly."""
     used = set()
     fvar = font["fvar"]
     used |= {a.axisNameID for a in fvar.axes}
@@ -125,7 +125,8 @@ def prune_names(font: TTFont) -> None:
     stat = font["STAT"].table
     used |= {a.AxisNameID for a in stat.DesignAxisRecord.Axis} | {v.ValueNameID for v in stat.AxisValueArray.AxisValue}
     used.add(stat.ElidedFallbackNameID)
-    for rec in font["GSUB"].table.FeatureList.FeatureRecord if "GSUB" in font else []:
+    records = [rec for tag in ("GSUB", "GPOS") if tag in font for rec in font[tag].table.FeatureList.FeatureRecord]
+    for rec in records:
         params = rec.Feature.FeatureParams
         for attr in ("UINameID", "FeatUILabelNameID", "FeatUITooltipTextNameID", "SampleTextNameID"):
             if params is not None and getattr(params, attr, None):
