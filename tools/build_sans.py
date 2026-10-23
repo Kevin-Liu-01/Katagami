@@ -712,7 +712,7 @@ def find_stem_ends(font, g, sw: float, letters: set[str]) -> list[tuple]:
                     continue  # the sides spread away from the flat end: an apex or a vertex
                 if top and lower and vertical(prev, a) and vertical(q, nxt):
                     right, head = False, True  # a head serif points left
-            out.append((ci, i, j, left, right, top, min(length, 1.3 * sw), head))
+            out.append((ci, i, j, left, right, top, min(length, SERIF_WIDTH_CAP * sw), head))
     return out
 
 
@@ -753,6 +753,7 @@ def find_arm_ends(font, g, sw: float) -> list[tuple]:
 
 
 ARMS = set("EFLTZzΓΕΖΤГЕТ")
+SERIF_WIDTH_CAP = 1.1  # stems: a serif's reach is measured on its stroke end, at most this wide
 EXIT_CLEAR = 0.6  # stems: ink above the x-height's middle that reaches this far past a foot (r's arm) takes its exit
 
 
@@ -820,6 +821,45 @@ def plan_serifs(fonts, italic: bool = False) -> dict:
     return plan
 
 
+def fit_serifs(fonts, plan: dict, reach: float, share: float) -> None:
+    """Narrow the letters whose serifs would reach past their own ink.
+
+    A serif on a stroke end at the edge of a letter (the tops of v, w and y,
+    the feet of A, K and X) reaches past its sidebearing by most of its length,
+    and widening the letter for all of it opens a hole beside it: in a sans
+    skeleton the diagonals already run to the edges. So each such letter is
+    narrowed, its stems kept, by `share` of the widening its serifs would need
+    (measured on Regular, applied to every master); the rest is spacing.
+    """
+    if not share:
+        return
+    ref = fonts["Regular"]
+    clear = TIP_CLEAR * stem(ref)
+    scales = {}
+    for name, (ends, _) in plan.items():
+        g = ref[name]
+        ink = g.getBounds(ref)
+        if ink is None or not g.width:
+            continue
+        over_l = over_r = 0.0  # how far the letter would widen on each side
+        for ci, i, j, left, right, top, width, head in ends:
+            pts = g.contours[ci].points
+            xs = (pts[i].x, pts[j].x)
+            o = reach * width
+            if left:
+                over_l = max(over_l, clear - (min(xs) - o))
+            if right and not head:
+                over_r = max(over_r, max(xs) + o + clear - g.width)
+        over = share * (over_l + over_r)
+        if over > 1:
+            scales[name] = (ink.xMax - ink.xMin - over) / (ink.xMax - ink.xMin)
+    for f in fonts.values():
+        before = snapshot(f)
+        sw = stem(f)
+        maps = {name: resize_glyph(f, name, k, sw) for name, k in scales.items()}
+        reflow_composites(f, maps, before)
+
+
 def add_contrast(fonts, amounts: dict) -> None:
     """Thin the horizontal strokes. Every point keeps its x and moves `amounts[style]` of
     the way from its y to the same point's y in the next lighter master (Regular
@@ -850,8 +890,17 @@ def add_contrast(fonts, amounts: dict) -> None:
 SERIF_TIP = 0.3  # the flat end of a head serif, as a share of its thickness
 # A serif's bracket: how far it runs along the serif, as a share of the serif's
 # reach, and how far it climbs the stroke, as a share of the serif's thickness.
-BRACKET = (0.4, 0.5)
+BRACKET = (0.35, 0.45)
+BRACKET_SIDE = 0.5  # the most of a short stroke side (inside x, A, K) a bracket may climb
 ARM_WIDTH = 0.4  # an arm's serif, in stems
+# Serif thickness per master, times serif_depth's share of the H crossbar: Thin's
+# serifs as thick as its hairlines, so they hold at text sizes; Black's a little
+# lighter than Regular's, so the heavy weights stay a text face and not a slab.
+SERIF_DEPTH_SCALE = (1.65, 1.0, 0.8)  # Thin, Regular, Black
+SERIF_REACH_POWER = 0.3  # toward Thin and Black a serif's reach scales with the stem to this power
+TIP_CLEAR = 0.15  # stems (Regular) a serif tip keeps from the edge of the advance
+SERIF_FIT = 0.75  # share of the serifs' reach past a letter's ink taken back by narrowing the letter, stems kept
+HEAD_BY_REACH = True  # a head serif's drop follows the reach (Regular stem times the reach scale), not the master's stem
 
 
 def _contour(nodes) -> Contour:
@@ -882,7 +931,8 @@ def _bracket(side, y: float, s: int, t: float, tip: float, way: int) -> list:
     back = y + s * t
     sx = _side_x(side, back)
     run = max(0.0, BRACKET[0] * way * (tip - sx))
-    top = back + s * BRACKET[1] * t
+    room = abs(side[1][1] - back)  # how much of the stroke's side stands above the serif's back
+    top = back + s * min(BRACKET[1] * t, BRACKET_SIDE * room)
     return [(tip, y, True), (tip, back, True), (sx + way * run, back, True), (sx + way * 0.45 * run, back, False),
             (_side_x(side, back + 0.55 * (top - back)), back + 0.55 * (top - back), False), (_side_x(side, top), top, True)]
 
@@ -939,8 +989,8 @@ def cut_serifs(fonts, plan: dict, reach: float, depth: float, head_drop: float, 
     gap = 0.5 * sw_ref  # the least white left between two serifs, inside a letter or between two
     for style, f in fonts.items():
         sw = stem(f)
-        k = (sw / sw_ref) ** 0.15
-        t = depth * crossbar(f)
+        k = (sw / sw_ref) ** SERIF_REACH_POWER
+        t = depth * crossbar(f) * dict(zip(("Thin", "Regular", "Black"), SERIF_DEPTH_SCALE)).get(style, 1.0)
         before = snapshot(f)
         widened = {}
         for name, (ends, arms) in plan.items():
@@ -976,7 +1026,7 @@ def cut_serifs(fonts, plan: dict, reach: float, depth: float, head_drop: float, 
             shapes = []
             for x0, x1, y, top, ol, orr, head, corner, o, lside, rside, has_l, has_r in spans:
                 if head:
-                    d = head_drop * sw
+                    d = head_drop * (sw_ref * k if HEAD_BY_REACH else sw)
                     yq = y - d * (x1 - x0) / (ol + x1 - x0)
                     corner.y = yq
                     tip, e, low = x0 - ol, SERIF_TIP * t, yq - t
@@ -998,8 +1048,9 @@ def cut_serifs(fonts, plan: dict, reach: float, depth: float, head_drop: float, 
             # a side whose serif reaches past the letter's ink widens until the
             # serif's tip keeps half the gap from the edge of the advance
             out = g.getBounds(f)
-            dl = max(0.0, gap / 2 - out.xMin) if out.xMin < ink.xMin - 1 else 0.0
-            dr = max(0.0, gap / 2 - (g.width - out.xMax)) if out.xMax > ink.xMax + 1 else 0.0
+            clear = TIP_CLEAR * sw_ref
+            dl = max(0.0, clear - out.xMin) if out.xMin < ink.xMin - 1 else 0.0
+            dr = max(0.0, clear - (g.width - out.xMax)) if out.xMax > ink.xMax + 1 else 0.0
             if dl or dr:
                 for c in g.contours:
                     for pt in c.points:
@@ -1253,6 +1304,8 @@ def build(p: Profile, italic: bool = False) -> Path:
     lower_xheight(fonts, p.xheight_scale)
     if p.serif_reach:
         plan = plan_serifs(fonts, italic)
+        fit_serifs(fonts, plan, p.serif_reach, SERIF_FIT)
+        plan = plan_serifs(fonts, italic)  # the same ends, where the narrowed letters now have them
         add_contrast(fonts, dict(p.serif_contrast))
         cut_serifs(fonts, plan, p.serif_reach, p.serif_depth, p.serif_head, p.serif_beak)
     small_caps(fonts)
