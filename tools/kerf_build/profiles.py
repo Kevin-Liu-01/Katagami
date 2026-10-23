@@ -22,6 +22,8 @@ class Profile:
     square_punctuation: bool = False  # Inter's ss07 becomes the default
     tails: bool = True  # g's tail mirrors its bowl into a level cut; y and t end in vertical cuts
     t_slant: float = 0.0  # stems the top-left corner of t's stem drops, cutting its top at a slant
+    t_flat: bool = False  # t's stem stops at the top of its crossbar, so the t is flat across the top
+    two_square: float = 0.0  # extra squaring for the 2's bowl and spine, on top of the lowercase squaring
     c_close: float = 0.0  # share of c's opening closed: each level terminal moves half of it toward the other
     g_rise: float = 0.0  # share of the curl above the g tail's cut that the cut moves up
     condense: float = 1.0  # horizontal ink scale for every letter and figure, stems kept, on top of `widths`
@@ -57,6 +59,8 @@ SANS = Profile(
     promote=DIGITS + ("cv12-compact-f.fea",),
     terminal_angle=0.0,  # Camber cuts c, e, s, a and g level
     f_overhang=0.8,
+    t_flat=True,  # Camber's t: the stem ends at the top of the crossbar
+    two_square=0.35,  # Camber's 2 turns as square as its O
     widths={
         "O": 0.90, "Q": 0.90, "C": 0.92, "G": 0.92, "D": 0.96,
         "o": 0.92, "c": 0.94, "e": 0.94,
@@ -85,6 +89,8 @@ ROUND = Profile(
     space_width=552,  # 270 per 1000 (Inter 281)
     terminal_angle=0.0,  # c, e, s, a and g cut level, as in Katagami Sans
     f_overhang=0.8,
+    t_flat=True,
+    two_square=0.25,
     corner_radius=0.22,  # round only at the vertices
 )
 

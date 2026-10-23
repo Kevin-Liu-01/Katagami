@@ -81,7 +81,7 @@ def curve_segments(contour: Contour) -> list[SegmentRef]:
     return out
 
 
-def plan_squaring(glyph: Glyph, tight: float = 0.0) -> list[tuple[int, SegmentRef, bool, float]]:
+def plan_squaring(glyph: Glyph, tight: float = 0.0, max_cos: float = 0.5) -> list[tuple[int, SegmentRef, bool, float]]:
     """Choose which segments to square, from the reference master.
 
     Returns (contour index, segment, is_counter, strength factor). Only
@@ -97,7 +97,7 @@ def plan_squaring(glyph: Glyph, tight: float = 0.0) -> list[tuple[int, SegmentRe
             if fr is None:
                 continue
             f0, f1, cos = fr
-            if abs(cos) > 0.5:  # tangents not roughly perpendicular
+            if abs(cos) > max_cos:  # tangents not roughly perpendicular
                 continue
             if not (0.35 < f0 < 0.85 and 0.35 < f1 < 0.85):
                 continue
@@ -440,3 +440,49 @@ def round_corners(glyph: Glyph, plan, radius: float) -> None:
                 Point(bx, by, "curve", smooth=True),
             ]
             pts[i:i + 1] = new
+
+
+# --- Straight strokes ------------------------------------------------------
+
+
+def straighten_runs(contour: Contour, max_turn: float = 12.0) -> bool:
+    """Put back on one line the points of a straight-sided polygon that bend
+    by less than `max_turn` degrees (the tail of Q, which crosses its bowl
+    through two such points). Width transforms and emboldening move those
+    points apart and kink the stroke; each run of slightly bent points is
+    projected onto the line between the run's two ends. Points only move."""
+    pts = contour.points
+    n = len(pts)
+    if n < 4 or any(p.type != "line" for p in pts):
+        return False
+    def turn(i: int) -> float:
+        a, b, c = pts[i - 1], pts[i], pts[(i + 1) % n]
+        u, v = _unit(b.x - a.x, b.y - a.y), _unit(c.x - b.x, c.y - b.y)
+        if u is None or v is None:
+            return 0.0
+        return math.degrees(math.acos(max(-1.0, min(1.0, u[0] * v[0] + u[1] * v[1]))))
+    flat = [turn(i) < max_turn for i in range(n)]
+    if all(flat):
+        return False
+    start = flat.index(False)
+    moved = False
+    k = 0
+    while k < n:
+        i = (start + k) % n
+        if not flat[i]:
+            k += 1
+            continue
+        run = []
+        while k < n and flat[(start + k) % n]:
+            run.append((start + k) % n)
+            k += 1
+        a, b = pts[run[0] - 1], pts[(run[-1] + 1) % n]
+        d = _unit(b.x - a.x, b.y - a.y)
+        if d is None:
+            continue
+        for j in run:
+            q = pts[j]
+            t = (q.x - a.x) * d[0] + (q.y - a.y) * d[1]
+            q.x, q.y = a.x + t * d[0], a.y + t * d[1]
+            moved = True
+    return moved

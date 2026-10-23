@@ -35,7 +35,7 @@ from kerf_build.fontops import (  # noqa: E402
 )
 from kerf_build.outline import (  # noqa: E402
     XMap,
-    apply_squaring, embolden_x, embolden_y, handles, keep_stroke, plan_corners, plan_squaring, round_corners,
+    apply_squaring, embolden_x, embolden_y, handles, keep_stroke, plan_corners, plan_squaring, round_corners, straighten_runs,
 )
 from kerf_build.profiles import PROFILES, Profile  # noqa: E402
 
@@ -306,6 +306,72 @@ def slant_t(fonts, share: float) -> None:
     i = min((k for k, p in enumerate(pts) if p.type and abs(p.y - top) < 1), key=lambda k: pts[k].x)
     for f in fonts.values():
         f[base].contours[0].points[i].y -= share * stem(f)
+
+
+def flat_t(fonts) -> None:
+    """A flat-topped t: the stem stops at the top of the crossbar, so the top of
+    the t is one level line. The stem part (shared by t and the compact t.1) is
+    cut down in every master; the t's anchors above the cut, and the marks of
+    accented t's that sit above it (ť, ṫ, ẗ), come down by the same amount."""
+    ref = fonts["Regular"]
+    if not ref["t"].components:
+        return
+    part = ref["t"].components[0].baseGlyph
+    users = [g.name for g in ref if g.components and g.components[0].baseGlyph == "t"]
+    for f in fonts.values():
+        bar_top = max(q.y for c in f["t"].contours for q in c.points)
+        pts = f[part].contours[0].points
+        top = max(q.y for q in pts if q.type)
+        drop = top - bar_top
+        if drop <= 0:
+            continue
+        for q in pts:
+            if q.type and abs(q.y - top) < 1:
+                q.y = bar_top
+        for name in ("t", "t.1", *users):
+            if name not in f:
+                continue
+            g = f[name]
+            for a in g.anchors:
+                if a.y > bar_top:
+                    a.y -= drop
+            if name in users:
+                for comp in g.components[1:]:
+                    b = f[comp.baseGlyph].getBounds(f)
+                    t = list(comp.transformation)
+                    if b is not None and f[comp.baseGlyph].width == 0 and b.yMin + t[5] >= bar_top:
+                        t[5] -= drop
+                        comp.transformation = tuple(t)
+
+
+TWO_NAMES = ("two", "two.sups", "two.subs", "two.numr", "two.dnom", "two.sinf")
+
+
+def square_two(fonts, share: float) -> None:
+    """Square the 2 further: its bowl and the spine that turns from the bowl
+    into the diagonal move `share` more of the way toward their corners. The
+    spine is not a quarter turn, so it is planned with a wider angle than other
+    arcs; the plan is made on Regular, as every squaring is."""
+    if not share:
+        return
+    ref = fonts["Regular"]
+    for name in TWO_NAMES:
+        if name not in ref or not ref[name].contours:
+            continue
+        plan = plan_squaring(ref[name], 0.0, max_cos=0.8)
+        for f in fonts.values():
+            apply_squaring(f[name], plan, share, share, 1.0)
+
+
+def straighten_q(fonts) -> None:
+    """Q's tail is straight: the two points where each side of the tail crosses
+    the bowl go back onto the line between the tail's ends, which the width
+    transforms had bent by up to 7 degrees."""
+    for f in fonts.values():
+        for name in ("Q",):
+            if name in f:
+                for c in f[name].contours:
+                    straighten_runs(c)
 
 
 SMALL_CAP_TRACK = 0.03  # of the em, added around each small capital
@@ -1287,7 +1353,10 @@ def build(p: Profile, italic: bool = False) -> Path:
     if p.promote:
         promote_alternates(fonts, p.promote, FEATURES)
         relabel_features(fonts, p.promote)
+    if p.t_flat:
+        flat_t(fonts)
     shape_curves(fonts, p)
+    square_two(fonts, p.two_square)
     if p.terminal_angle is not None:
         level_terminals(fonts, p.terminal_angle)
     if p.c_close:
@@ -1308,6 +1377,7 @@ def build(p: Profile, italic: bool = False) -> Path:
         plan = plan_serifs(fonts, italic)  # the same ends, where the narrowed letters now have them
         add_contrast(fonts, dict(p.serif_contrast))
         cut_serifs(fonts, plan, p.serif_reach, p.serif_depth, p.serif_head, p.serif_beak)
+    straighten_q(fonts)
     small_caps(fonts)
     respace(fonts, p.spacing)
     set_space(fonts, p.space_width)

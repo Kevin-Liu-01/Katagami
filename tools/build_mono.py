@@ -46,7 +46,7 @@ from kerf_build.fontops import (  # noqa: E402
     FILTERS_KEY, ROOT, assign_categories, composites_to_flatten, decompose, italic_style, reflow_composites, set_names, shear, slant_tangent,
     snapshot, swap_glyph_outlines,
 )
-from kerf_build.outline import XMap, embolden_x  # noqa: E402
+from kerf_build.outline import XMap, embolden_x, straighten_runs  # noqa: E402
 from build_sans import relabel_features  # noqa: E402
 from fontTools.pens.recordingPen import DecomposingRecordingPen  # noqa: E402
 
@@ -506,6 +506,8 @@ def main(italic: bool = False) -> None:
             maps[name] = fit_to_cell(f, g, k, stem, origin)
         draw_slabs(f, stem, bar)
         bar_zero(f, stem)
+        for c in f["Q"].contours:  # fitting bends Q's tail where it crosses the bowl; straighten it again
+            straighten_runs(c)
         reflow_composites(f, maps, old)
         keep_marks_in_cell(f)
         for g in f:
