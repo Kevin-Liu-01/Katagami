@@ -269,7 +269,7 @@ Chinese, Japanese and Korean would pass the 65,535-glyph limit, so they are comp
 | `transformed_components` (proportional romans) | FAIL | FAIL: Inter's flipped and scaled components; decomposing them at compile time would fix it |
 | `dotted_circle` (proportional romans) | FAIL | FAIL: the merged complex scripts need a dotted circle, U+25CC, that Inter lacks |
 
-In v0.1 the four proportional romans each had 1 ERROR, 11 FAIL and 17 WARN, and Mono 1 ERROR, 9 FAIL and 14 WARN. In v0.2 Mono and Mono Italic together have no ERROR and 4 FAIL each (the version format and the three coverage checks); the targeted run of the checks above passes every one of them on all ten files except the version format. The WARNs left are an unregistered vendor ID (KERF), no `meta` table, the OFL body text, Inter's long glyph names, overlapping segments and interpolation notes in a few glyphs, and alternates no feature reaches.
+In v0.1 each proportional roman had 1 ERROR, 11 FAIL and 17 WARN, and Mono 1 ERROR, 9 FAIL and 14 WARN. In v0.2 each proportional roman has 6 FAIL (the version format, the three coverage checks, transformed components and the dotted circle) and each Italic 4 (the version format and the coverage checks); Mono and Mono Italic have 4 each. Two of the four proportional runs also report an ERROR in `superfamily/list`, an IndexError inside fontbakery 1.1.0 itself. The WARNs left (28 or 29 per pair) are an unregistered vendor ID (KERF), no `meta` table, the OFL body text, Inter's long glyph names, overlapping segments and interpolation notes in a few glyphs, and alternates no feature reaches.
 
 ## Not done yet
 
