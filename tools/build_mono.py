@@ -48,8 +48,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from kerf_build.boxdraw import draw_box_glyphs  # noqa: E402
 from kerf_build.terminal import draw_terminal_glyphs  # noqa: E402
 from kerf_build.fontops import (  # noqa: E402
-    FILTERS_KEY, ITALIC_MATCH, ROOT, assign_categories, composites_to_flatten, decompose, design_distances, italic_style, reflow_composites,
-    romanize, set_names, shear, slant_tangent, snapshot, swap_glyph_outlines,
+    FILTERS_KEY, ITALIC_MATCH, ROOT, assign_categories, combining_double_acute, composites_to_flatten, decompose, design_distances, dot_size,
+    dotted_circle_anchors, draw_dotted_circle, italic_style, reflow_composites, romanize, set_names, shear, slant_tangent, snapshot, swap_glyph_outlines,
 )
 from kerf_build.outline import XMap, embolden_x, straighten_runs  # noqa: E402
 from build_sans import relabel_features  # noqa: E402
@@ -497,6 +497,8 @@ def fit(italic: bool, work: Path) -> tuple[dict, dict]:
     scales = plan_scales(fonts["Regular"])
     zero_width = {g.name for g in fonts["Regular"] if g.width == 0}
     measures = {}
+    regular_stem = ink_width(fonts["Regular"], "idotless")
+    dotted_anchors = dotted_circle_anchors(fonts["Regular"])
 
     for style, f in fonts.items():
         f.kerning.clear()
@@ -527,6 +529,9 @@ def fit(italic: bool, work: Path) -> tuple[dict, dict]:
         keep_marks_in_cell(f)
         for g in f:
             g.width = 0 if g.name in zero_width else CELL
+        # the dotted circle is drawn again on the cell, not fitted to it, so its dots stay round
+        draw_dotted_circle(f, dot_size(stem, regular_stem), min(f.info.xHeight, MAX_INK["other"] * CELL), CELL, dotted_anchors)
+        combining_double_acute(f)  # again from the fitted double acute
     return fonts, measures
 
 

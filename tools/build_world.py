@@ -18,7 +18,9 @@ vendor/noto, fetched by tools/build.sh), so one Katagami file sets them all:
      Katagami's weight axis and named instances.
 
 Katagami's own line spacing is kept; the Windows clipping box grows to the
-tallest script. The glyphs added here are Noto's design at Katagami's size and
+tallest script. Katagami's dotted circle (U+25CC) becomes a base in every
+script's mark-to-base lookups, at the anchors Noto gives its own, so shaping
+engines set a mark without a base on it (`seat_dotted_circle`). The glyphs added here are Noto's design at Katagami's size and
 weight, not redrawn in Katagami's style.
 """
 
@@ -161,11 +163,9 @@ def embolden(font: TTFont, strength: float) -> None:
             hmtx[name] = (max(0, round(width + strength)) if width else 0, g.xMin)
 
 
-def script_masters(script: str, factor: float, have: set[int], work: Path) -> dict[str, Path]:
-    """Noto's script at Katagami's three master weights, at Katagami's units and size."""
+def _subset(script: str, unicodes: list[int]) -> TTFont:
+    """Noto's font for the script, subset to `unicodes` with its layout closure."""
     font = TTFont(noto_file(script))
-    cmap = font.getBestCmap()
-    unicodes = [u for lo, hi in SCRIPTS[script] for u in range(lo, hi + 1) if u in cmap and u not in have]
     opts = subset.Options()
     opts.layout_features = ["*"]
     opts.layout_scripts = ["*"]
@@ -184,6 +184,11 @@ def script_masters(script: str, factor: float, have: set[int], work: Path) -> di
         if tag in font and getattr(font[tag].table, "FeatureVariations", None) is not None:
             font[tag].table.FeatureVariations = None
             font[tag].table.Version = 0x00010000
+    return font
+
+
+def _statics(font: TTFont, factor: float, work: Path, stem: str) -> dict[str, TTFont]:
+    """A subset Noto font at Katagami's three master weights, at Katagami's units and size."""
     axes = {a.axisTag: (a.minValue, a.maxValue) for a in font["fvar"].axes} if "fvar" in font else {}
     lo, hi = axes.get("wght", (400, 400))
     out = {}
@@ -191,15 +196,185 @@ def script_masters(script: str, factor: float, have: set[int], work: Path) -> di
         near = min(max(wght, lo), hi)
         if axes:
             location = {"wght": near} | ({"wdth": 100} if "wdth" in axes else {})
-            static = instantiateVariableFont(TTFont(_save(font, work / f"{script}.ttf")), location)
+            static = instantiateVariableFont(TTFont(_save(font, work / f"{stem}.ttf")), location)
         else:
-            static = TTFont(_save(font, work / f"{script}.ttf"))
+            static = TTFont(_save(font, work / f"{stem}.ttf"))
         # a weight Noto does not draw, from the nearest one it does
         embolden(static, (NOTO_STEM[wght] - NOTO_STEM[near]) * static["head"].unitsPerEm / 1000)
         scale_upem(static, round(2048 * factor))  # Noto's units times 2048 / its em, times factor
         static["head"].unitsPerEm = 2048
-        out[style] = _save(static, work / f"{script}-{style}.ttf")
+        out[style] = static
     return out
+
+
+def script_masters(script: str, factor: float, have: set[int], work: Path) -> tuple[dict[str, Path], dict[str, tuple | None]]:
+    """Noto's script at Katagami's three master weights, at Katagami's units and
+    size, and for each master where its marks sit on Noto's dotted circle
+    (`dotted_circle_anchors`), or None where Noto has no dotted circle."""
+    cmap = TTFont(noto_file(script)).getBestCmap()
+    unicodes = [u for lo, hi in SCRIPTS[script] for u in range(lo, hi + 1) if u in cmap and u not in have]
+    statics = _statics(_subset(script, unicodes), factor, work, script)
+    out = {style: _save(static, work / f"{script}-{style}.ttf") for style, static in statics.items()}
+    dotted = dict.fromkeys(MASTERS)
+    if 0x25CC in cmap:
+        # the same subset with Noto's dotted circle kept, read for its anchors only
+        with_dc = _statics(_subset(script, unicodes + [0x25CC]), factor, work, f"{script}-dc")
+        dotted = {style: dotted_circle_anchors(with_dc[style], TTFont(out[style])) for style in MASTERS}
+    return out, dotted
+
+
+def _mark_base_subtables(font: TTFont) -> list:
+    """Every mark-to-base subtable in the font's GPOS, in lookup order, inside extensions too."""
+    if "GPOS" not in font or not font["GPOS"].table.LookupList:
+        return []
+    out = []
+    for lookup in font["GPOS"].table.LookupList.Lookup:
+        for st in lookup.SubTable:
+            ext = getattr(st, "ExtSubTable", None)
+            st = ext if ext is not None else st
+            if type(st).__name__ == "MarkBasePos" and st.Format == 1:
+                out.append(st)
+    return out
+
+
+def _mark_classes(st) -> dict[str, int]:
+    return {g: rec.Class for g, rec in zip(st.MarkCoverage.glyphs, st.MarkArray.MarkRecord)}
+
+
+def _anchor(a) -> tuple[float, float] | None:
+    return None if a is None else (a.XCoordinate, a.YCoordinate)
+
+
+def dotted_circle_anchors(with_dc: TTFont, part: TTFont) -> tuple:
+    """Where the part's marks sit on Noto's dotted circle: the circle's box
+    and, for each of the part's mark-to-base subtables in order, its marks
+    and an anchor for the circle in each mark class (None where there is
+    none to give).
+
+    Read from the subset that kept the circle. Noto often attaches marks to
+    its circle in lookups of their own (Devanagari's vowel signs sit on it
+    through `mark`, on letters through `abvm`), lookups the subset without
+    the circle drops, so each mark's place on the circle is taken from
+    wherever the circle is its base, as the step from the mark's anchor to
+    the circle's, and given back in the part's own subtables from the
+    mark's anchor there. A class none of whose marks Noto seats on its
+    circle takes the place of its first base's anchor in that base's box,
+    in the circle's box."""
+    dc = with_dc.getBestCmap()[0x25CC]
+    glyf = with_dc["glyf"]
+    g = glyf[dc]
+    g.recalcBounds(glyf)
+    box = (g.xMin, g.yMin, g.xMax, g.yMax)
+    step = {}  # mark -> where the circle's anchor lies from the mark's own anchor
+    for st in _mark_base_subtables(with_dc):
+        if dc not in st.BaseCoverage.glyphs:
+            continue
+        rec = st.BaseArray.BaseRecord[st.BaseCoverage.glyphs.index(dc)]
+        for m, mrec in zip(st.MarkCoverage.glyphs, st.MarkArray.MarkRecord):
+            base, own = _anchor(rec.BaseAnchor[mrec.Class]), _anchor(mrec.MarkAnchor)
+            if m not in step and base is not None and own is not None:
+                step[m] = (base[0] - own[0], base[1] - own[1])
+    pglyf = part["glyf"]
+    items = []
+    for st in _mark_base_subtables(part):
+        marks = _mark_classes(st)
+        anchors = {}
+        for m, mrec in zip(st.MarkCoverage.glyphs, st.MarkArray.MarkRecord):
+            own = _anchor(mrec.MarkAnchor)
+            if mrec.Class not in anchors and m in step and own is not None:
+                anchors[mrec.Class] = (own[0] + step[m][0], own[1] + step[m][1])
+        for c in range(st.ClassCount):
+            if c not in anchors:
+                a = _box_anchor(pglyf, st, c, box)
+                if a is not None:
+                    anchors[c] = a
+        items.append((frozenset(marks), anchors or None))
+    return box, items
+
+
+def _box_anchor(glyf, st, c: int, box) -> tuple[float, float] | None:
+    """A circle's anchor for mark class c of a mark-to-base subtable, where
+    nothing better is known: the place of the first base's anchor in that
+    base's box, in the circle's box."""
+    for b, rec in zip(st.BaseCoverage.glyphs, st.BaseArray.BaseRecord):
+        a = _anchor(rec.BaseAnchor[c])
+        bg = glyf[b]
+        if a is None or bg.numberOfContours == 0:
+            continue
+        bg.recalcBounds(glyf)
+        if bg.xMax - bg.xMin < 1 or bg.yMax - bg.yMin < 1:
+            continue
+        u, v = (a[0] - bg.xMin) / (bg.xMax - bg.xMin), (a[1] - bg.yMin) / (bg.yMax - bg.yMin)
+        return box[0] + u * (box[2] - box[0]), box[1] + v * (box[3] - box[1])
+    return None
+
+
+def seat_dotted_circle(merged: TTFont, sources: list[Path], dotted: list) -> None:
+    """Make Katagami's dotted circle (U+25CC) a base in every merged script's
+    mark-to-base subtables, at the anchors Noto gives its own dotted circle,
+    taken about the circles' centres and scaled from Noto's circle to
+    Katagami's, so a mark keeps its place around the ring. Shaping engines
+    set the dotted circle under a mark that has no base (a vowel sign typed
+    alone, a broken cluster); this way the mark sits on Katagami's circle as
+    it sat on Noto's. `dotted` has one entry per part (after the Katagami
+    master, sources[0]), from script_masters."""
+    from types import SimpleNamespace
+    from fontTools.merge.cmap import computeMegaGlyphOrder
+    from fontTools.ttLib.tables import otTables
+
+    fonts = [TTFont(p, lazy=True) for p in sources]
+    orders = [list(f.getGlyphOrder()) for f in fonts]
+    renamed = [list(o) for o in orders]
+    computeMegaGlyphOrder(SimpleNamespace(), renamed)  # the names the merge gave each part's glyphs
+    names = [dict(zip(o, r)) for o, r in zip(orders, renamed)]
+    counts = [len(_mark_base_subtables(f)) for f in fonts]
+    tables = _mark_base_subtables(merged)
+    if sum(counts) != len(tables):
+        raise ValueError("the merged font's mark-to-base subtables do not add up to its sources'")
+    dc = merged.getBestCmap()[0x25CC]
+    glyf = merged["glyf"]
+    g = glyf[dc]
+    g.recalcBounds(glyf)
+    kbox = (g.xMin, g.yMin, g.xMax, g.yMax)
+    kx, ky = (g.xMin + g.xMax) / 2, (g.yMin + g.yMax) / 2
+    off = counts[0]
+    for i, data in enumerate(dotted, start=1):
+        n = counts[i]
+        own = tables[off:off + n]
+        if data is None:
+            # Noto draws no circle for this script (Georgian, Ol Chiki, Vai): place it by the bases
+            box = kbox
+            items = [{c: a for c in range(st.ClassCount) if (a := _box_anchor(glyf, st, c, box)) is not None} for st in own]
+        else:
+            box, found = data
+            if len(found) != n:
+                raise ValueError(f"{sources[i].name}: {len(found)} dotted-circle entries for {n} mark-to-base subtables")
+            items = []
+            for st, (marks, anchors) in zip(own, found):
+                if {names[i][m] for m in marks} != set(st.MarkCoverage.glyphs):
+                    raise ValueError(f"{sources[i].name}: a merged mark-to-base subtable has other marks than its source")
+                items.append(anchors)
+        # the marks keep their place around the circle: about its centre, scaled from Noto's circle to Katagami's
+        nx, ny = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+        sx, sy = (kbox[2] - kbox[0]) / (box[2] - box[0]), (kbox[3] - kbox[1]) / (box[3] - box[1])
+        for st, anchors in zip(own, items):
+            if not anchors or dc in st.BaseCoverage.glyphs:
+                continue
+            rec = otTables.BaseRecord()
+            rec.BaseAnchor = []
+            for c in range(st.ClassCount):
+                a = None
+                if c in anchors:
+                    a = otTables.Anchor()
+                    a.Format = 1
+                    a.XCoordinate, a.YCoordinate = round(kx + (anchors[c][0] - nx) * sx), round(ky + (anchors[c][1] - ny) * sy)
+                rec.BaseAnchor.append(a)
+            pairs = sorted(list(zip(st.BaseCoverage.glyphs, st.BaseArray.BaseRecord)) + [(dc, rec)],
+                           key=lambda p: merged.getGlyphID(p[0]))
+            st.BaseCoverage.glyphs = [p[0] for p in pairs]
+            st.BaseArray.BaseRecord = [p[1] for p in pairs]
+            st.BaseArray.BaseCount = len(pairs)
+        off += n
 
 
 def _save(font: TTFont, path: Path) -> Path:
@@ -207,7 +382,7 @@ def _save(font: TTFont, path: Path) -> Path:
     return path
 
 
-def merge_master(kerf: Path, parts: list[Path], out: Path) -> Path:
+def merge_master(kerf: Path, parts: list[Path], out: Path, dotted: list | None = None) -> Path:
     base = TTFont(kerf)
     keep = {
         "hhea": (base["hhea"].ascent, base["hhea"].descent, base["hhea"].lineGap),
@@ -228,6 +403,8 @@ def merge_master(kerf: Path, parts: list[Path], out: Path) -> Path:
     head = merged["head"]
     merged["OS/2"].usWinAscent = max(merged["OS/2"].usWinAscent, head.yMax)
     merged["OS/2"].usWinDescent = max(merged["OS/2"].usWinDescent, -head.yMin)
+    if dotted is not None and 0x25CC in merged.getBestCmap():
+        seat_dotted_circle(merged, [kerf] + list(parts), dotted)
     merged.save(out)
     return out
 
@@ -309,11 +486,14 @@ def build(key: str, only: list[str] | None = None) -> Path:
         kerf = {style: _save(instantiateVariableFont(TTFont(core), {"wght": w}), work / f"kerf-{style}.ttf")
                 for style, w in MASTERS.items()}
         parts = {style: [] for style in MASTERS}
+        dotted = {style: [] for style in MASTERS}
         for script in scripts:
-            for style, path in script_masters(script, factor, have, work).items():
+            paths, anchors = script_masters(script, factor, have, work)
+            for style, path in paths.items():
                 parts[style].append(path)
+                dotted[style].append(anchors[style])
             print(f"  {script}")
-        merged = {style: merge_master(kerf[style], parts[style], work / f"merged-{style}.ttf") for style in MASTERS}
+        merged = {style: merge_master(kerf[style], parts[style], work / f"merged-{style}.ttf", dotted[style]) for style in MASTERS}
 
         ds = DesignSpaceDocument()
         ax = AxisDescriptor()

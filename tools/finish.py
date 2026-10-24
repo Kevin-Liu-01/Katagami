@@ -21,6 +21,9 @@ in place, after fontmake (and, for the roman, the script merge):
      glyph of the two.
   6. Unhinted: a gasp table that asks for smoothing at every size, and a prep
      program that turns on smart dropout control (as gftools fix-unhinted does).
+  7. Components: every glyph built from a flipped, rotated or scaled component
+     (Inter's d from b, q from p, И from N) is drawn in, point for point from
+     the compiled component at each master, so its outline does not change.
 """
 
 from __future__ import annotations
@@ -31,6 +34,11 @@ from pathlib import Path
 from fontTools.otlLib.builder import buildStatTable
 from fontTools.ttLib import TTFont, newTable
 from fontTools.ttLib.tables import ttProgram
+from fontTools.ttLib.tables._g_l_y_f import (
+    OVERLAP_COMPOUND, SCALE_COMPONENT_OFFSET_DEFAULT, SCALED_COMPONENT_OFFSET, UNSCALED_COMPONENT_OFFSET, Glyph, GlyphCoordinates,
+    flagOnCurve, flagOverlapSimple,
+)
+from fontTools.ttLib.tables.TupleVariation import TupleVariation
 
 sys.path.insert(0, str(Path(__file__).parent))
 from kerf_build.fontops import VERSION  # noqa: E402
@@ -147,6 +155,161 @@ def unhinted(font: TTFont) -> None:
     font["prep"] = prep
 
 
+class _Varied:
+    """The glyf table at a location: each glyph with the font's variations applied."""
+
+    def __init__(self, glyph_set):
+        self.gs = glyph_set
+
+    def __getitem__(self, name):
+        return self.gs[name]._getGlyphAndOffset()[0]
+
+
+def _scales_offset(compo) -> bool:
+    """Whether the rasterizer transforms this component's offset too (getCoordinates' rule)."""
+    if compo.flags & SCALED_COMPONENT_OFFSET:
+        return True
+    return not compo.flags & UNSCALED_COMPONENT_OFFSET and bool(SCALE_COMPONENT_OFFSET_DEFAULT)
+
+
+def _apply(t, x, y):
+    return x * t[0][0] + y * t[1][0], x * t[0][1] + y * t[1][1]
+
+
+def draw_in_transformed(font: TTFont) -> list[str]:
+    """Draw in every glyph that has a flipped, rotated or scaled component.
+    TrueType rasterizers and hinting tools handle such components badly
+    (fontbakery's transformed_components), so each becomes a simple glyph
+    made of its components' own compiled points, moved and transformed as
+    the rasterizer does it, the contours of a flipped component reversed so
+    they keep their turn. Its variations are the components' variations put
+    through the same transform, points the font infers (IUP) left to be
+    inferred, plus the composite's own offset deltas. Inter's transforms are
+    flips and half turns, so every point and delta stays an integer and the
+    outline is the same at every weight. Returns the glyphs drawn in."""
+    glyf = font["glyf"]
+    names = [n for n in font.getGlyphOrder() if glyf[n].isComposite()
+             and any(getattr(c, "transform", None) is not None for c in glyf[n].components)]
+    if not names:
+        return []
+    gvar = font["gvar"] if "gvar" in font else None
+    key = lambda axes: tuple(sorted(axes.items()))  # noqa: E731
+    out = {}
+    for name in names:
+        g = glyf[name]
+        coords, flags, ends, parts = [], bytearray(), [], []
+        for i, compo in enumerate(g.components):
+            cg = glyf[compo.glyphName]
+            if cg.isComposite():
+                raise ValueError(f"{name}: nested component {compo.glyphName}; fontmake should have flattened it")
+            t = getattr(compo, "transform", [[1, 0], [0, 1]])
+            if any(v != int(v) for row in t for v in row):
+                raise ValueError(f"{name}: a scaled component ({t}); its points would not stay integers")
+            one = Glyph()
+            one.numberOfContours = -1
+            one.components = [compo]
+            c, e, f = one.getCoordinates(glyf)
+            flipped = t[0][0] * t[1][1] - t[0][1] * t[1][0] < 0
+            perm, start = [], 0
+            for end in e:
+                idx = list(range(start, end + 1))
+                perm += idx[:1] + idx[:0:-1] if flipped else idx
+                ends.append(len(coords) + len(perm) - 1)
+                start = end + 1
+            coords += [c[k] for k in perm]
+            flags += bytes(f[k] for k in perm)
+            parts.append((i, compo, t, perm, list(e)))
+        variations = {}
+        if gvar is not None:
+            own = {key(v.axes): v for v in gvar.variations.get(name, [])}
+            comps = [{key(v.axes): v for v in gvar.variations.get(compo.glyphName, [])} for _, compo, *_ in parts]
+            for k in sorted(set(own) | set().union(*comps)):
+                deltas = []
+                for (i, compo, t, perm, e), table in zip(parts, comps):
+                    n = len(perm)
+                    d = table[k].coordinates[:n] if k in table else [None] * n
+                    d = [None if v is None else _apply(t, *v) for v in d]
+                    off = own[k].coordinates[i] if k in own and own[k].coordinates[i] is not None else (0, 0)
+                    if _scales_offset(compo):
+                        off = _apply(t, *off)
+                    if off != (0, 0):
+                        start = 0
+                        for end in e:
+                            run = range(start, end + 1)
+                            if all(d[j] is None for j in run):
+                                for j in run:
+                                    d[j] = (0, 0)  # nothing to infer from: the offset moves every point
+                            start = end + 1
+                        d = [None if v is None else (v[0] + off[0], v[1] + off[1]) for v in d]
+                    deltas += [d[j] for j in perm]
+                phantoms = own[k].coordinates[-4:] if k in own else [(0, 0)] * 4
+                deltas += [(0, 0) if v is None else v for v in phantoms]
+                if any(v is not None and v != (0, 0) for v in deltas):
+                    variations[k] = TupleVariation(dict(k), [None if v is None else (int(v[0]), int(v[1])) for v in deltas])
+        new = Glyph()
+        new.numberOfContours = len(ends)
+        new.coordinates = GlyphCoordinates([(int(x), int(y)) for x, y in coords])
+        new.endPtsOfContours = ends
+        overlap = bool(g.components[0].flags & OVERLAP_COMPOUND) or any(f & flagOverlapSimple for f in flags)
+        new.flags = bytearray(f & flagOnCurve for f in flags)
+        if overlap and new.flags:
+            new.flags[0] |= flagOverlapSimple
+        new.program = ttProgram.Program()
+        new.program.fromBytecode(b"")
+        out[name] = (new, list(variations.values()))
+    # a glyph that is only a turned part (d, a turned b) is drawn in; a glyph that sets such
+    # a part beside others (ď, ḋ, Й) keeps its components and takes the drawn-in glyph instead
+    single = {n: glyf[n].components[0] for n in names if len(glyf[n].components) == 1}
+    for name in names:
+        g = glyf[name]
+        if name in single or not _reuses(g, single):
+            continue
+        own = {key(v.axes): v for v in gvar.variations.get(name, [])} if gvar is not None else {}
+        swaps = {}
+        for i, compo in enumerate(g.components):
+            if getattr(compo, "transform", None) is None:
+                continue
+            y = _part_for(compo, single)
+            yc = single[y]
+            swaps[i] = (y, (compo.x - yc.x, compo.y - yc.y))
+            parts = {key(v.axes): v for v in gvar.variations.get(y, [])} if gvar is not None else {}
+            for k, v in parts.items():  # the drawn-in glyph's own offset variation is now in its points
+                d = v.coordinates[0] or (0, 0)
+                if k not in own:
+                    own[k] = TupleVariation(dict(k), [(0, 0)] * (len(g.components) + 4))
+                c = own[k].coordinates[i] or (0, 0)
+                own[k].coordinates[i] = (c[0] - d[0], c[1] - d[1])
+        for i, (y, (dx, dy)) in swaps.items():
+            compo = g.components[i]
+            compo.glyphName = y
+            compo.x, compo.y = dx, dy
+            del compo.transform
+            compo.flags &= ~0x00C8  # no scale, no x and y scale, no two by two
+        out.pop(name, None)
+        if gvar is not None:
+            gvar.variations[name] = [v for v in own.values() if any(c not in (None, (0, 0)) for c in v.coordinates)]
+    for name, (new, variations) in out.items():
+        glyf[name] = new
+        new.recalcBounds(glyf)
+        if gvar is not None:
+            gvar.variations[name] = variations
+    return sorted(out)
+
+
+def _part_for(compo, single: dict) -> str | None:
+    """The drawn-in glyph that is exactly this component: the same base, turned the same way."""
+    for y, yc in single.items():
+        if yc.glyphName == compo.glyphName and getattr(yc, "transform", None) == compo.transform and not (
+                (compo.flags | yc.flags) & SCALED_COMPONENT_OFFSET) and _scales_offset(compo) is False:
+            return y
+    return None
+
+
+def _reuses(g, single: dict) -> bool:
+    """Whether every turned component of a composite is a glyph that is drawn in on its own."""
+    return all(getattr(c, "transform", None) is None or _part_for(c, single) is not None for c in g.components)
+
+
 def finish(key: str, only: str | None = None) -> None:
     stem = STEMS[key]
     family = PROFILES[key].family if key in PROFILES else "Katagami Mono"
@@ -158,6 +321,9 @@ def finish(key: str, only: str | None = None) -> None:
         if not path.exists() or only and only != ("italic" if italic else "roman"):
             continue
         font = roman if not italic else TTFont(path)
+        drawn = draw_in_transformed(font)
+        if drawn:
+            print(f"{path.relative_to(ROOT)}: {len(drawn)} glyphs with transformed components drawn in")
         ps = names(font, family, italic)
         version(font, ps)
         style_bits(font, italic)

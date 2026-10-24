@@ -33,9 +33,9 @@ from fontTools.designspaceLib import AxisDescriptor, DesignSpaceDocument, Instan
 
 sys.path.insert(0, str(Path(__file__).parent))
 from kerf_build.fontops import (  # noqa: E402
-    ITALIC_MATCH, MASTERS, ROOT, assign_categories, decompose_transformed, design_distances, erase_open_corners, italic_style,
-    load_inter_masters, promote_alternates, reflow_composites, resize_glyph, respace, romanize, set_names, shear, slant_tangent,
-    snapshot, stem, swap_glyph_outlines,
+    ITALIC_MATCH, MASTERS, ROOT, assign_categories, combining_double_acute, decompose_transformed, design_distances,
+    dot_size, dotted_circle_anchors, draw_dotted_circle, erase_open_corners, italic_style, load_inter_masters, promote_alternates, reflow_composites,
+    resize_glyph, respace, romanize, set_names, shear, slant_tangent, snapshot, stem, swap_glyph_outlines,
 )
 from kerf_build.outline import (  # noqa: E402
     XMap,
@@ -1082,6 +1082,7 @@ def serif_parts(font) -> set[str]:
 TERMINAL_FACE = (0.45, 1.6)  # stems (Regular): how long a cut across a stroke may be to count as its end
 TERMINAL_REF = 1.0  # stems: a terminal cut this long or longer takes a full beak; shorter ones (superiors) a smaller one
 TERMINAL_SYMBOLS = set("?¿&§$¢€£@‽")  # symbols drawn with the letters' curved strokes
+LEVEL_BEAK_ANGLE = 6  # degrees: a cut further from level than this takes no beak
 
 
 def _ink_side(font, g, a, q) -> tuple[bool, bool]:
@@ -1157,6 +1158,10 @@ def plan_terminals(fonts, plan: dict) -> dict:
                 angle = min(angle, 180 - angle)
                 mid_x, mid_y, cut_y = (b.xMin + b.xMax) / 2, (b.yMin + b.yMax) / 2, (a.y + q.y) / 2
                 if angle <= 30:
+                    # a cut left at a slant (Inter's a.2, which the level cuts do not reach) ends plain:
+                    # a beak hung from a sloping face pokes past one corner or sinks into the other
+                    if angle > LEVEL_BEAK_ANGLE:
+                        continue
                     kind = "level"
                     # the ink is left of travel, so the bare side faces up when the cut runs right to left
                     way = 1 if q.x < a.x else -1
@@ -1181,6 +1186,10 @@ def plan_terminals(fonts, plan: dict) -> dict:
                 ink_left, bare_right = _ink_side(ref, g, a, q)
                 if not (ink_left and bare_right):
                     continue
+                # a stroke that ends rising at the foot of the letter's right side (the exits of c, C, e
+                # and t) ends plain: its beak would point up at the terminal above it, a tooth in the opening
+                if way > 0 and (a.x + q.x) / 2 > mid_x:
+                    continue
                 scale = min(1.0, length / (TERMINAL_REF * sw))
                 if kind == "level":
                     outer = i if abs(a.x - mid_x) > abs(q.x - mid_x) else j
@@ -1188,9 +1197,42 @@ def plan_terminals(fonts, plan: dict) -> dict:
                     lo_k, hi_k = (i, j) if a.y < q.y else (j, i)
                     outer = lo_k if way < 0 else hi_k
                 found.append((kind, ci, i, j, outer, way, scale))
+        found = [term for term in found if not _jaw(ref, g, term, found, mid_x)]
         if found:
             out[name] = found
     return out
+
+
+def _jaw(font, g, term, found, mid_x: float) -> bool:
+    """Whether a rising beak at the foot of an opening would face the beak above
+    it across that opening, as in ɔ and Ↄ: both cuts on the same side of the
+    letter and nothing between them (the white at their mid-height reaches
+    the letter's middle, where 3 has its waist). The upper beak stays."""
+    from fontTools.pens.pointInsidePen import PointInsidePen
+    kind, ci, i, j, outer, way, _ = term
+    if kind != "level" or way < 0:
+        return False
+    pts = g.contours[ci].points
+    side = 1 if pts[outer].x > mid_x else -1
+    y = (pts[i].y + pts[j].y) / 2
+    for k2, c2, i2, j2, o2, w2, _ in found:
+        if k2 != "level" or w2 > 0:
+            continue
+        p2 = g.contours[c2].points
+        if (p2[o2].x > mid_x) != (side > 0) or (p2[i2].y + p2[j2].y) / 2 <= y:
+            continue
+        mid_y = (y + (p2[i2].y + p2[j2].y) / 2) / 2
+        x0 = (pts[outer].x + p2[o2].x) / 2
+        ink = False
+        for t in range(1, 21):
+            pen = PointInsidePen(font, (x0 + (mid_x - x0) * t / 20, mid_y))
+            g.draw(pen)
+            if pen.getResult():
+                ink = True
+                break
+        if not ink:
+            return True
+    return False
 
 
 def _walk_to_x(pts, k: int, step: int, x: float) -> float:
@@ -1233,25 +1275,26 @@ def _upright(pts, i: int, j: int, outer: int) -> bool:
     return recut(pts, i, j, 90) or recut(pts, i, j, 90, (near.x, near.y))
 
 
-def _beak_nodes(x_o, y_o, way, h, w, length, y_face, x_end, y_end, lip) -> list:
-    """A vertical beak: an outer edge flush with the terminal at x_o, a square
-    end `length` past (x_o, y_o) in the direction way, `w` wide toward the
-    stroke (h), and an inner edge that brackets into the stroke as an arm's
-    serif does. y_face is the stroke's edge at the inner edge and (x_end,
-    y_end) where the bracket meets it; `lip` are the points inside the
-    stroke the contour returns through, so beak and stroke overlap."""
-    x1 = x_o + h * w
-    rise = BRACKET[0] * length
-    run = x_end - x1
-    nodes = [(x_o, y_o, True), (x_o, y_o + way * length, True), (x1, y_o + way * length, True),
-             (x1, y_face + way * rise, True), (x1, y_face + way * 0.55 * rise, False),
-             (x1 + 0.45 * run, y_end, False), (x_end, y_end, True)] + [(x, y, True) for x, y in lip]
-    on = [(x, y) for x, y, keep in nodes if keep]
-    area = sum(on[k - 1][0] * on[k][1] - on[k][0] * on[k - 1][1] for k in range(len(on)))
-    return nodes if area > 0 else nodes[::-1]
+def _beak_nodes(o, tip_out, tip_in, h1, h2, land, lip, way: int, h: int) -> list:
+    """A beak as one contour: down (or up) its outer edge from the stroke's
+    corner o to its square end (tip_out, tip_in), back along its inner curve
+    (handles h1, h2) to where it lands on the stroke, and through `lip`,
+    points inside the stroke, to o, so beak and stroke overlap. It runs
+    counter-clockwise, as outer contours do: the turn is set by which way the
+    beak points (way) and on which side the stroke lies (h), the same in every
+    master, so a thin master's narrow beak cannot come out reversed."""
+    nodes = [(*o, True), (*tip_out, True), (*tip_in, True), (*h1, False), (*h2, False), (*land, True)]
+    nodes += [(x, y, True) for x, y in lip]
+    return nodes if way * h < 0 else nodes[::-1]
 
 
-TERMINAL_ROOM = 1 / 3  # the most of the white past a terminal its beak may take, so facing beaks leave a third open (Black c)
+TERMINAL_ROOM = 1 / 3  # the most of the white past a terminal its beak may take, so facing beaks leave a third open
+BEAK_LENGTH = 0.45  # Regular stems a beak reaches past its terminal, scaled with the stem as the serifs' reach is
+BEAK_TIP = 1.0  # a beak's square end, as a share of the master's serif thickness, at most half the cut
+BEAK_SWEEP = (0.15, 0.5)  # the inner curve's handles: up the beak (share of its length), along the stroke (share of its run)
+BEAK_RUN = 1.0  # an upright cut's inner curve lands this many beak lengths past the beak's width along the stroke
+BEAK_LEAN = 0.35  # the most a beak's outer edge leans in from upright, as dx per unit of drop
+BEAK_LEVEL = 0.5  # an upright cut takes a beak only where the stroke runs on from it at most this steeply (dy/dx)
 
 
 def _room(font, g, x: float, y: float, way: int, most: float) -> float:
@@ -1269,72 +1312,120 @@ def _room(font, g, x: float, y: float, way: int, most: float) -> float:
     return most
 
 
+def _outer_lean(pts, outer: int, i: int, h: int, way: int) -> float:
+    """How far the stroke's outer edge leans toward the letter (h) per unit of
+    height as it reaches the corner `outer` of a level cut: the direction its
+    last handle gives, followed past the corner. Never outward (an edge
+    leaving the letter is followed upright) and at most BEAK_LEAN."""
+    n = len(pts)
+    o = pts[outer]
+    k = (outer - 1) % n if outer == i else (outer + 1) % n
+    hx, hy = pts[k].x, pts[k].y
+    if abs(hy - o.y) < 1:
+        return 0.0
+    dx_per = (o.x - hx) / (o.y - hy) * way  # x change per unit moved in the direction way
+    return max(0.0, min(BEAK_LEAN, dx_per * h))
+
+
+def _beak(font, g, term, w: float, length: float, lean: float, sweep) -> list | None:
+    """One beak's contour for a terminal of plan_terminals in this master, w
+    its square end and `length` how far it reaches; an upright cut is cut
+    upright first. None where the terminal cannot take a beak that reads:
+    an upright cut whose stroke turns away from it steeply (the flared arms
+    of ʊ, the small hooks of ν and χ)."""
+    kind, ci, i, j, outer, way, scale = term
+    pts = g.contours[ci].points
+    a, q = pts[i], pts[j]
+    sa, sb = sweep
+    if kind == "level":
+        o, inner = (a, q) if outer == i else (q, a)
+        w = min(w, 0.5 * abs(inner.x - o.x))
+        h = 1 if inner.x > o.x else -1
+        dx = h * lean  # the outer edge's lean per unit of drop
+        length = min(length, TERMINAL_ROOM * _room(font, g, o.x + h * w / 2, o.y, way, 3 * length))
+        tip_out = (o.x + dx * length, o.y + way * length)
+        norm = math.hypot(1, dx)
+        tip_in = (tip_out[0] + h * w / norm, tip_out[1] - way * w * abs(dx) / norm)  # the square end, across the beak
+        run = abs(inner.x - tip_in[0])
+        h1 = (tip_in[0] - dx * sa * length, tip_in[1] - way * sa * length)
+        h2 = (inner.x - h * sb * run, inner.y)
+        mid = ((o.x + inner.x) / 2, (o.y + inner.y) / 2 - way * 0.25 * w)
+        return _beak_nodes((o.x, o.y), tip_out, tip_in, h1, h2, (inner.x, inner.y), [mid], way, h)
+    if not _upright(pts, i, j, outer):
+        return None
+    xe = (a.x + q.x) / 2
+    for pt in (a, q):
+        pt.x = xe
+    o = pts[outer]
+    step = -1 if outer == i else 1
+    away = pts[(outer + step) % len(pts)]
+    h = 1 if away.x > xe else -1
+    length = min(length, TERMINAL_ROOM * _room(font, g, xe + h * w / 2, _walk_to_x(pts, outer, step, xe + h * w / 2), way, 3 * length))
+    tip_out, tip_in = (xe, o.y + way * length), (xe + h * w, o.y + way * length)
+    xl = xe + h * (w + BEAK_RUN * length)
+    yl = _walk_to_x(pts, outer, step, xl)
+    if abs(yl - o.y) > BEAK_LEVEL * abs(xl - xe):
+        return None
+    slope = (_walk_to_x(pts, outer, step, xl + h * 4) - yl) / (h * 4)  # dy/dx of the stroke's edge there
+    run = abs(xl - tip_in[0])
+    h1 = (tip_in[0], tip_in[1] - way * sa * length)
+    h2 = (xl - h * sb * run, yl - h * sb * run * slope)
+    dip = 0.3 * abs(q.y - a.y)
+    return _beak_nodes((xe, o.y), tip_out, tip_in, h1, h2, (xl, yl), [(xl, yl - way * dip), (xe, o.y - way * dip)], way, h)
+
+
 def cut_terminals(fonts, plan: dict, depth: float, reach: float) -> None:
-    """Give every terminal plan_terminals found a vertical beak in the stem
-    serifs' system: its outer edge flush with the end of the stroke, a square
-    end `reach` Regular stems past the stroke (the stem serifs' reach),
-    scaled with the stem as theirs is, as thick as the master's serifs (SERIF_DEPTH_SCALE, so
-    Thin's hold and Black's stay light), and a bracket into the stroke in the
-    serifs' proportions (BRACKET). A level cut takes its beak at its outer
-    corner, pointing away from the stroke (down from the top of c, up from
-    its foot); an upright cut is first cut exactly upright through its
-    midpoint, and its beak runs along the cut past the stroke toward the
-    middle of the letter (down from the arm of r and the hook of f, up from
-    the tails of t, y and j). Every beak is its own contour, the same in
-    every master. A beak takes at most a third of the white past its
-    terminal (TERMINAL_ROOM), so the two beaks of a narrow c leave it open."""
+    """Give every terminal plan_terminals found a beak: a short barb that
+    carries the stroke's outer edge past the end and points back into the
+    letter, ends square, and sweeps back into the stroke along a taut curve,
+    so the end of the stroke turns into the beak instead of stepping into a
+    tab. It is BEAK_LENGTH Regular stems long, scaled with the stem as the
+    serifs' reach is, and its square end is as thick as the master's serifs
+    (SERIF_DEPTH_SCALE, so Thin's hold and Black's stay light), at most half
+    the cut. A level cut (c, s, a, S, the figures) takes its beak at its
+    outer corner, along the stroke's outer edge (down from the top of c, up
+    from the foot of s), and the inner curve lands on the cut's inner
+    corner, so the whole cut becomes the beak's face. An upright cut (the
+    arm of r, the hook of f, the tails of j and y) is first cut exactly
+    upright through its middle; its beak runs on down (or up) the cut past
+    the stroke, and the inner curve lands on the stroke's edge one beak
+    length past the beak (BEAK_RUN). Every beak is its own contour, the same
+    in every master: a terminal that cannot take one in every master keeps
+    its plain cut in all of them (`_beak`). A beak takes at most a third of
+    the white past its terminal (TERMINAL_ROOM)."""
     sw_ref = stem(fonts["Regular"])
     def crossbar(font) -> float:
         ys = sorted({round(pt.y) for c in font["H"].contours for pt in c.points if 0 < round(pt.y) < round(font["H"].getBounds(font).yMax)})
         return ys[-1] - ys[0] if len(ys) >= 2 else stem(font)
-    # an upright cut that one master cannot cut upright keeps its cut, and no beak, in every master
-    plan = {name: [term for term in terms if term[0] == "level" or all(
-        _upright(copy.deepcopy(f[name].contours[term[1]].points), *term[2:5]) for f in fonts.values())] for name, terms in plan.items()}
+    ref = fonts["Regular"]
+    lean = {}  # decided on Regular, so every master leans its beaks alike
+    for name, terms in plan.items():
+        for kind, ci, i, j, outer, way, scale in terms:
+            if kind == "level":
+                pts = ref[name].contours[ci].points
+                o, inner = (pts[i], pts[j]) if outer == i else (pts[j], pts[i])
+                lean[(name, ci, outer)] = _outer_lean(pts, outer, i, 1 if inner.x > o.x else -1, way)
+    sizes = {}
     for style, f in fonts.items():
-        sw = stem(f)
-        k = (sw / sw_ref) ** SERIF_REACH_POWER
+        k = (stem(f) / sw_ref) ** SERIF_REACH_POWER
         t = depth * crossbar(f) * dict(zip(("Thin", "Regular", "Black"), SERIF_DEPTH_SCALE)).get(style, 1.0)
+        sizes[style] = (BEAK_TIP * t, BEAK_LENGTH * sw_ref * k)
+    def shape(style, g, term):
+        w, length = sizes[style]
+        return _beak(fonts[style], g, term, w * term[6], length * term[6], lean.get((g.name, term[1], term[4]), 0.0), BEAK_SWEEP)
+    # a terminal takes its beak only where every master can draw it, so the masters stay compatible
+    plan = {name: [term for term in terms if all(shape(style, copy.deepcopy(f[name]), term) is not None for style, f in fonts.items())]
+            for name, terms in plan.items()}
+    for style, f in fonts.items():
         for name, terms in plan.items():
             g = f[name]
-            shapes = []
-            for kind, ci, i, j, outer, way, scale in terms:
-                pts = g.contours[ci].points
-                a, q = pts[i], pts[j]
-                w, length = t * scale, reach * sw_ref * k * scale
-                run = BRACKET[1] * w
-                if kind == "level":
-                    # the bracket runs from the beak's inner edge to the inner corner of the cut,
-                    # so the end of the stroke sweeps into the beak instead of stepping
-                    o, inner = (a, q) if outer == i else (q, a)
-                    span = abs(inner.x - o.x)
-                    w = min(w, 0.5 * span)
-                    h = 1 if inner.x > o.x else -1
-                    face = lambda x, o=o, inner=inner: o.y + (inner.y - o.y) * (x - o.x) / (inner.x - o.x)  # noqa: E731
-                    x1, xm = o.x + h * w, (o.x + inner.x) / 2
-                    length = min(length, TERMINAL_ROOM * _room(f, g, o.x + h * w / 2, face(o.x + h * w / 2), way, 3 * length))
-                    # back to the outer corner through a point inside the stroke, above (or below) the cut
-                    shapes.append(_beak_nodes(o.x, o.y, way, h, w, length, face(x1), inner.x, inner.y, [(xm, face(xm) - way * 0.25 * w)]))
-                else:
-                    _upright(pts, i, j, outer)
-                    xe = (a.x + q.x) / 2
-                    for pt in (a, q):
-                        pt.x = xe
-                    o = pts[outer]
-                    step = -1 if outer == i else 1
-                    away = pts[(outer + step) % len(pts)]
-                    h = 1 if away.x > xe else -1
-                    x1, x2 = xe + h * w, xe + h * (w + run)
-                    length = min(length, TERMINAL_ROOM * _room(f, g, xe + h * w / 2, _walk_to_x(pts, outer, step, xe + h * w / 2), way, 3 * length))
-                    dip = 0.3 * abs(q.y - a.y)
-                    y2 = _walk_to_x(pts, outer, step, x2)
-                    # back to the corner along the inside of the stroke and up (or down) the cut
-                    shapes.append(_beak_nodes(xe, o.y, way, h, w, length, _walk_to_x(pts, outer, step, x1), x2, y2,
-                                              [(x2, y2 - way * dip), (xe, o.y - way * dip)]))
+            shapes = [shape(style, g, term) for term in terms]
             for nodes in shapes:
                 g.appendContour(_contour(nodes))
             if shapes:
                 g.lib["public.truetype.overlap"] = True
         flag_overlaps(f)
+
 
 def close_c(fonts, share: float) -> None:
     """Bring c's two terminals toward each other by `share` of the gap between
@@ -1514,9 +1605,24 @@ def adjust_widths(fonts, widths: dict[str, float], condense: float = 1.0) -> Non
     for f in fonts.values():
         old = snapshot(f)
         sw = stem(f)
-        maps = {name: resize_glyph(f, name, k, sw) for name, k in scales.items()
+        # in name order: a glyph drawn over a part that is resized too (Ґ over Г) measures
+        # the part as it stands, so the order must be the same in every run
+        maps = {name: resize_glyph(f, name, k, sw) for name, k in sorted(scales.items())
                 if name in f and k != 1 and all(m[name].width > 0 for m in fonts.values())}
         reflow_composites(f, maps, old)
+
+
+def dotted_circle(fonts) -> None:
+    """U+25CC DOTTED CIRCLE, drawn after every transform so none reshapes its
+    dots: a ring as tall as the x-height, spaced as o is, its dots sized from
+    each master's stem (fontops.draw_dotted_circle)."""
+    sw_ref = stem(fonts["Regular"])
+    anchors = dotted_circle_anchors(fonts["Regular"])
+    for f in fonts.values():
+        o = f["o"]
+        b = o.getBounds(f)
+        d = f.info.xHeight
+        draw_dotted_circle(f, dot_size(stem(f), sw_ref), d, d + b.xMin + (o.width - b.xMax), anchors)
 
 
 def write_designspace(p: Profile, out_dir: Path, paths: dict[str, Path], italic: bool = False) -> Path:
@@ -1586,6 +1692,11 @@ def transform(p: Profile, italic: bool = False) -> tuple[dict, dict]:
     respace(fonts, p.spacing)
     set_space(fonts, p.space_width)
     scale_outlines(fonts, p.scale)
+    if not italic:
+        # the Italic takes both from the roman (romanize), so they are the roman's slanted
+        dotted_circle(fonts)
+        for f in fonts.values():
+            combining_double_acute(f)
     return fonts, soften_vertices(fonts, p.corner_radius)
 
 

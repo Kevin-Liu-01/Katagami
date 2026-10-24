@@ -509,3 +509,127 @@ def romanize(italic: dict, roman: dict, names) -> None:
                 f.lib.pop(key, None)
     # roman composites with flipped or scaled parts are drawn in, as the Italic's were
     decompose_transformed(italic)
+
+
+DOTTED_CIRCLE = "uni25CC"
+DOTS = 10  # dots around the ring: as many as Black's dots leave white between
+DOT_SHARE = 0.7  # a dot across, at Regular, as a share of the Regular stem
+DOT_POWER = 0.5  # toward Thin and Black a dot grows with the master's stem to this power
+DOT_GAP = 0.3  # the least white between two dots, as a share of the distance between their centres
+KAPPA = 0.5523
+
+
+def dot_size(stem_w: float, stem_regular: float) -> float:
+    """A dotted circle's dot, across, for a master whose stem is stem_w."""
+    return DOT_SHARE * stem_regular * (stem_w / stem_regular) ** DOT_POWER
+
+
+# Anchors the circle takes from another letter than o: Inter's o has its ogonek
+# anchor halfway up its side, for the ogonek.o it is built with (ǫ), where the
+# plain ogonek mark would float; a's sits at the foot, as the mark expects.
+DOTTED_REFS = {"ogonek": "a"}
+
+
+def dotted_circle_anchors(font, ref: str = "o") -> dict[str, str]:
+    """The base anchors a dotted circle needs, each with the letter it is
+    taken from: every anchor a zero-width mark attaches by and some letter
+    has, from the round letter `ref` where it has it (or the letter
+    DOTTED_REFS names) and otherwise from the first letter in the glyph order
+    that does. Decided on one master and used in all, so every master's
+    circle has the same anchors."""
+    marks = {a.name[1:] for m in font if m.width == 0 for a in m.anchors if a.name.startswith("_")}
+    order = font.lib.get("public.glyphOrder") or list(font.keys())
+    letters = [font[n] for n in order if n in font and font[n].width and font[n].unicodes]
+    out = {}
+    for an in sorted(marks):
+        other = DOTTED_REFS.get(an)
+        if other in font and any(a.name == an for a in font[other].anchors):
+            out[an] = other
+            continue
+        if any(a.name == an for a in font[ref].anchors):
+            out[an] = ref
+            continue
+        for h in letters:
+            if any(a.name == an for a in h.anchors) and h.getBounds(font) is not None:
+                out[an] = h.name
+                break
+    return out
+
+
+def draw_dotted_circle(font, dot: float, diameter: float, advance: float, anchors: dict[str, str], ref: str = "o") -> None:
+    """U+25CC DOTTED CIRCLE: DOTS round dots `dot` units across on a ring
+    `diameter` across at its outside, centred in an `advance` and on half the
+    x-height, with a dot at the top. Each of `anchors` (dotted_circle_anchors)
+    is placed where its letter has it: at the letter's height and moved
+    across with the ring where the letter is the round letter `ref`, and
+    otherwise at the same place in the ring's box as in the letter's.
+    Shaping engines set the circle under a mark that has no base, so the
+    mark sits on it as on a letter."""
+    name = DOTTED_CIRCLE
+    g = font[name] if name in font else font.newGlyph(name)
+    g.clearContours()
+    g.clearComponents()
+    g.clearAnchors()
+    g.unicodes = [0x25CC]
+    g.width = round(advance)
+    cx, cy = advance / 2, font.info.xHeight / 2
+    ring = diameter / 2 - dot / 2
+    spacing = 2 * ring * math.sin(math.pi / DOTS)
+    r = min(dot, (1 - DOT_GAP) * spacing) / 2
+    k = KAPPA * r
+    for n in range(DOTS):
+        a = math.pi / 2 + 2 * math.pi * n / DOTS
+        x, y = cx + ring * math.cos(a), cy + ring * math.sin(a)
+        c = ufoLib2.objects.Contour()
+        for px, py, kind in ((x + r, y, "curve"), (x + r, y + k, None), (x + k, y + r, None), (x, y + r, "curve"),
+                             (x - k, y + r, None), (x - r, y + k, None), (x - r, y, "curve"),
+                             (x - r, y - k, None), (x - k, y - r, None), (x, y - r, "curve"),
+                             (x + k, y - r, None), (x + r, y - k, None)):
+            c.points.append(ufoLib2.objects.Point(round(px, 1), round(py, 1), kind, smooth=kind is not None))
+        g.appendContour(c)
+    x0, y0 = cx - diameter / 2, cy - diameter / 2
+    for an, src in anchors.items():
+        h = font[src]
+        hb = h.getBounds(font)
+        ax, ay = next((a.x, a.y) for a in h.anchors if a.name == an)
+        if src == ref:
+            g.appendAnchor({"name": an, "x": round(ax - (hb.xMin + hb.xMax) / 2 + cx), "y": round(ay)})
+        else:
+            u, v = (ax - hb.xMin) / (hb.xMax - hb.xMin), (ay - hb.yMin) / (hb.yMax - hb.yMin)
+            g.appendAnchor({"name": an, "x": round(x0 + u * diameter), "y": round(y0 + v * diameter)})
+    order = font.lib.get("public.glyphOrder")
+    if order is not None and name not in order:
+        order.append(name)
+
+
+DOUBLE_ACUTE = "hungarumlautcomb"
+
+
+def combining_double_acute(font) -> None:
+    """U+030B COMBINING DOUBLE ACUTE ACCENT, which Inter has no glyph for, as
+    Inter's own double acute set as a mark: a component of hungarumlaut
+    (U+02DD, which Inter draws as its double grave mirrored), no advance,
+    hungarumlaut's _top anchor, and a top anchor as far above the ink as the
+    double grave's, so marks stack on it. Nothing is drawn: it is the same
+    outline as the spacing accent and the one in ő."""
+    if "hungarumlaut" not in font or "dblgravecmb" not in font:
+        return
+    src, grave = font["hungarumlaut"], font["dblgravecmb"]
+    top = next((a for a in src.anchors if a.name == "_top"), None)
+    if top is None:
+        return
+    g = font[DOUBLE_ACUTE] if DOUBLE_ACUTE in font else font.newGlyph(DOUBLE_ACUTE)
+    g.clearContours()
+    g.clearComponents()
+    g.clearAnchors()
+    g.unicodes = [0x030B]
+    g.width = 0
+    g.components.append(ufoLib2.objects.Component("hungarumlaut"))
+    g.appendAnchor({"name": "_top", "x": top.x, "y": top.y})
+    above = next((a for a in grave.anchors if a.name == "top"), None)
+    sb, gb = src.getBounds(font), grave.getBounds(font)
+    if above is not None and sb is not None and gb is not None:
+        g.appendAnchor({"name": "top", "x": top.x, "y": round(sb.yMax + above.y - gb.yMax)})
+    order = font.lib.get("public.glyphOrder")
+    if order is not None and DOUBLE_ACUTE not in order:
+        order.append(DOUBLE_ACUTE)
