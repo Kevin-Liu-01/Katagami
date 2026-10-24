@@ -22,13 +22,17 @@ Every fitting decision is made once, on the Regular master.
 
 `python tools/build_mono.py --italic` builds Katagami Mono Italic the same way
 from Katagami Sans Italic's masters. They are stood upright first, fitted as
-above, and slanted again; box drawing, blocks, Braille and the agent symbols
-are drawn after that, upright, so they still join from cell to cell.
+above, and compared with the roman fitted the same way: a glyph whose design
+differs takes the roman's (`romanize`), so the Italic is the roman slanted.
+Then they are slanted again; box drawing, blocks, Braille and the agent
+symbols are drawn after that, upright, so they still join from cell to cell.
 """
 
 from __future__ import annotations
 
 import copy
+import json
+import math
 import re
 import shutil
 import subprocess
@@ -44,11 +48,11 @@ sys.path.insert(0, str(Path(__file__).parent))
 from kerf_build.boxdraw import draw_box_glyphs  # noqa: E402
 from kerf_build.terminal import draw_terminal_glyphs  # noqa: E402
 from kerf_build.fontops import (  # noqa: E402
-    FILTERS_KEY, ROOT, assign_categories, composites_to_flatten, decompose, italic_style, reflow_composites, set_names, shear, slant_tangent,
-    snapshot, swap_glyph_outlines,
+    FILTERS_KEY, ITALIC_MATCH, ROOT, assign_categories, composites_to_flatten, decompose, design_distances, italic_style, reflow_composites,
+    romanize, set_names, shear, slant_tangent, snapshot, swap_glyph_outlines,
 )
 from kerf_build.outline import XMap, embolden_x, straighten_runs  # noqa: E402
-from build_sans import T_RISE, relabel_features, set_t_top  # noqa: E402
+from build_sans import relabel_features  # noqa: E402
 from fontTools.pens.recordingPen import DecomposingRecordingPen  # noqa: E402
 
 FAMILY = "Katagami Mono"
@@ -109,9 +113,8 @@ LIGATURES = [
 SPACER = "kerf.spacer"
 
 
-def interpolate_bold(italic: bool = False) -> Path:
-    """Katagami Sans at design weight 740, as a UFO with the masters' point structure."""
-    out = (OUT_ITALIC if italic else OUT) / "instances"
+def interpolate_bold(italic: bool, out: Path) -> Path:
+    """Katagami Sans at design weight 740, as a UFO with the masters' point structure, in `out`."""
     src = SANS_ITALIC / "KatagamiSans-Italic.designspace" if italic else SANS / "KatagamiSans.designspace"
     subprocess.run(
         [sys.executable, "-m", "fontmake", "-m", str(src),
@@ -471,32 +474,29 @@ def write_designspace(paths, italic: bool = False) -> Path:
     return out
 
 
-def main(italic: bool = False) -> None:
-    out = OUT_ITALIC if italic else OUT
-    if out.exists():
-        shutil.rmtree(out)
-    out.mkdir(parents=True)
-    bold = interpolate_bold(italic)
+def fit(italic: bool, work: Path) -> tuple[dict, dict]:
+    """Katagami Sans's masters (an Italic's stood upright) with a Bold
+    interpolated in `work`, fitted to the cell: alternates promoted, every
+    glyph fitted, slabs, the zero's bar, composites re-seated and every
+    advance one cell. Returns the masters and each one's stem and bar, read
+    before fitting, for the glyphs drawn on the cell afterwards."""
     sans = SANS_ITALIC if italic else SANS
     fonts = {
         "Thin": ufoLib2.Font.open(sans / f"KatagamiSans-Thin{'Italic' if italic else ''}.ufo", lazy=False),
         "Regular": ufoLib2.Font.open(sans / f"KatagamiSans-{'Italic' if italic else 'Regular'}.ufo", lazy=False),
-        "Bold": ufoLib2.Font.open(bold, lazy=False),
+        "Bold": ufoLib2.Font.open(interpolate_bold(italic, work), lazy=False),
     }
     if italic:
         # stand the Italic upright about half its x-height, as build_sans.py slanted it
-        slope, pivot = slant_tangent(fonts["Regular"]), fonts["Regular"].info.xHeight / 2
-        shear(fonts, -slope, pivot)
+        shear(fonts, -slant_tangent(fonts["Regular"]), fonts["Regular"].info.xHeight / 2)
     promote_alternates(fonts)
-    # Katagami Sans's t is flat across the top; in code it would read as tau,
-    # so the mono's t keeps Inter's stem above the crossbar
-    set_t_top(fonts, T_RISE)
     features = mono_features(fonts["Regular"].features.text, set(fonts["Regular"].keys()))
     flatten = composites_to_flatten(fonts["Regular"])
     for f in fonts.values():
         decompose(f, flatten)
     scales = plan_scales(fonts["Regular"])
     zero_width = {g.name for g in fonts["Regular"] if g.width == 0}
+    measures = {}
 
     for style, f in fonts.items():
         f.kerning.clear()
@@ -505,6 +505,7 @@ def main(italic: bool = False) -> None:
         stem = ink_width(f, "idotless")
         b = f["hyphen"].getBounds(f)
         bar = b.yMax - b.yMin
+        measures[style] = (stem, bar)
         old = snapshot(f)
         maps = {}
         for name, k in scales.items():
@@ -526,6 +527,25 @@ def main(italic: bool = False) -> None:
         keep_marks_in_cell(f)
         for g in f:
             g.width = 0 if g.name in zero_width else CELL
+    return fonts, measures
+
+
+def main(italic: bool = False) -> None:
+    out = OUT_ITALIC if italic else OUT
+    if out.exists():
+        shutil.rmtree(out)
+    out.mkdir(parents=True)
+    fonts, measures = fit(italic, out / "instances")
+    if italic:
+        # each glyph is the roman's design, slanted (build_sans.py does the same for the members)
+        roman, _ = fit(False, out / "roman-instances")
+        distances = design_distances(fonts, roman)
+        replaced = sorted(name for name, d in distances.items() if d > ITALIC_MATCH)
+        romanize(fonts, roman, replaced)
+        slope, pivot = slant_tangent(fonts["Regular"]), fonts["Regular"].info.xHeight / 2
+
+    for style, f in fonts.items():
+        stem, bar = measures[style]
         if italic:
             code_ligatures(f)
             shear({style: f}, slope, pivot)
@@ -548,6 +568,11 @@ def main(italic: bool = False) -> None:
         p = out / f"KatagamiMono-{(italic_style(style) if italic else style).replace(' ', '')}.ufo"
         f.save(p, overwrite=True)
         paths[style] = p
+    if italic:
+        # which glyphs took the roman's drawing, and how far every glyph was from it
+        (out / "romanized.json").write_text(json.dumps(
+            {"limit": ITALIC_MATCH, "replaced": replaced,
+             "distances": {name: (None if math.isinf(d) else round(d, 1)) for name, d in distances.items()}}, indent=0))
     print(write_designspace(paths, italic))
 
 

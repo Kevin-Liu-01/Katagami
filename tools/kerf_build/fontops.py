@@ -5,8 +5,10 @@ from __future__ import annotations
 import copy
 import math
 
+import numpy as np
+import pathops
 from fontTools.pens.pointPen import SegmentToPointPen
-from fontTools.pens.recordingPen import DecomposingRecordingPen
+from fontTools.pens.recordingPen import DecomposingRecordingPen, RecordingPen
 from pathlib import Path
 
 import ufoLib2
@@ -377,3 +379,133 @@ def erase_open_corners(fonts: dict) -> int:
     for f in fonts.values():
         f.lib[FILTERS_KEY] = [x for x in f.lib.get(FILTERS_KEY, []) if x.get("name") != "eraseOpenCorners"]
     return kept
+
+
+def ink_outline(font, g, steps: int = 12) -> tuple[int, np.ndarray]:
+    """A glyph's filled shape: the number of contours once its overlaps are
+    removed, and points every 1/steps of each segment of that outline, its
+    ink centred on x = 0. Components are drawn in."""
+    path = pathops.Path()
+    rec = DecomposingRecordingPen(font)
+    g.draw(rec)
+    rec.replay(path.getPen())
+    try:
+        path = pathops.simplify(path, fix_winding=True, keep_starting_points=False)
+    except pathops.PathOpsError:
+        pass  # Skia cannot resolve some overlaps (Serif Black's k.sups): compare the outline as drawn
+    out = RecordingPen()
+    path.draw(out)
+    ts = np.linspace(0, 1, steps + 1)[1:, None]
+    pts, contours, cur, start = [], 0, None, None
+    for op, args in out.value:
+        if op == "moveTo":
+            cur = start = np.array(args[0], float)
+            contours += 1
+            pts.append(cur[None])
+            continue
+        if op in ("closePath", "endPath"):
+            seg = [cur, start]
+        else:
+            seg = [cur] + [np.array(a, float) for a in args]
+        if len(seg) == 2:
+            pts.append(seg[0] + (seg[1] - seg[0]) * ts)
+        elif len(seg) == 3:  # quadratic
+            u = 1 - ts
+            pts.append(u * u * seg[0] + 2 * u * ts * seg[1] + ts * ts * seg[2])
+        else:
+            u = 1 - ts
+            pts.append(u**3 * seg[0] + 3 * u * u * ts * seg[1] + 3 * u * ts * ts * seg[2] + ts**3 * seg[3])
+        cur = seg[-1]
+    if not pts:
+        return 0, np.zeros((0, 2))
+    a = np.concatenate(pts)
+    a[:, 0] -= (a[:, 0].min() + a[:, 0].max()) / 2
+    return contours, a
+
+
+def outline_distance(a: np.ndarray, b: np.ndarray) -> float:
+    """The farthest any point of either outline lies from the other (Hausdorff)."""
+    if not len(a) or not len(b):
+        return 0.0 if len(a) == len(b) else math.inf
+    def one(p, q):
+        worst = 0.0
+        for k in range(0, len(p), 1024):
+            d = ((p[k:k + 1024, None, :] - q[None, :, :]) ** 2).sum(-1).min(1).max()
+            worst = max(worst, float(d))
+        return worst
+    return math.sqrt(max(one(a, b), one(b, a)))
+
+
+def design_difference(fa, a, fb, b) -> tuple[int, int, float]:
+    """Contours of each filled shape and the outline distance between them, in units."""
+    ca, pa = ink_outline(fa, a)
+    cb, pb = ink_outline(fb, b)
+    return ca, cb, (outline_distance(pa, pb) if ca == cb else math.inf)
+
+
+ITALIC_MATCH = 64  # units: the farthest an upright Italic glyph's outline may lie from its roman's and keep Inter Italic's drawing
+
+
+def design_distances(italic: dict, roman: dict) -> dict[str, float]:
+    """For every roman glyph, how far the upright Italic's glyph of the same
+    name lies from it: the largest outline distance over the masters, or
+    infinity where the Italic lacks the glyph or the filled shapes have a
+    different number of contours."""
+    out = {}
+    for name in roman["Regular"].keys():
+        if name not in italic["Regular"]:
+            out[name] = math.inf
+            continue
+        out[name] = max(design_difference(roman[s], roman[s][name], italic[s], italic[s][name])[2] for s in roman)
+    return out
+
+
+def romanize(italic: dict, roman: dict, names) -> None:
+    """Make an Italic its roman slanted: the glyphs in `names` take the
+    roman's drawing, anchors and advance, so the slant is their only change,
+    and the Italic takes the roman's glyph set and order, features, kerning
+    and groups. Both are the member's masters upright (the Italic stood
+    upright and put through the roman's transforms); the other glyphs keep
+    the Italic's drawing, with Inter Italic's optical refinements.
+
+    Where a composite and one of its components come from different fonts
+    (a roman aacute over the Italic's acutecomb), the component moves by the
+    difference between the two drawings' ink centres, so it lands where the
+    composite's own font had it: Inter Italic draws its marks further left of
+    their origin than the roman does."""
+    names = set(names)
+    def centre(font, name):
+        b = font[name].getBounds(font)
+        return (0.0, 0.0) if b is None else ((b.xMin + b.xMax) / 2, (b.yMin + b.yMax) / 2)
+    for style, f in italic.items():
+        r = roman[style]
+        own = {name: centre(f, name) for name in f.keys()}  # the Italic's drawing, before any glyph is replaced
+        for name in names:
+            f.layers.defaultLayer.insertGlyph(r[name], name, overwrite=True, copy=True)
+        for g in f:
+            for comp in g.components:
+                base = comp.baseGlyph
+                if (g.name in names) == (base in names) or base not in own or base not in r or tuple(comp.transformation[:4]) != (1, 0, 0, 1):
+                    continue
+                (ix, iy), (rx, ry) = own[base], centre(r, base)
+                dx, dy = (rx - ix, ry - iy) if g.name in names else (ix - rx, iy - ry)
+                xx, xy, yx, yy, ox, oy = comp.transformation
+                comp.transformation = (xx, xy, yx, yy, ox + dx, oy + dy)
+        extra = [name for name in f.keys() if name not in r]
+        for g in f:
+            if any(c.baseGlyph in extra for c in g.components):
+                decompose(f, [g.name])
+        for name in extra:
+            del f[name]
+        f.features.text = r.features.text
+        f.kerning.clear()
+        f.kerning.update(r.kerning)
+        f.groups.clear()
+        f.groups.update({k: list(v) for k, v in r.groups.items()})
+        for key in ("public.glyphOrder", "public.postscriptNames", "public.skipExportGlyphs"):
+            if key in r.lib:
+                f.lib[key] = copy.deepcopy(r.lib[key])
+            else:
+                f.lib.pop(key, None)
+    # roman composites with flipped or scaled parts are drawn in, as the Italic's were
+    decompose_transformed(italic)

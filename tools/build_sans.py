@@ -5,7 +5,9 @@
 With --italic the member's Italic is built from Inter Italic's masters. They
 are stood upright first (sheared back by Inter's 9.4 degrees about half the
 x-height), so every transform below meets vertical stems as it does in the
-roman, and slanted again at the end about the member's own half x-height.
+roman. Every glyph whose design then differs from the roman's takes the
+roman's (`romanize`), and the masters are slanted again at the end about the
+member's own half x-height.
 
 Inter -> profile, in order (each step only where the profile asks for it):
   1. Inter alternates promoted to the default (square punctuation, profile picks)
@@ -18,6 +20,7 @@ Inter -> profile, in order (each step only where the profile asks for it):
 from __future__ import annotations
 
 import copy
+import json
 import math
 import shutil
 import sys
@@ -30,8 +33,9 @@ from fontTools.designspaceLib import AxisDescriptor, DesignSpaceDocument, Instan
 
 sys.path.insert(0, str(Path(__file__).parent))
 from kerf_build.fontops import (  # noqa: E402
-    MASTERS, ROOT, assign_categories, decompose_transformed, erase_open_corners, italic_style, load_inter_masters, promote_alternates,
-    reflow_composites, resize_glyph, respace, set_names, shear, slant_tangent, snapshot, stem, swap_glyph_outlines,
+    ITALIC_MATCH, MASTERS, ROOT, assign_categories, decompose_transformed, design_distances, erase_open_corners, italic_style,
+    load_inter_masters, promote_alternates, reflow_composites, resize_glyph, respace, romanize, set_names, shear, slant_tangent,
+    snapshot, stem, swap_glyph_outlines,
 )
 from kerf_build.outline import (  # noqa: E402
     XMap,
@@ -306,51 +310,6 @@ def slant_t(fonts, share: float) -> None:
     i = min((k for k, p in enumerate(pts) if p.type and abs(p.y - top) < 1), key=lambda k: pts[k].x)
     for f in fonts.values():
         f[base].contours[0].points[i].y -= share * stem(f)
-
-
-T_RISE = 266 / 1118  # Inter's t: the stem rises this share of the x-height above the crossbar
-
-
-def set_t_top(fonts, rise: float) -> None:
-    """Cut t's stem `rise` x-heights above the top of its crossbar (0 makes the
-    t flat across the top). The stem part (shared by t and the compact t.1)
-    changes in every master; the t's anchors above the crossbar, and the marks
-    of accented t's that sit above it (ť, ṫ, ẗ), move by the same amount."""
-    ref = fonts["Regular"]
-    if not ref["t"].components:
-        return
-    part = ref["t"].components[0].baseGlyph
-    users = [g.name for g in ref if g.components and g.components[0].baseGlyph == "t"]
-    for f in fonts.values():
-        bar_top = max(q.y for c in f["t"].contours for q in c.points)
-        pts = f[part].contours[0].points
-        top = max(q.y for q in pts if q.type)
-        delta = bar_top + rise * f.info.xHeight - top
-        if abs(delta) < 1:
-            continue
-        for q in pts:
-            if q.type and abs(q.y - top) < 1:
-                q.y += delta
-        for name in ("t", "t.1", *users):
-            if name not in f:
-                continue
-            g = f[name]
-            for a in g.anchors:
-                if a.y > bar_top:
-                    a.y += delta
-            if name in users:
-                for comp in g.components[1:]:
-                    b = f[comp.baseGlyph].getBounds(f)
-                    t = list(comp.transformation)
-                    if b is not None and f[comp.baseGlyph].width == 0 and b.yMin + t[5] >= bar_top:
-                        t[5] += delta
-                        comp.transformation = tuple(t)
-
-
-def flat_t(fonts) -> None:
-    """A flat-topped t: the stem stops at the top of the crossbar, so the top of
-    the t is one level line (Katagami Mono raises it again, `set_t_top`)."""
-    set_t_top(fonts, 0.0)
 
 
 TWO_NAMES = ("two", "two.sups", "two.subs", "two.numr", "two.dnom", "two.sinf")
@@ -700,31 +659,40 @@ def level_terminals(fonts, angle: float) -> None:
     for f in fonts.values():
         for name, terms in plans.items():
             for ci, i, j in terms:
-                pts = f[name].contours[ci].points
-                n = len(pts)
-                P = lambda k: pts[k % n]  # noqa: E731
-                if P(i - 3).type is None or P(j + 2).type is not None or P(j + 3).type != "curve":
-                    continue
-                p, q = P(i), P(j)
-                mid = ((p.x + q.x) / 2, (p.y + q.y) / 2)
-                dx, dy = q.x - p.x, q.y - p.y
-                a = math.radians(angle) * (1 if dx * dy >= 0 else -1)
-                direction = (math.cos(a), math.sin(a))
-                side = lambda pt: (pt[0] - mid[0]) * direction[1] - (pt[1] - mid[1]) * direction[0]  # noqa: E731
-                into = [P(i - 3), P(i - 2), P(i - 1), p]  # the edge arriving at the cut
-                out = [q, P(j + 1), P(j + 2), P(j + 3)]  # the edge leaving it
-                ca = [(pt.x, pt.y) for pt in into]
-                cb = [(pt.x, pt.y) for pt in out]
-                ta = _crossing(ca, side, 1.0, 0.6, 1.4)
-                tb = _crossing(cb, side, 0.0, -0.4, 0.4)
-                if ta is None or tb is None:
-                    continue
-                left, _ = _split(ca, ta)
-                _, right = _split(cb, tb)
-                for pt, (x, y) in zip(into[1:], left[1:]):
-                    pt.x, pt.y = x, y
-                for pt, (x, y) in zip(out[:3], right[:3]):
-                    pt.x, pt.y = x, y
+                recut(f[name].contours[ci].points, i, j, angle)
+
+
+def recut(pts, i: int, j: int, angle: float, through=None) -> bool:
+    """Cut the stroke end from point i to point j again, along a line at `angle`
+    degrees through its midpoint (or the point `through`), tilted the way the
+    old cut was: each edge is split where it crosses the line, so it stays a
+    piece of its own curve. Returns False, changing nothing, where an edge is
+    not a curve or does not cross the line near the old cut."""
+    n = len(pts)
+    P = lambda k: pts[k % n]  # noqa: E731
+    if P(i - 3).type is None or P(j + 2).type is not None or P(j + 3).type != "curve":
+        return False
+    p, q = P(i), P(j)
+    mid = through or ((p.x + q.x) / 2, (p.y + q.y) / 2)
+    dx, dy = q.x - p.x, q.y - p.y
+    a = math.radians(angle) * (1 if dx * dy >= 0 else -1)
+    direction = (math.cos(a), math.sin(a))
+    side = lambda pt: (pt[0] - mid[0]) * direction[1] - (pt[1] - mid[1]) * direction[0]  # noqa: E731
+    into = [P(i - 3), P(i - 2), P(i - 1), p]  # the edge arriving at the cut
+    out = [q, P(j + 1), P(j + 2), P(j + 3)]  # the edge leaving it
+    ca = [(pt.x, pt.y) for pt in into]
+    cb = [(pt.x, pt.y) for pt in out]
+    ta = _crossing(ca, side, 1.0, 0.6, 1.4)
+    tb = _crossing(cb, side, 0.0, -0.4, 0.4)
+    if ta is None or tb is None:
+        return False
+    left, _ = _split(ca, ta)
+    _, right = _split(cb, tb)
+    for pt, (x, y) in zip(into[1:], left[1:]):
+        pt.x, pt.y = x, y
+    for pt, (x, y) in zip(out[:3], right[:3]):
+        pt.x, pt.y = x, y
+    return True
 
 
 def find_stem_ends(font, g, sw: float, letters: set[str]) -> list[tuple]:
@@ -829,67 +797,22 @@ def find_arm_ends(font, g, sw: float) -> list[tuple]:
 
 ARMS = set("EFLTZzΓΕΖΤГЕТ")
 SERIF_WIDTH_CAP = 1.1  # stems: a serif's reach is measured on its stroke end, at most this wide
-EXIT_CLEAR = 0.6  # stems: ink above the x-height's middle that reaches this far past a foot (r's arm) takes its exit
-
-
-def italic_ends(font, g, ends: list[tuple], sw: float, letters: set[str]) -> list[tuple]:
-    """An Italic's lowercase takes entry and exit strokes in place of serifs on both sides.
-
-    The pen enters a lowercase letter at its top left and leaves it at its
-    bottom right. So the leftmost top end keeps its serif on the left side only
-    (the entry), and head serifs stay; the glyph's rightmost foot on the
-    baseline keeps its serif on the right side only (the exit), unless ink
-    higher up reaches past it (the arm of r), where the pen leaves from the arm;
-    every other lowercase top and baseline foot takes none. Feet on the
-    descender (p, q) and capitals keep their serifs on both sides.
-    """
-    lower = unicodedata.category(chr(g.unicodes[0])) == "Ll" if g.unicodes else g.name.split(".")[0] in letters and g.name[:1].islower()
-    if not lower:
-        return ends
-    b = g.getBounds(font)
-    xh = font["x"].getBounds(font).yMax if "x" in font else font.info.xHeight
-    pts = lambda e: (g.contours[e[0]].points[e[1]], g.contours[e[0]].points[e[2]])  # noqa: E731
-    feet = [e for e in ends if not e[5] and abs(pts(e)[0].y) < 3]
-    tops = [e for e in ends if e[5]]
-    exit_foot = max(feet, key=lambda e: max(q.x for q in pts(e)), default=None)
-    if exit_foot is not None:
-        foot_right = max(q.x for q in pts(exit_foot))
-        upper = [q.x for c in g.contours for q in c.points if q.type and q.y > xh / 2]
-        if upper and max(upper) > foot_right + EXIT_CLEAR * sw:
-            exit_foot = None
-    entry = min(tops, key=lambda e: min(q.x for q in pts(e)), default=None)
-    out = []
-    for e in ends:
-        ci, i, j, left, right, top, width, head = e
-        if e in feet:
-            if e is not exit_foot or not right:
-                continue
-            left = False
-        elif top and not head:
-            if e is not entry or not left:
-                continue
-            right = False
-        out.append((ci, i, j, left, right, top, width, head))
-    return out
-
-
-def plan_serifs(fonts, italic: bool = False) -> dict:
+def plan_serifs(fonts) -> dict:
     """Where Katagami Serif's serifs go, found on Regular before any of them is cut:
-    stem ends and the free ends of arms. An Italic's lowercase takes entry and
-    exit strokes instead (`italic_ends`)."""
+    stem ends and the free ends of arms, in letters, their alternates and the
+    stems f and t are built from."""
     ref = fonts["Regular"]
     sw = stem(ref)
     letters = {g.name for g in ref if g.unicodes and unicodedata.category(chr(g.unicodes[0]))[0] == "L"}
     base = lambda g: g.name if g.unicodes else g.name.split(".")[0]  # noqa: E731
     char = {g.name: chr(g.unicodes[0]) for g in ref if g.unicodes}
     names = [g.name for g in ref if g.contours and g.width and (g.name in letters or (not g.unicodes and base(g) in letters))]
+    names += sorted(serif_parts(ref) - set(names))
     plan = {}
     for name in names:
         g = ref[name]
         ch = char.get(base(g), "")
         ends = find_stem_ends(ref, g, sw, letters)
-        if italic:
-            ends = italic_ends(ref, g, ends, sw, letters)
         arms = find_arm_ends(ref, g, sw) if ch in ARMS else []
         if ends or arms:
             plan[name] = (ends, arms)
@@ -1062,6 +985,7 @@ def cut_serifs(fonts, plan: dict, reach: float, depth: float, head_drop: float, 
         ys = sorted({round(pt.y) for c in font["H"].contours for pt in c.points if 0 < round(pt.y) < round(font["H"].getBounds(font).yMax)})
         return ys[-1] - ys[0] if len(ys) >= 2 else stem(font)
     gap = 0.5 * sw_ref  # the least white left between two serifs, inside a letter or between two
+    parts = serif_parts(fonts["Regular"])
     for style, f in fonts.items():
         sw = stem(f)
         k = (sw / sw_ref) ** SERIF_REACH_POWER
@@ -1126,7 +1050,7 @@ def cut_serifs(fonts, plan: dict, reach: float, depth: float, head_drop: float, 
             clear = TIP_CLEAR * sw_ref
             dl = max(0.0, clear - out.xMin) if out.xMin < ink.xMin - 1 else 0.0
             dr = max(0.0, clear - (g.width - out.xMax)) if out.xMax > ink.xMax + 1 else 0.0
-            if dl or dr:
+            if (dl or dr) and name not in parts:  # a part sits inside its letter's advance
                 for c in g.contours:
                     for pt in c.points:
                         pt.x += dl
@@ -1135,14 +1059,282 @@ def cut_serifs(fonts, plan: dict, reach: float, depth: float, head_drop: float, 
                 g.width = round(g.width + dl + dr)
                 widened[name] = XMap(0, dl, 1)
         reflow_composites(f, widened, before)
-        # fontmake flattens components, so a composite of a serifed glyph overlaps too
-        def wedged(name: str) -> bool:
-            g = f[name]
-            return bool(g.lib.get("public.truetype.overlap")) or any(wedged(c.baseGlyph) for c in g.components)
-        for g in f:
-            if g.components and wedged(g.name):
-                g.lib["public.truetype.overlap"] = True
+        flag_overlaps(f)
 
+
+def flag_overlaps(font) -> None:
+    """fontmake flattens components, so a composite of a serifed glyph overlaps too."""
+    def wedged(name: str) -> bool:
+        g = font[name]
+        return bool(g.lib.get("public.truetype.overlap")) or any(wedged(c.baseGlyph) for c in g.components)
+    for g in font:
+        if g.components and wedged(g.name):
+            g.lib["public.truetype.overlap"] = True
+
+
+
+def serif_parts(font) -> set[str]:
+    """The stems f and t are drawn from (unencoded parts): their ends take
+    serifs and beaks as a letter's do."""
+    return {font[n].components[0].baseGlyph for n in ("f", "t") if n in font and font[n].components}
+
+
+TERMINAL_FACE = (0.45, 1.6)  # stems (Regular): how long a cut across a stroke may be to count as its end
+TERMINAL_REF = 1.0  # stems: a terminal cut this long or longer takes a full beak; shorter ones (superiors) a smaller one
+TERMINAL_SYMBOLS = set("?¿&§$¢€£@‽")  # symbols drawn with the letters' curved strokes
+
+
+def _ink_side(font, g, a, q) -> tuple[bool, bool]:
+    """Whether the ink lies on the left of the cut from a to q and not on its right,
+    a quarter stem from its midpoint: the cut is an end the stroke stops at."""
+    from fontTools.pens.pointInsidePen import PointInsidePen
+    mx, my = (a.x + q.x) / 2, (a.y + q.y) / 2
+    d = math.hypot(q.x - a.x, q.y - a.y)
+    nx, ny = -(q.y - a.y) / d, (q.x - a.x) / d  # left of travel
+    r = 0.25 * stem(font)
+    def inside(x, y):
+        pen = PointInsidePen(font, (x, y))
+        g.draw(pen)
+        return pen.getResult()
+    return inside(mx + r * nx, my + r * ny), not inside(mx - r * nx, my - r * ny)
+
+
+def plan_terminals(fonts, plan: dict) -> dict:
+    """Where Katagami Serif's terminals take a beak, found on Regular: every
+    stroke end the serif plan leaves bare in letters, figures, their
+    alternates, the stems of f and t and the symbols drawn like letters.
+
+    A stroke end is a straight cut 0.45 to 1.6 stems long between two
+    corners whose sides run back the way they came, with ink on one side of
+    it and none on the other. A level cut (within 30 degrees of horizontal)
+    between two curves is the end of a curved stroke (c, s, a, C, S, G, the
+    figures), and so is one on a short straight stroke that hooks back up
+    (J); its beak must point into the letter. An upright cut (within 30
+    degrees of vertical) is the end of a hook, an arm or a tail (r, f, t, y,
+    j), unless it ends a stub in the middle third of the letter (the waist of
+    3) or a stroke that lies on the baseline, x-height or cap height. A bar's
+    end, with a straight side 1.8 stems or longer (the crossbars of f and t,
+    the foot of 2), is not a terminal. Returns
+    {glyph: [(kind, contour, i, j, outer, way, scale)]}: for a level cut the
+    corner on the outside of the letter and whether the beak points up (1)
+    or down (-1); for an upright cut the corner the beak grows from; scale is
+    the cut's length over TERMINAL_REF stems, at most 1.
+    """
+    ref = fonts["Regular"]
+    sw = stem(ref)
+    cat = lambda g: unicodedata.category(chr(g.unicodes[0])) if g.unicodes else ""  # noqa: E731
+    drawn = {g.name for g in ref if g.unicodes and (cat(g)[0] in "LN" or chr(g.unicodes[0]) in TERMINAL_SYMBOLS)}
+    names = [g.name for g in ref if g.contours and g.width and (g.name in drawn or (not g.unicodes and g.name.split(".")[0] in drawn))]
+    names += sorted(serif_parts(ref) - set(names))
+    metrics = (ref["x"].getBounds(ref).yMax, ref["H"].getBounds(ref).yMax)
+    out = {}
+    for name in names:
+        g = ref[name]
+        ends, arms = plan.get(name, ([], []))
+        taken = {(e[0], k) for e in ends + arms for k in (e[1], e[2])}
+        b = g.getBounds(ref)
+        found = []
+        for ci, c in enumerate(g.contours):
+            pts = c.points
+            n = len(pts)
+            for i in range(n):
+                j = (i + 1) % n
+                a, q = pts[i], pts[j]
+                if a.type is None or q.type != "line" or a.smooth or q.smooth or (ci, i) in taken or (ci, j) in taken:
+                    continue
+                length = math.hypot(q.x - a.x, q.y - a.y)
+                if not TERMINAL_FACE[0] * sw <= length <= TERMINAL_FACE[1] * sw:
+                    continue
+                prev, nxt = pts[(i - 1) % n], pts[(j + 1) % n]
+                din, dout = (a.x - prev.x, a.y - prev.y), (nxt.x - q.x, nxt.y - q.y)
+                li, lo = math.hypot(*din), math.hypot(*dout)
+                if li < 1 or lo < 1 or (din[0] * dout[0] + din[1] * dout[1]) / (li * lo) > -0.5:
+                    continue
+                into_curve, out_curve = a.type == "curve", nxt.type is None
+                # a bar's end: a straight side at least 1.8 stems long runs from it (f, t, Z, the foot of 2)
+                bar = (not into_curve and li >= 1.8 * sw) or (nxt.type == "line" and lo >= 1.8 * sw)
+                angle = abs(math.degrees(math.atan2(q.y - a.y, q.x - a.x))) % 180
+                angle = min(angle, 180 - angle)
+                mid_x, mid_y, cut_y = (b.xMin + b.xMax) / 2, (b.yMin + b.yMax) / 2, (a.y + q.y) / 2
+                if angle <= 30:
+                    kind = "level"
+                    # the ink is left of travel, so the bare side faces up when the cut runs right to left
+                    way = 1 if q.x < a.x else -1
+                    # a beak points into the letter, never past its top or foot (the arms of ω)
+                    if (way > 0) != (cut_y < mid_y):
+                        continue
+                    # the end of a curved stroke, or of a straight one that hooks back up (J)
+                    if not (into_curve and out_curve or not bar and way > 0):
+                        continue
+                elif angle >= 60 and not bar:
+                    kind = "upright"
+                    lo_y, hi_y = sorted((a.y, q.y))
+                    # a stroke lying on a metric line ends in a bar's end (the foot of 2, the top of Z)
+                    if abs(lo_y) < 3 or any(abs(hi_y - m) < 3 for m in metrics):
+                        continue
+                    # a stub in the middle of a letter (the waist of 3) is not a terminal
+                    if abs(cut_y - mid_y) < (b.yMax - b.yMin) / 6:
+                        continue
+                    way = -1 if cut_y > mid_y else 1
+                else:
+                    continue
+                ink_left, bare_right = _ink_side(ref, g, a, q)
+                if not (ink_left and bare_right):
+                    continue
+                scale = min(1.0, length / (TERMINAL_REF * sw))
+                if kind == "level":
+                    outer = i if abs(a.x - mid_x) > abs(q.x - mid_x) else j
+                else:
+                    lo_k, hi_k = (i, j) if a.y < q.y else (j, i)
+                    outer = lo_k if way < 0 else hi_k
+                found.append((kind, ci, i, j, outer, way, scale))
+        if found:
+            out[name] = found
+    return out
+
+
+def _walk_to_x(pts, k: int, step: int, x: float) -> float:
+    """The height where the outline, followed from point k in direction step
+    (away from a cut), first reaches x; the height of point k if it does not
+    within three segments."""
+    n = len(pts)
+    cur = k
+    for _ in range(3):
+        seg = [pts[cur]]
+        nk = cur
+        while True:
+            nk = (nk + step) % n
+            seg.append(pts[nk])
+            if pts[nk].type is not None:
+                break
+        xy = [(q.x, q.y) for q in seg]
+        samples = []
+        for t in [m / 32 for m in range(33)]:
+            if len(xy) == 4:
+                samples.append(_point(xy, t))
+            else:
+                samples.append((xy[0][0] + (xy[-1][0] - xy[0][0]) * t, xy[0][1] + (xy[-1][1] - xy[0][1]) * t))
+        for (x0, y0), (x1, y1) in zip(samples, samples[1:]):
+            if (x0 - x) * (x1 - x) <= 0 and x0 != x1:
+                return y0 + (y1 - y0) * (x - x0) / (x1 - x0)
+        cur = nk
+    return pts[k].y
+
+
+def _upright(pts, i: int, j: int, outer: int) -> bool:
+    """Cut the stroke end from point i to point j exactly upright: through its
+    midpoint, or, where an edge cannot reach that line (the hook of f),
+    through the corner nearer the stroke. Returns False where neither works."""
+    a, q = pts[i], pts[j]
+    if abs(q.x - a.x) <= 1:
+        return True
+    side = 1 if pts[(outer + (-1 if outer == i else 1)) % len(pts)].x > (a.x + q.x) / 2 else -1
+    near = max((a, q), key=lambda pt: side * pt.x)
+    return recut(pts, i, j, 90) or recut(pts, i, j, 90, (near.x, near.y))
+
+
+def _beak_nodes(x_o, y_o, way, h, w, length, y_face, x_end, y_end, lip) -> list:
+    """A vertical beak: an outer edge flush with the terminal at x_o, a square
+    end `length` past (x_o, y_o) in the direction way, `w` wide toward the
+    stroke (h), and an inner edge that brackets into the stroke as an arm's
+    serif does. y_face is the stroke's edge at the inner edge and (x_end,
+    y_end) where the bracket meets it; `lip` are the points inside the
+    stroke the contour returns through, so beak and stroke overlap."""
+    x1 = x_o + h * w
+    rise = BRACKET[0] * length
+    run = x_end - x1
+    nodes = [(x_o, y_o, True), (x_o, y_o + way * length, True), (x1, y_o + way * length, True),
+             (x1, y_face + way * rise, True), (x1, y_face + way * 0.55 * rise, False),
+             (x1 + 0.45 * run, y_end, False), (x_end, y_end, True)] + [(x, y, True) for x, y in lip]
+    on = [(x, y) for x, y, keep in nodes if keep]
+    area = sum(on[k - 1][0] * on[k][1] - on[k][0] * on[k - 1][1] for k in range(len(on)))
+    return nodes if area > 0 else nodes[::-1]
+
+
+TERMINAL_ROOM = 1 / 3  # the most of the white past a terminal its beak may take, so facing beaks leave a third open (Black c)
+
+
+def _room(font, g, x: float, y: float, way: int, most: float) -> float:
+    """How far the white runs from (x, y) straight up (way 1) or down (-1)
+    before it meets ink, looked for up to `most` units."""
+    from fontTools.pens.pointInsidePen import PointInsidePen
+    step = 4.0
+    d = step
+    while d < most:
+        pen = PointInsidePen(font, (x, y + way * d))
+        g.draw(pen)
+        if pen.getResult():
+            return d
+        d += step
+    return most
+
+
+def cut_terminals(fonts, plan: dict, depth: float, reach: float) -> None:
+    """Give every terminal plan_terminals found a vertical beak in the stem
+    serifs' system: its outer edge flush with the end of the stroke, a square
+    end `reach` Regular stems past the stroke (the stem serifs' reach),
+    scaled with the stem as theirs is, as thick as the master's serifs (SERIF_DEPTH_SCALE, so
+    Thin's hold and Black's stay light), and a bracket into the stroke in the
+    serifs' proportions (BRACKET). A level cut takes its beak at its outer
+    corner, pointing away from the stroke (down from the top of c, up from
+    its foot); an upright cut is first cut exactly upright through its
+    midpoint, and its beak runs along the cut past the stroke toward the
+    middle of the letter (down from the arm of r and the hook of f, up from
+    the tails of t, y and j). Every beak is its own contour, the same in
+    every master. A beak takes at most a third of the white past its
+    terminal (TERMINAL_ROOM), so the two beaks of a narrow c leave it open."""
+    sw_ref = stem(fonts["Regular"])
+    def crossbar(font) -> float:
+        ys = sorted({round(pt.y) for c in font["H"].contours for pt in c.points if 0 < round(pt.y) < round(font["H"].getBounds(font).yMax)})
+        return ys[-1] - ys[0] if len(ys) >= 2 else stem(font)
+    # an upright cut that one master cannot cut upright keeps its cut, and no beak, in every master
+    plan = {name: [term for term in terms if term[0] == "level" or all(
+        _upright(copy.deepcopy(f[name].contours[term[1]].points), *term[2:5]) for f in fonts.values())] for name, terms in plan.items()}
+    for style, f in fonts.items():
+        sw = stem(f)
+        k = (sw / sw_ref) ** SERIF_REACH_POWER
+        t = depth * crossbar(f) * dict(zip(("Thin", "Regular", "Black"), SERIF_DEPTH_SCALE)).get(style, 1.0)
+        for name, terms in plan.items():
+            g = f[name]
+            shapes = []
+            for kind, ci, i, j, outer, way, scale in terms:
+                pts = g.contours[ci].points
+                a, q = pts[i], pts[j]
+                w, length = t * scale, reach * sw_ref * k * scale
+                run = BRACKET[1] * w
+                if kind == "level":
+                    # the bracket runs from the beak's inner edge to the inner corner of the cut,
+                    # so the end of the stroke sweeps into the beak instead of stepping
+                    o, inner = (a, q) if outer == i else (q, a)
+                    span = abs(inner.x - o.x)
+                    w = min(w, 0.5 * span)
+                    h = 1 if inner.x > o.x else -1
+                    face = lambda x, o=o, inner=inner: o.y + (inner.y - o.y) * (x - o.x) / (inner.x - o.x)  # noqa: E731
+                    x1, xm = o.x + h * w, (o.x + inner.x) / 2
+                    length = min(length, TERMINAL_ROOM * _room(f, g, o.x + h * w / 2, face(o.x + h * w / 2), way, 3 * length))
+                    # back to the outer corner through a point inside the stroke, above (or below) the cut
+                    shapes.append(_beak_nodes(o.x, o.y, way, h, w, length, face(x1), inner.x, inner.y, [(xm, face(xm) - way * 0.25 * w)]))
+                else:
+                    _upright(pts, i, j, outer)
+                    xe = (a.x + q.x) / 2
+                    for pt in (a, q):
+                        pt.x = xe
+                    o = pts[outer]
+                    step = -1 if outer == i else 1
+                    away = pts[(outer + step) % len(pts)]
+                    h = 1 if away.x > xe else -1
+                    x1, x2 = xe + h * w, xe + h * (w + run)
+                    length = min(length, TERMINAL_ROOM * _room(f, g, xe + h * w / 2, _walk_to_x(pts, outer, step, xe + h * w / 2), way, 3 * length))
+                    dip = 0.3 * abs(q.y - a.y)
+                    y2 = _walk_to_x(pts, outer, step, x2)
+                    # back to the corner along the inside of the stroke and up (or down) the cut
+                    shapes.append(_beak_nodes(xe, o.y, way, h, w, length, _walk_to_x(pts, outer, step, x1), x2, y2,
+                                              [(x2, y2 - way * dip), (xe, o.y - way * dip)]))
+            for nodes in shapes:
+                g.appendContour(_contour(nodes))
+            if shapes:
+                g.lib["public.truetype.overlap"] = True
+        flag_overlaps(f)
 
 def close_c(fonts, share: float) -> None:
     """Bring c's two terminals toward each other by `share` of the gap between
@@ -1351,19 +1543,19 @@ def write_designspace(p: Profile, out_dir: Path, paths: dict[str, Path], italic:
     return out
 
 
-def build(p: Profile, italic: bool = False) -> Path:
+def transform(p: Profile, italic: bool = False) -> tuple[dict, dict]:
+    """Inter's Thin, Regular and Black (an Italic's stood upright) through
+    every transform of the profile. Returns the masters and the corners
+    `soften_vertices` rounded."""
     fonts = load_inter_masters(italic)
     if italic:
-        slope = slant_tangent(fonts["Regular"])
         decompose_transformed(fonts)
-        shear(fonts, -slope, fonts["Regular"].info.xHeight / 2)
+        shear(fonts, -slant_tangent(fonts["Regular"]), fonts["Regular"].info.xHeight / 2)
     if p.square_punctuation:
         promote_square_punctuation(fonts)
     if p.promote:
         promote_alternates(fonts, p.promote, FEATURES)
         relabel_features(fonts, p.promote)
-    if p.t_flat:
-        flat_t(fonts)
     shape_curves(fonts, p)
     square_two(fonts, p.two_square)
     if p.terminal_angle is not None:
@@ -1381,19 +1573,34 @@ def build(p: Profile, italic: bool = False) -> Path:
     lift_ascenders(fonts, p.ascender_lift)
     lower_xheight(fonts, p.xheight_scale)
     if p.serif_reach:
-        plan = plan_serifs(fonts, italic)
+        plan = plan_serifs(fonts)
         fit_serifs(fonts, plan, p.serif_reach, SERIF_FIT)
-        plan = plan_serifs(fonts, italic)  # the same ends, where the narrowed letters now have them
+        plan = plan_serifs(fonts)  # the same ends, where the narrowed letters now have them
+        terminals = plan_terminals(fonts, plan)
         add_contrast(fonts, dict(p.serif_contrast))
+        # before the serifs, which would count in the stems and crossbars the beaks are measured on
+        cut_terminals(fonts, terminals, p.serif_depth, p.serif_reach)
         cut_serifs(fonts, plan, p.serif_reach, p.serif_depth, p.serif_head, p.serif_beak)
     straighten_q(fonts)
     small_caps(fonts)
     respace(fonts, p.spacing)
     set_space(fonts, p.space_width)
     scale_outlines(fonts, p.scale)
-    corners = soften_vertices(fonts, p.corner_radius)
+    return fonts, soften_vertices(fonts, p.corner_radius)
+
+
+def build(p: Profile, italic: bool = False) -> Path:
+    fonts, corners = transform(p, italic)
     if italic:
-        shear(fonts, slope, fonts["Regular"].info.xHeight / 2)
+        # each glyph is the roman's design, slanted: Inter Italic's drawing
+        # stays only where it matches the roman's
+        roman, roman_corners = transform(p)
+        distances = design_distances(fonts, roman)
+        replaced = sorted(name for name, d in distances.items() if d > ITALIC_MATCH)
+        romanize(fonts, roman, replaced)
+        corners = {name: plan for name, plan in corners.items() if name in roman["Regular"] and name not in replaced}
+        corners |= {name: roman_corners[name] for name in replaced if name in roman_corners}
+        shear(fonts, slant_tangent(fonts["Regular"]), fonts["Regular"].info.xHeight / 2)
     erase_open_corners(fonts)
 
     out = ROOT / "build" / (f"{p.key}-italic" if italic else p.key)
@@ -1414,6 +1621,11 @@ def build(p: Profile, italic: bool = False) -> Path:
         path = out / f"{p.file_stem}-{(italic_style(style) if italic else style).replace(' ', '')}.ufo"
         f.save(path, overwrite=True)
         paths[style] = path
+    if italic:
+        # which glyphs took the roman's drawing, and how far every glyph was from it
+        (out / "romanized.json").write_text(json.dumps(
+            {"limit": ITALIC_MATCH, "replaced": replaced,
+             "distances": {name: (None if math.isinf(d) else round(d, 1)) for name, d in distances.items()}}, indent=0))
     return write_designspace(p, out, paths, italic)
 
 
