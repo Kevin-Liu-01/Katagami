@@ -14,7 +14,8 @@ where it runs SHOULDER degrees steep); then both edges are stretched
 sideways about their far ends until the cut stands upright at the old outer
 corner's x. The spur: as wide as the stem serifs are thick, reaching past the
 inner corner as far as they reach past a stem (serif_depth, serif_reach,
-with their weight scaling), square-ended, with the arm serifs' bracket into
+with their weight scaling; a capital's or a figure's in proportion to its
+height), square-ended, with the arm serifs' bracket into
 the stroke's inner edge. The ends 0.2 already cut upright (the arm of r, the
 tails of j and y) keep 0.2's face and take the same spur; f's hook, which
 leans too far to cut upright in every master, is cut like a level end.
@@ -47,6 +48,10 @@ BEAK_REACH = 1.0  # the spur's reach past the stroke's inner edge, as a share of
 # cut-back end is stretched sideways, so the stroke keeps its reach and meets the face at a
 # slant, as a text face's arc runs out to its beak. 0 leaves the face over the inner corner.
 FACE_OUT = 1.0
+# The spur's reach grows with the letter's height over the x-height to this power, so a capital's
+# or a figure's beak keeps the share of its height a lowercase one has (Times New Roman's C and s
+# both drop about a third of theirs); 0 gives every beak the stem serifs' reach.
+BEAK_BY_HEIGHT = 1.0
 RIGHT_EXITS = False  # whether a stroke rising out at the foot of a letter's right side (c, C, e, t) takes a beak
 
 
@@ -327,7 +332,8 @@ def cut_terminals(fonts, plan: dict, depth: float, reach: float) -> None:
     as the master's serifs are thick (SERIF_DEPTH_SCALE, so Thin's holds and
     Black's stays light), reaching past the inner corner the stem serifs'
     reach (serif_reach of a Regular stem, scaled with the stem as theirs
-    is, and shorter on a short cut, a superior's), square-ended, with the
+    is, and shorter on a short cut, a superior's) times the letter's height
+    over the x-height (BEAK_BY_HEIGHT), square-ended, with the
     arm serifs' bracket into the stroke's inner edge. A spur takes at most
     TERMINAL_ROOM of the white past its terminal. Every spur is its own
     contour, the same in every master, and a terminal takes one only where
@@ -344,6 +350,16 @@ def cut_terminals(fonts, plan: dict, depth: float, reach: float) -> None:
         k = (stem(f) / sw_ref) ** SERIF_REACH_POWER
         t = depth * crossbar(f) * dict(zip(("Thin", "Regular", "Black"), SERIF_DEPTH_SCALE)).get(style, 1.0)
         sizes[style] = (t, k)
+
+    xheight = {style: f["x"].getBounds(f).yMax for style, f in fonts.items()}
+    heights = {}
+
+    def _height(f, name):
+        # the letter's height from the baseline (or its own foot, for a superior), before any end is cut
+        if (id(f), name) not in heights:
+            b = f[name].getBounds(f)
+            heights[(id(f), name)] = b.yMax - max(b.yMin, 0.0)
+        return heights[(id(f), name)]
 
     def face(f, name, term):
         kind, ci, i, j, outer, way, scale = term
@@ -362,6 +378,9 @@ def cut_terminals(fonts, plan: dict, depth: float, reach: float) -> None:
                 term = ("leaning", ci, i, j, j if outer == i else i, way, scale)
             if all(face(f, name, term) is not None for f in fonts.values()):
                 kept.setdefault(name, []).append(term)
+    for f in fonts.values():
+        for name in kept:
+            _height(f, name)
     for style, f in fonts.items():
         t, k = sizes[style]
         for name, terms in kept.items():
@@ -392,7 +411,7 @@ def cut_terminals(fonts, plan: dict, depth: float, reach: float) -> None:
                     toward = pts[n_side[3]].x
                 x_f = a.x
                 w = BEAK_WIDTH * t * scale
-                length = BEAK_REACH * reach * sw_ref * k * scale
+                length = BEAK_REACH * reach * sw_ref * k * scale * (_height(f, name) / xheight[style]) ** BEAK_BY_HEIGHT
                 run = BRACKET[1] * w
                 o = pts[spur_at]
                 step = -1 if spur_at == i else 1
