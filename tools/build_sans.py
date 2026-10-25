@@ -1082,13 +1082,10 @@ def serif_parts(font) -> set[str]:
 TERMINAL_FACE = (0.45, 1.6)  # stems (Regular): how long a cut across a stroke may be to count as its end
 TERMINAL_REF = 1.0  # stems: a terminal cut shorter than this (the superiors) is planned with its share of a full one
 TERMINAL_SYMBOLS = set("?¿&§$¢€£@‽")  # symbols drawn with the letters' curved strokes
-SHOULDER = 30  # degrees: the outer edge is cut back no further than where it runs this steep
 LEVEL_FACE_ANGLE = 6  # degrees: a cut further from level than this (Inter's a.2, £, §) ends plain
-# How far the face goes back out toward where the stroke ended (its old outer corner): the
-# cut-back end is stretched sideways, so the stroke keeps its reach and meets the face at a
-# slant. 0 leaves the face over the inner corner.
-FACE_OUT = 1.0
-RIGHT_EXITS = False  # whether a stroke rising out at the foot of a letter's right side (c, C, e, t) takes a face
+FACETS_KEY = "com.kerf.facets"
+FACET = 0.45  # the facet's height, as a share of the cut's length (about a stem serif's thickness at Regular and Black)
+RIGHT_EXITS = False  # whether a stroke rising out at the foot of a letter's right side (c, C, e, t) takes a facet
 
 def _ink_side(font, g, a, q) -> tuple[bool, bool]:
     """Whether the ink lies on the left of the cut from a to q and not on its right,
@@ -1106,7 +1103,7 @@ def _ink_side(font, g, a, q) -> tuple[bool, bool]:
 
 
 def plan_terminals(fonts, plan: dict) -> dict:
-    """Where Katagami Serif's terminals take an upright face, found on Regular: every
+    """Where Katagami Serif's terminals take a facet, found on Regular: every
     stroke end the serif plan leaves bare in letters, figures, their
     alternates, the stems of f and t and the symbols drawn like letters.
 
@@ -1234,18 +1231,6 @@ def _jaw(font, g, term, found, mid_x: float) -> bool:
     return False
 
 
-def _upright(pts, i: int, j: int, outer: int) -> bool:
-    """Cut the stroke end from point i to point j exactly upright: through its
-    midpoint, or, where an edge cannot reach that line (the hook of f),
-    through the corner nearer the stroke. Returns False where neither works."""
-    a, q = pts[i], pts[j]
-    if abs(q.x - a.x) <= 1:
-        return True
-    side = 1 if pts[(outer + (-1 if outer == i else 1)) % len(pts)].x > (a.x + q.x) / 2 else -1
-    near = max((a, q), key=lambda pt: side * pt.x)
-    return recut(pts, i, j, 90) or recut(pts, i, j, 90, (near.x, near.y))
-
-
 def _edges(pts, i: int, j: int, outer: int):
     """The cubics on either side of the cut from i to j, each as its four
     points' indices from the cut's corner outward: (outer edge, inner edge).
@@ -1259,29 +1244,6 @@ def _edges(pts, i: int, j: int, outer: int):
     return (into, out) if outer == i else (out, into)
 
 
-def _at_x(pts, side, x: float):
-    """Where the cubic `side` (indices from the corner outward) crosses x: (t from
-    the corner, y), or None where it does not within the curve."""
-    c = [(pts[k].x, pts[k].y) for k in side]
-    steps = 64
-    prev = _point(c, 0.0)
-    for s in range(1, steps + 1):
-        t = s / steps
-        cur = _point(c, t)
-        if (prev[0] - x) * (cur[0] - x) <= 0 and prev[0] != cur[0]:
-            lo, hi = t - 1 / steps, t
-            for _ in range(40):
-                mid = (lo + hi) / 2
-                if (_point(c, lo)[0] - x) * (_point(c, mid)[0] - x) <= 0:
-                    hi = mid
-                else:
-                    lo = mid
-            t = (lo + hi) / 2
-            return t, _point(c, t)[1]
-        prev = cur
-    return None
-
-
 def _trim(pts, side, t: float) -> None:
     """Cut the cubic `side` at t (from its corner), keeping the part away from
     the corner: the corner moves to the cut and both handles shrink with it,
@@ -1292,108 +1254,101 @@ def _trim(pts, side, t: float) -> None:
         pts[k].x, pts[k].y = x, y
 
 
-def _slope(pts, side, t: float) -> float:
-    """How steep the cubic `side` runs at t, in degrees from level."""
-    c = [(pts[k].x, pts[k].y) for k in side]
-    a, b = _point(c, max(0.0, t - 1e-4)), _point(c, min(1.0, t + 1e-4))
-    return abs(math.degrees(math.atan2(b[1] - a[1], abs(b[0] - a[0]) or 1e-9)))
+def _side_curve(pts, side):
+    return [(pts[k].x, pts[k].y) for k in side]
 
 
-def _face(pts, i: int, j: int, outer: int):
-    """Where a cut's outer edge is cut back to, as its t from the outer corner:
-    above (or below) the cut's inner corner, where the stroke still runs at a
-    slant, but no further back than where the edge runs SHOULDER degrees
-    steep, so a heavy stroke, whose inner corner stands near the top of the
-    letter, keeps a round shoulder. None where an edge is not a single curve
-    or never reaches the inner corner's x."""
+def _first_crossing(c, fn, lo: float, hi: float):
+    """The first parameter from lo toward hi where the cubic c crosses fn's zero, or None."""
+    steps = 120
+    prev = fn(_point(c, lo))
+    for k in range(1, steps + 1):
+        t = lo + (hi - lo) * k / steps
+        cur = fn(_point(c, t))
+        if prev == 0 or prev * cur < 0:
+            a, b = t - (hi - lo) / steps, t
+            for _ in range(50):
+                m = (a + b) / 2
+                if fn(_point(c, a)) * fn(_point(c, m)) <= 0:
+                    b = m
+                else:
+                    a = m
+            return (a + b) / 2
+        prev = cur
+    return None
+
+
+def _facet(pts, term) -> bool:
+    """A small square facet at the cut's outer corner: the outer edge is trimmed where
+    it stands FACET of the cut's length from the cut's line (split by de Casteljau, so it
+    stays a piece of its own curve), and the corner becomes a short face square to the
+    cut, its foot a new point on the cut. Returns False, changing nothing, where the
+    edge is not a single curve or does not reach that far."""
+    kind, ci, i, j, outer, way, scale = term
+    if kind == "upright":
+        outer = j if outer == i else i  # an upright term records the corner below or above the outer edge
     sides = _edges(pts, i, j, outer)
     if sides is None:
-        return None
+        return False
     o_side, n_side = sides
-    corner = pts[n_side[0]]
-    back = 1 if pts[n_side[3]].x > corner.x else -1  # from the inner corner back along the stroke
-    if back * (pts[o_side[0]].x - corner.x) > 0 or back * (pts[o_side[3]].x - corner.x) <= 0:
-        return None
-    hit = _at_x(pts, o_side, corner.x)
-    if hit is None:
-        return None
-    t = hit[0]
-    if _slope(pts, o_side, t) < SHOULDER:
-        lo, hi = 0.0, t
-        for _ in range(40):
-            mid = (lo + hi) / 2
-            if _slope(pts, o_side, mid) > SHOULDER:
-                lo = mid
-            else:
-                hi = mid
-        t = (lo + hi) / 2
-    return t
+    ox, oy = pts[o_side[0]].x, pts[o_side[0]].y
+    nc = pts[n_side[0]]
+    length = math.hypot(nc.x - ox, nc.y - oy)
+    ux, uy = (nc.x - ox) / length, (nc.y - oy) / length  # along the cut, outer to inner
+    nx, ny = -uy, ux  # square to the cut, into the stroke: toward the outer edge's far end
+    far = pts[o_side[3]]
+    if (far.x - ox) * nx + (far.y - oy) * ny < 0:
+        nx, ny = -nx, -ny
+    h = FACET * length
+    t = _first_crossing(_side_curve(pts, o_side), lambda p: (p[0] - ox) * nx + (p[1] - oy) * ny - h, 0.0, 0.95)
+    if t is None:
+        return False
+    _trim(pts, o_side, t)
+    top = pts[o_side[0]]
+    d = (top.x - ox) * ux + (top.y - oy) * uy
+    foot = Point(ox + d * ux, oy + d * uy, "line")
+    lo, hi = sorted((i, j))
+    if (lo, hi) == (0, len(pts) - 1):
+        pts.append(foot)
+    else:
+        pts.insert(hi, foot)
+    return True
 
 
-def _stretch(pts, side, x: float) -> None:
-    """Stretch the cubic `side` sideways about its far end, so its corner lands
-    on x: heights stay, so the stroke's drop and its height at the face stay,
-    and the far end's handle keeps its direction (a level one stays level)."""
-    x0 = pts[side[3]].x
-    if abs(pts[side[0]].x - x0) < 1:
-        return
-    k = (x - x0) / (pts[side[0]].x - x0)
-    for idx in side[:3]:
-        pts[idx].x = x0 + k * (pts[idx].x - x0)
+def small_cap_terminals(fonts, plan: dict) -> dict:
+    """The terminals of each drawn small capital: its capital's, where the small capital
+    keeps the capital's contours point for point (small_caps copies them in order)."""
+    ref = fonts["Regular"]
+    cmap = {u: g.name for g in ref for u in g.unicodes}
+    out = {}
+    for g in ref:
+        if not g.name.endswith(".smcp") or not g.contours:
+            continue
+        lc = g.name[: -len(".smcp")]
+        if lc not in ref or not ref[lc].unicodes:
+            continue
+        up = chr(ref[lc].unicodes[0]).upper()
+        cap = cmap.get(ord(up)) if len(up) == 1 else None
+        if cap in plan and [len(c.points) for c in ref[cap].contours] == [len(c.points) for c in g.contours]:
+            out[g.name] = plan[cap]
+    return out
 
 
 def cut_terminals(fonts, plan: dict) -> None:
-    """Give every terminal plan_terminals found an upright face.
-
-    A level cut (the end of a curved stroke) becomes an upright face at the
-    letter's outer extreme. Its inner corner keeps its height. The stroke's
-    outer edge is cut back to where it stands over that corner (`_face`),
-    where it still runs at a slant, and both edges are then stretched
-    sideways about their far ends until the corners stand at the old outer
-    corner's x (FACE_OUT), so the stroke keeps its reach and runs into the
-    face at a slant. Edges are split by de Casteljau and stretched, so they
-    stay single curves and every master keeps its points. An upright cut
-    (the arm of r, the tails of j and y) is cut exactly upright through its
-    middle; one that leans too far for that in some master (the hook of f)
-    is cut like a level one, at its back corner. A terminal takes a face only
-    where every master can cut it.
-    """
-    def face(f, name, term):
-        kind, ci, i, j, outer, way, scale = term
-        return _face(f[name].contours[ci].points, i, j, outer)
-
-    kept = {}
-    for name, terms in plan.items():
-        for term in terms:
-            if term[0] == "upright":
-                if all(_upright(copy.deepcopy(f[name].contours[term[1]].points), *term[2:5]) for f in fonts.values()):
-                    kept.setdefault(name, []).append(term)
-                    continue
-                # cut like a level one, its outer corner the one the stroke runs on from
-                kind, ci, i, j, outer, way, scale = term
-                term = ("leaning", ci, i, j, j if outer == i else i, way, scale)
-            if all(face(f, name, term) is not None for f in fonts.values()):
-                kept.setdefault(name, []).append(term)
+    """Give every terminal plan_terminals found a small square facet at its outer
+    corner (`_facet`), on Text's own curve: Text's cut stays where it is, the outer
+    edge is only trimmed along itself, and no other point moves. A terminal takes a
+    facet only where every master can cut it. The facet adds a point, so this runs
+    after the stem serifs, whose plan holds point numbers, and each contour's later
+    terminals are cut first, so the earlier numbers stay valid."""
+    kept = {name: [term for term in terms if all(_facet(copy.deepcopy(f[name].contours[term[1]].points), term)
+                                                 for f in fonts.values())] for name, terms in plan.items()}
     for f in fonts.values():
+        # which glyphs took facets, so an Italic can take the roman's design where the two differ (build pops it)
+        f.lib[FACETS_KEY] = sorted(name for name, terms in kept.items() if terms)
         for name, terms in kept.items():
-            g = f[name]
-            for kind, ci, i, j, outer, way, scale in terms:
-                pts = g.contours[ci].points
-                a, q = pts[i], pts[j]
-                if kind == "upright":
-                    _upright(pts, i, j, outer)
-                    for pt in (a, q):
-                        pt.x = (a.x + q.x) / 2
-                    continue
-                t_out = _face(pts, i, j, outer)
-                o_side, n_side = _edges(pts, i, j, outer)
-                x_in, x_out = pts[n_side[0]].x, pts[outer].x
-                _trim(pts, o_side, t_out)
-                x_f = x_in + FACE_OUT * (x_out - x_in)
-                _stretch(pts, o_side, x_f)
-                _stretch(pts, n_side, x_f)
-                for pt in (a, q):
-                    pt.x = x_f
+            for term in sorted(terms, key=lambda tm: (tm[1], -max(tm[2], tm[3]))):
+                _facet(f[name].contours[term[1]].points, term)
 
 
 def close_c(fonts, share: float) -> None:
@@ -1653,11 +1608,13 @@ def transform(p: Profile, italic: bool = False) -> tuple[dict, dict]:
         plan = plan_serifs(fonts)  # the same ends, where the narrowed letters now have them
         terminals = plan_terminals(fonts, plan)
         add_contrast(fonts, dict(p.serif_contrast))
-        # before the serifs, so a face is cut on the stroke alone
-        cut_terminals(fonts, terminals)
         cut_serifs(fonts, plan, p.serif_reach, p.serif_depth, p.serif_head, p.serif_beak)
     straighten_q(fonts)
     small_caps(fonts)
+    if p.serif_reach:
+        # after the serifs (a facet adds a point, and their plan holds point numbers) and after the
+        # small capitals, so each takes its own facets on its own curve, not its capital's re-emboldened
+        cut_terminals(fonts, terminals | small_cap_terminals(fonts, terminals))
     respace(fonts, p.spacing)
     set_space(fonts, p.space_width)
     scale_outlines(fonts, p.scale)
@@ -1676,11 +1633,16 @@ def build(p: Profile, italic: bool = False) -> Path:
         # stays only where it matches the roman's
         roman, roman_corners = transform(p)
         distances = design_distances(fonts, roman)
-        replaced = sorted(name for name, d in distances.items() if d > ITALIC_MATCH)
+        # and where the Italic's own drawing takes terminal facets the roman's does not (or the other
+        # way round: Inter Italic's J ends in a curve the facets can cut, the roman's in a straight stub)
+        faceted = set(fonts["Regular"].lib.get(FACETS_KEY, [])) ^ set(roman["Regular"].lib.get(FACETS_KEY, []))
+        replaced = sorted(name for name, d in distances.items() if d > ITALIC_MATCH or name in faceted)
         romanize(fonts, roman, replaced)
         corners = {name: plan for name, plan in corners.items() if name in roman["Regular"] and name not in replaced}
         corners |= {name: roman_corners[name] for name in replaced if name in roman_corners}
         shear(fonts, slant_tangent(fonts["Regular"]), fonts["Regular"].info.xHeight / 2)
+    for f in fonts.values():
+        f.lib.pop(FACETS_KEY, None)
     erase_open_corners(fonts)
 
     out = ROOT / "build" / (f"{p.key}-italic" if italic else p.key)

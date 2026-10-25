@@ -88,8 +88,12 @@ def build(part, text, variant="moved", consts=None):
         plan = B.plan_serifs(fonts)
         terminals = M.plan_terminals(fonts, plan)
         B.add_contrast(fonts, dict(P.serif_contrast))
+        # build_sans.py cuts its terminals after the stem serifs since the facets (d6b70d5 and later)
+        after = M is NEW
         if option:
             kept = ENDS.cut(fonts, terminals, option)
+        elif after:
+            pass
         elif len(inspect.signature(M.cut_terminals).parameters) == 2:
             M.cut_terminals(fonts, terminals)
         else:
@@ -97,6 +101,8 @@ def build(part, text, variant="moved", consts=None):
         B.cut_serifs(fonts, plan, P.serif_reach, P.serif_depth, P.serif_head, P.serif_beak)
         if option:
             ENDS.after_serifs(fonts, kept, option, P.serif_depth)
+        elif after:
+            M.cut_terminals(fonts, terminals)
         respace(fonts, P.spacing)
         B.scale_outlines(fonts, P.scale)
         if part in ("italic", "slanted"):

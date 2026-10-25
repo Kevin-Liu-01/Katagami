@@ -26,7 +26,8 @@ from pathlib import Path
 from ufoLib2.objects import Point
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import build_sans as B  # noqa: E402
+sys.path.insert(0, str(Path(__file__).parent))
+from oldcuts import OLD as B  # noqa: E402  build_sans.py at fedf6b2, which still has _upright and _at_x
 
 LABELS = {"A": "A  Text's level cut", "B": "B  upright cut, no stretch", "C": "C  cut turned halfway to square",
           "D": "D  level cut, square facet"}

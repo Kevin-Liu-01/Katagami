@@ -36,8 +36,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from build_sans import (  # noqa: E402
     BRACKET, SERIF_DEPTH_SCALE, SERIF_REACH_POWER, TERMINAL_FACE, TERMINAL_REF, TERMINAL_SYMBOLS,
-    _contour, _ink_side, _point, _split, _upright, flag_overlaps, serif_parts, stem,
+    _contour, _ink_side, _point, _split, flag_overlaps, serif_parts, stem,
 )
+from oldcuts import OLD  # noqa: E402
+_upright = OLD._upright
 
 
 def _walk_to_x(pts, k: int, step: int, x: float) -> float:
