@@ -1075,13 +1075,29 @@ def flag_overlaps(font) -> None:
 
 def serif_parts(font) -> set[str]:
     """The stems f and t are drawn from (unencoded parts): their ends take
-    serifs and terminal slabs as a letter's do."""
+    serifs and beaks as a letter's do."""
     return {font[n].components[0].baseGlyph for n in ("f", "t") if n in font and font[n].components}
 
 
 TERMINAL_FACE = (0.45, 1.6)  # stems (Regular): how long a cut across a stroke may be to count as its end
-TERMINAL_REF = 1.0  # stems: a terminal cut this long or longer takes a full slab; shorter ones (superiors) a thinner one
+TERMINAL_REF = 1.0  # stems: a terminal cut this long or longer takes a full beak; shorter ones (superiors) a smaller one
 TERMINAL_SYMBOLS = set("?¿&§$¢€£@‽")  # symbols drawn with the letters' curved strokes
+SHOULDER = 30  # degrees: the outer edge is cut back no further than where it runs this steep
+LEVEL_BEAK_ANGLE = 6  # degrees: a cut further from level than this (Inter's a.2, £, §) ends plain
+TERMINAL_ROOM = 1 / 3  # the most of the white past a terminal its spur may take, so facing beaks leave a third open
+BEAK_WIDTH = 1.0  # the spur's width, as a share of the master's serif thickness
+BEAK_REACH = 0.4  # the spur's reach past the stroke's inner edge, as a share of the stem serifs' reach
+BEAK_MIN = 0.25  # Regular stems: the least a spur reaches past the inner edge, so Thin's still shows as a tick
+UPRIGHT_REACH = 1.0  # the same share for the ends 0.2 cut upright (r, j, y), which keep 0.2's beak
+# How far the face goes back out toward where the stroke ended (its old outer corner): the
+# cut-back end is stretched sideways, so the stroke keeps its reach and meets the face at a
+# slant, as a text face's arc runs out to its beak. 0 leaves the face over the inner corner.
+FACE_OUT = 1.0
+# The spur's reach grows with the letter's height over the x-height to this power, so a capital's
+# or a figure's beak keeps the share of its height a lowercase one has (Times New Roman's C and s
+# both drop about a third of theirs); 0 gives every beak the stem serifs' reach.
+BEAK_BY_HEIGHT = 1.0
+RIGHT_EXITS = False  # whether a stroke rising out at the foot of a letter's right side (c, C, e, t) takes a beak
 
 
 def _ink_side(font, g, a, q) -> tuple[bool, bool]:
@@ -1100,25 +1116,27 @@ def _ink_side(font, g, a, q) -> tuple[bool, bool]:
 
 
 def plan_terminals(fonts, plan: dict) -> dict:
-    """Where Katagami Serif's terminals take a flat slab, found on Regular: every
+    """Where Katagami Serif's terminals take a beak, found on Regular: every
     stroke end the serif plan leaves bare in letters, figures, their
     alternates, the stems of f and t and the symbols drawn like letters.
 
     A stroke end is a straight cut 0.45 to 1.6 stems long between two
     corners whose sides run back the way they came, with ink on one side of
-    it and none on the other. A level cut (within 30 degrees of horizontal)
-    between two curves is the end of a curved stroke (c, s, a, C, S, G, the
-    figures), and so is one on a short straight stroke that hooks back up
-    (J); its slab must lie within the letter's height. An upright cut (within 30
-    degrees of vertical) is the end of a hook, an arm or a tail (r, f, t, y,
-    j), unless it ends a stub in the middle third of the letter (the waist of
-    3) or a stroke that lies on the baseline, x-height or cap height. A bar's
-    end, with a straight side 1.8 stems or longer (the crossbars of f and t,
-    the foot of 2), is not a terminal. Returns
-    {glyph: [(kind, contour, i, j, outer, way, scale)]}: for a level cut the
-    corner on the outside of the letter and whether the cut faces up (1)
-    or down (-1); for an upright cut the corner below or above it; scale is
-    the cut's length over TERMINAL_REF stems, at most 1.
+    it and none on the other. A level cut (within LEVEL_BEAK_ANGLE of
+    horizontal) between two curves is the end of a curved stroke (C, G, S,
+    a, c, s, the figures); its beak points into the letter. An upright cut
+    (within 30 degrees of vertical) ends a hook, an arm or a tail (r, f, j,
+    y), unless it ends a stub in the middle third of the letter (the waist
+    of 3) or a stroke lying on the baseline, x-height or cap height. A bar's
+    end (the crossbars of f and t, the foot of 2) is not a terminal. The
+    stroke rising out at the foot of a letter's right side (c, C, e, ε, the
+    hook of t) ends plain, as in a text face, and so does the lower end of
+    an opening whose upper end has a beak on the same side (ɔ, Ↄ).
+    Returns {glyph: [(kind, contour, i, j, outer, way, scale)]}: for a
+    level cut the corner on the outside of the letter, for an upright cut
+    the corner the spur grows from; way is 1 for a spur pointing up and -1
+    for one pointing down; scale is the cut's length over TERMINAL_REF
+    stems, at most 1.
     """
     ref = fonts["Regular"]
     sw = stem(ref)
@@ -1151,31 +1169,27 @@ def plan_terminals(fonts, plan: dict) -> dict:
                 if li < 1 or lo < 1 or (din[0] * dout[0] + din[1] * dout[1]) / (li * lo) > -0.5:
                     continue
                 into_curve, out_curve = a.type == "curve", nxt.type is None
-                # a bar's end: a straight side at least 1.8 stems long runs from it (f, t, Z, the foot of 2)
                 bar = (not into_curve and li >= 1.8 * sw) or (nxt.type == "line" and lo >= 1.8 * sw)
                 angle = abs(math.degrees(math.atan2(q.y - a.y, q.x - a.x))) % 180
                 angle = min(angle, 180 - angle)
                 mid_x, mid_y, cut_y = (b.xMin + b.xMax) / 2, (b.yMin + b.yMax) / 2, (a.y + q.y) / 2
                 if angle <= 30:
-                    # a cut left at a slant (Inter's a.2, which the level cuts do not reach) keeps it
-                    if angle > SLAB_ANGLE:
+                    if angle > LEVEL_BEAK_ANGLE:
                         continue
                     kind = "level"
                     # the ink is left of travel, so the bare side faces up when the cut runs right to left
                     way = 1 if q.x < a.x else -1
-                    # a slab stays within the letter's height, never on its top or foot (the arms of ω)
+                    # a beak points into the letter, never past its top or foot (the arms of ω)
                     if (way > 0) != (cut_y < mid_y):
                         continue
-                    # the end of a curved stroke, or of a straight one that hooks back up (J)
-                    if not (into_curve and out_curve or not bar and way > 0):
+                    # only the end of a curved stroke can be cut back to a face its stroke meets at a slant
+                    if not (into_curve and out_curve):
                         continue
                 elif angle >= 60 and not bar:
                     kind = "upright"
                     lo_y, hi_y = sorted((a.y, q.y))
-                    # a stroke lying on a metric line ends in a bar's end (the foot of 2, the top of Z)
                     if abs(lo_y) < 3 or any(abs(hi_y - m) < 3 for m in metrics):
                         continue
-                    # a stub in the middle of a letter (the waist of 3) is not a terminal
                     if abs(cut_y - mid_y) < (b.yMax - b.yMin) / 6:
                         continue
                     way = -1 if cut_y > mid_y else 1
@@ -1184,10 +1198,7 @@ def plan_terminals(fonts, plan: dict) -> dict:
                 ink_left, bare_right = _ink_side(ref, g, a, q)
                 if not (ink_left and bare_right):
                     continue
-                # a curved stroke that ends rising at the foot of the letter's right side (the exits of c,
-                # C and e) ends plain: its slab would run under the one above it, a second jaw (t's hook
-                # takes one, as a foot)
-                if not SLAB_EXITS and kind == "level" and way > 0 and (a.x + q.x) / 2 > mid_x:
+                if not RIGHT_EXITS and way > 0 and (a.x + q.x) / 2 > mid_x:
                     continue
                 scale = min(1.0, length / (TERMINAL_REF * sw))
                 if kind == "level":
@@ -1203,11 +1214,10 @@ def plan_terminals(fonts, plan: dict) -> dict:
 
 
 def _jaw(font, g, term, found, mid_x: float) -> bool:
-    """Whether the slab at the foot of an opening would sit under the slab above
-    it across that opening, a second jaw, as in ɔ and Ↄ (the mirrored c): both
-    cuts on the same side of the letter and nothing between them (the white at
-    their mid-height reaches the letter's middle, where 3 has its waist). The
-    upper slab stays."""
+    """Whether a rising beak at the foot of an opening would face the beak above
+    it across that opening, as in ɔ and Ↄ: both cuts on the same side of the
+    letter and nothing between them (the white at their mid-height reaches
+    the letter's middle, where 3 has its waist). The upper beak stays."""
     from fontTools.pens.pointInsidePen import PointInsidePen
     kind, ci, i, j, outer, way, _ = term
     if kind != "level" or way < 0:
@@ -1223,14 +1233,12 @@ def _jaw(font, g, term, found, mid_x: float) -> bool:
             continue
         mid_y = (y + (p2[i2].y + p2[j2].y) / 2) / 2
         x0 = (pts[outer].x + p2[o2].x) / 2
-        ink = False
         for t in range(1, 21):
             pen = PointInsidePen(font, (x0 + (mid_x - x0) * t / 20, mid_y))
             g.draw(pen)
             if pen.getResult():
-                ink = True
                 break
-        if not ink:
+        else:
             return True
     return False
 
@@ -1275,50 +1283,129 @@ def _upright(pts, i: int, j: int, outer: int) -> bool:
     return recut(pts, i, j, 90) or recut(pts, i, j, 90, (near.x, near.y))
 
 
-def _contour_x(pts, k: int, step: int, y: float) -> float | None:
-    """Where the outline, followed from point k in direction step (away from a
-    cut), first reaches height y, within three segments; None if it does not."""
+def _edges(pts, i: int, j: int, outer: int):
+    """The cubics on either side of the cut from i to j, each as its four
+    points' indices from the cut's corner outward: (outer edge, inner edge).
+    None where one side is not a single curve."""
     n = len(pts)
-    cur = k
-    for _ in range(3):
-        seg = [pts[cur]]
-        nk = cur
-        while True:
-            nk = (nk + step) % n
-            seg.append(pts[nk])
-            if pts[nk].type is not None:
-                break
-        xy = [(q.x, q.y) for q in seg]
-        samples = [_point(xy, m / 32) if len(xy) == 4 else
-                   (xy[0][0] + (xy[-1][0] - xy[0][0]) * m / 32, xy[0][1] + (xy[-1][1] - xy[0][1]) * m / 32) for m in range(33)]
-        for (x0, y0), (x1, y1) in zip(samples, samples[1:]):
-            if (y0 - y) * (y1 - y) <= 0 and y0 != y1:
-                return x0 + (x1 - x0) * (y - y0) / (y1 - y0)
-        cur = nk
+    into = [i, (i - 1) % n, (i - 2) % n, (i - 3) % n]  # from corner i back along the arriving edge
+    out = [j, (j + 1) % n, (j + 2) % n, (j + 3) % n]
+    for side in (into, out):
+        if pts[side[1]].type is not None or pts[side[2]].type is not None or pts[side[3]].type is None:
+            return None
+    return (into, out) if outer == i else (out, into)
+
+
+def _at_x(pts, side, x: float):
+    """Where the cubic `side` (indices from the corner outward) crosses x: (t from
+    the corner, y), or None where it does not within the curve."""
+    c = [(pts[k].x, pts[k].y) for k in side]
+    steps = 64
+    prev = _point(c, 0.0)
+    for s in range(1, steps + 1):
+        t = s / steps
+        cur = _point(c, t)
+        if (prev[0] - x) * (cur[0] - x) <= 0 and prev[0] != cur[0]:
+            lo, hi = t - 1 / steps, t
+            for _ in range(40):
+                mid = (lo + hi) / 2
+                if (_point(c, lo)[0] - x) * (_point(c, mid)[0] - x) <= 0:
+                    hi = mid
+                else:
+                    lo = mid
+            t = (lo + hi) / 2
+            return t, _point(c, t)[1]
+        prev = cur
     return None
 
 
-SLAB_REACH = 0.7  # a terminal slab's reach past the stroke, as a share of the stem serifs' reach
-SLAB_INWARD = 0.4  # share of the reach a terminal's slab also runs inward, past the cut's inner corner
-SLAB_MIN = 0.45  # a slab a neighbouring stroke would cut shorter than this share of its reach is left off
-SLAB_ANGLE = 6  # degrees: a cut further from level than this keeps its plain cut
-SLAB_EXITS = False  # whether the rising exits at a letter's right foot (c, C, e, t) take a slab
-SLAB_CLEAR = 0.85  # share of a side's own white a letter keeps past a terminal slab that reaches beyond its ink
+def _trim(pts, side, t: float) -> None:
+    """Cut the cubic `side` at t (from its corner), keeping the part away from
+    the corner: the corner moves to the cut and both handles shrink with it,
+    so the edge stays a piece of its own curve."""
+    c = [(pts[k].x, pts[k].y) for k in side]
+    _, rest = _split(c, t)
+    for k, (x, y) in zip(side[:3], rest[:3]):
+        pts[k].x, pts[k].y = x, y
 
 
-def _inked(font, g, x: float, y: float) -> bool:
-    from fontTools.pens.pointInsidePen import PointInsidePen
-    pen = PointInsidePen(font, (x, y))
-    g.draw(pen)
-    return pen.getResult()
+def _slope(pts, side, t: float) -> float:
+    """How steep the cubic `side` runs at t, in degrees from level."""
+    c = [(pts[k].x, pts[k].y) for k in side]
+    a, b = _point(c, max(0.0, t - 1e-4)), _point(c, min(1.0, t + 1e-4))
+    return abs(math.degrees(math.atan2(b[1] - a[1], abs(b[0] - a[0]) or 1e-9)))
 
 
-def _free(font, g, x: float, y: float, way: int, most: float) -> float:
-    """How far the white runs from (x, y) along x (way 1 right, -1 left) before it meets ink, up to `most`."""
+def _face(pts, i: int, j: int, outer: int):
+    """Where a cut's outer edge is cut back to, as its t from the outer corner:
+    above (or below) the cut's inner corner, where the stroke still runs at a
+    slant, but no further back than where the edge runs SHOULDER degrees
+    steep, so a heavy stroke, whose inner corner stands near the top of the
+    letter, keeps a round shoulder. None where an edge is not a single curve
+    or never reaches the inner corner's x."""
+    sides = _edges(pts, i, j, outer)
+    if sides is None:
+        return None
+    o_side, n_side = sides
+    corner = pts[n_side[0]]
+    back = 1 if pts[n_side[3]].x > corner.x else -1  # from the inner corner back along the stroke
+    if back * (pts[o_side[0]].x - corner.x) > 0 or back * (pts[o_side[3]].x - corner.x) <= 0:
+        return None
+    hit = _at_x(pts, o_side, corner.x)
+    if hit is None:
+        return None
+    t = hit[0]
+    if _slope(pts, o_side, t) < SHOULDER:
+        lo, hi = 0.0, t
+        for _ in range(40):
+            mid = (lo + hi) / 2
+            if _slope(pts, o_side, mid) > SHOULDER:
+                lo = mid
+            else:
+                hi = mid
+        t = (lo + hi) / 2
+    return t
+
+
+def _stretch(pts, side, x: float) -> None:
+    """Stretch the cubic `side` sideways about its far end, so its corner lands
+    on x: heights stay, so the stroke's drop and its height at the face stay,
+    and the far end's handle keeps its direction (a level one stays level)."""
+    x0 = pts[side[3]].x
+    if abs(pts[side[0]].x - x0) < 1:
+        return
+    k = (x - x0) / (pts[side[0]].x - x0)
+    for idx in side[:3]:
+        pts[idx].x = x0 + k * (pts[idx].x - x0)
+
+
+def _spur_nodes(x_f, y_n, way, h, w, length, y_face, x_end, y_end, lip) -> list:
+    """The spur on a vertical face at x_f: its outer edge carries the face on
+    from the inner corner (x_f, y_n) `length` further in the direction way,
+    its square end is `w` wide toward the stroke (h), and its inner edge
+    meets the stroke's inner edge in the arm serifs' bracket: it leaves the
+    spur BRACKET[0] of the spur's length short of the stroke (y_face is the
+    stroke's edge over the spur's inner edge) and lands at (x_end, y_end).
+    `lip` are points inside the stroke the contour returns through, so spur
+    and stroke overlap."""
+    x1 = x_f + h * w
+    rise = BRACKET[0] * length
+    run = x_end - x1
+    nodes = [(x_f, y_n, True), (x_f, y_n + way * length, True), (x1, y_n + way * length, True),
+             (x1, y_face + way * rise, True), (x1, y_face + way * 0.55 * rise, False),
+             (x1 + 0.45 * run, y_end, False), (x_end, y_end, True)] + [(x, y, True) for x, y in lip]
+    on = [(x, y) for x, y, keep in nodes if keep]
+    area = sum(on[k - 1][0] * on[k][1] - on[k][0] * on[k - 1][1] for k in range(len(on)))
+    return nodes if area > 0 else nodes[::-1]
+
+
+def _room(font, g, x: float, y: float, way: int, most: float) -> float:
+    """How far the white runs from (x, y) straight up (way 1) or down (-1)
+    before it meets ink, looked for up to `most` units."""
     from fontTools.pens.pointInsidePen import PointInsidePen
     d = 4.0
     while d < most:
-        pen = PointInsidePen(font, (x + way * d, y))
+        pen = PointInsidePen(font, (x, y + way * d))
         g.draw(pen)
         if pen.getResult():
             return d
@@ -1326,179 +1413,120 @@ def _free(font, g, x: float, y: float, way: int, most: float) -> float:
     return most
 
 
-def _slab(font, g, term, t: float, o: float, gap: float, inward_part: bool = False) -> list | None:
-    """A flat terminal serif in this master: a slab as thick as the serifs (t),
-    its outer face flush with the end of the stroke and level, reaching `o`
-    past the stroke's outer side and ending square, its back meeting that side
-    in the serifs' bracket. A level cut (c, s, a, S, the figures) takes it on
-    the cut: flush with the cut's level, outward past the outer corner. An
-    upright cut (r, f, j, y, t) is cut upright first and takes it on the
-    stroke's outer edge: flush with the arm's top (r, f) or the tail's foot
-    (j, y, t), outward past the cut. None where a neighbouring part of the
-    letter leaves less than SLAB_MIN of the reach, with `gap` of white kept."""
-    kind, ci, i, j, outer, way, scale = term
-    pts = g.contours[ci].points
-    n = len(pts)
-    a, q = pts[i], pts[j]
-    if kind == "level":
-        o_pt, i_pt = (a, q) if outer == i else (q, a)
-        out_step, in_step = (-1, 1) if outer == i else (1, -1)
-        k_out, k_in = outer, (j if outer == i else i)
-        s = -way  # the serif grows into the stroke: up from a cut the stroke stands on (the top of c), down from one it hangs from
-        y = o_pt.y
-        h = 1 if o_pt.x > i_pt.x else -1  # outward
-        back = y + s * t
-        # the stroke's outer side up to where the bracket ends (a short arch, as in Black's a, may not reach as far)
-        far = next(((x, f) for f in (2.0, 1.6, 1.3) if (x := _contour_x(pts, k_out, out_step, y + s * f * t)) is not None), None)
-        in_back = _contour_x(pts, k_in, in_step, back)
-        if in_back is None and _inked(font, g, i_pt.x, back):
-            in_back = i_pt.x  # a counter shorter than the slab (Black's s): the stroke above the inner corner is solid
-        if far is None or in_back is None:
-            return None
-        far_out, far_f = far
-        # the white beyond the stroke's outer side, through the slab's height and a gap beyond its face
-        x_side = [_contour_x(pts, k_out, out_step, y + s * f * t) for f in (0.1, 0.5, 0.95)]
-        if any(x is None for x in x_side):
-            return None
-        free = min([_free(font, g, x + h, y + s * f * t, h, o + 2 * gap) for x, f in zip(x_side, (0.1, 0.5, 0.95))] +
-                   [_free(font, g, o_pt.x + h, y - s * gap * f, h, o + 2 * gap) for f in (0.25, 0.75)])
-        reach = min(o, free - gap)
-        if reach < SLAB_MIN * o:
-            return None
-        outer_side = ((o_pt.x, y), (far_out, y + s * far_f * t))
-        inner_side = ((i_pt.x, y), (in_back, back))
-        # a small part inward too, as a foot serif runs both ways, where the counter has room for it
-        inward = 0.0
-        if inward_part:
-            in_far = _contour_x(pts, k_in, in_step, y + s * 2 * t)
-            x_in = [_contour_x(pts, k_in, in_step, y + s * f * t) for f in (0.1, 0.5, 0.95)]
-            if in_far is None or any(x is None for x in x_in):
-                return None
-            room = min([_free(font, g, x - h, y + s * f * t, -h, o + 2 * gap) for x, f in zip(x_in, (0.1, 0.5, 0.95))] +
-                       [_free(font, g, i_pt.x - h, y - s * gap * f, -h, o + 2 * gap) for f in (0.25, 0.75)])
-            inward = min(SLAB_INWARD * reach, room - gap)
-            if inward < 0.5 * SLAB_INWARD * reach:
-                return None
-            inner_side = ((i_pt.x, y), (in_far, y + s * 2 * t))
-        left, right = (inner_side, outer_side) if h > 0 else (outer_side, inner_side)
-        ol, orr = (inward, reach) if h > 0 else (reach, inward)
-        return _serif_nodes(y, s, left, right, ol, orr, t, h < 0 or inward > 0, h > 0 or inward > 0)
-    # an upright cut: the slab on the stroke's outer edge, past the cut
-    if not _upright(pts, i, j, outer):
-        return None
-    xe = (a.x + q.x) / 2
-    for pt in (a, q):
-        pt.x = xe
-    lo_k, hi_k = (i, j) if a.y < q.y else (j, i)
-    edge = hi_k if way < 0 else lo_k  # the arm's top (r, f), the tail's foot (j, y, t)
-    other = lo_k if edge == hi_k else hi_k
-    step = -1 if edge == i else 1
-    away = pts[(edge + step) % n]
-    h = -1 if away.x > xe else 1  # outward, past the cut
-    y = pts[edge].y
-    s = -1 if edge == hi_k else 1  # into the stroke
-    face = abs(pts[hi_k].y - pts[lo_k].y)
-    t = min(t, 0.75 * face)  # never deeper than the end it caps (Thin's serifs are thicker than its hairlines)
-    free = min(_free(font, g, xe + h, y + s * f * t, h, o + 2 * gap) for f in (0.1, 0.5, 0.95))
-    reach = min(o, free - gap)
-    if reach < SLAB_MIN * o:
-        return None
-    tip, backy = xe + h * reach, y + s * t
-    run = BRACKET[0] * reach
-    climb = min(BRACKET[1] * t, BRACKET_SIDE * (face - t))
-    top = backy + s * climb
-    lip = min(0.3 * t, 0.5 * abs(xe - away.x))
-    nodes = [(xe - h * lip, y, True), (tip, y, True), (tip, backy, True), (xe + h * run, backy, True),
-             (xe + h * 0.45 * run, backy, False), (xe, backy + s * 0.55 * climb, False), (xe, top, True),
-             (xe - h * lip, top, True)]
-    # outer contours run counter-clockwise: the turn follows from which way the slab reaches and grows
-    return nodes if h * s > 0 else nodes[::-1]
-
-
 def cut_terminals(fonts, plan: dict, depth: float, reach: float) -> None:
-    """Give every terminal plan_terminals found a flat serif in the stem
-    serifs' system (`_slab`): as thick as the master's serifs
-    (SERIF_DEPTH_SCALE, so Thin's hold and Black's stay light), reaching
-    `reach` of the Regular cut past the stroke, scaled with the stem as the
-    serifs' reach is, square-ended, with the serifs' bracket. Every slab is
-    its own contour, the same in every master; a terminal takes one only
-    where every master can draw it. A letter whose slab reaches past its
-    ink widens until the tip keeps TIP_CLEAR stems from the edge of its
-    advance, as the stem serifs do."""
+    """Give every terminal plan_terminals found a moved beak.
+
+    A level cut (the end of a curved stroke) becomes a vertical face at the
+    letter's outer extreme. Its inner corner keeps its height. The stroke's
+    outer edge is cut back to where it stands over that corner (`_face`),
+    where it still runs at a slant, and both edges are then stretched
+    sideways about their far ends until the corners stand at the old outer
+    corner's x (FACE_OUT), so the stroke keeps its reach and runs out over
+    the face. Edges are split by de Casteljau and stretched, so they stay
+    single curves and every master keeps its points. An upright cut (the arm
+    of r, the tails of j and y) is cut exactly upright through its middle,
+    as in 0.2; one that leans too far for that in some master (the hook of
+    f) is cut like a level one, at its back corner.
+
+    The face then carries on past the stroke's inner edge as a spur: as wide
+    as the master's serifs are thick (SERIF_DEPTH_SCALE, so Thin's holds and
+    Black's stays light), reaching past the inner corner the stem serifs'
+    reach (serif_reach of a Regular stem, scaled with the stem as theirs
+    is, and shorter on a short cut, a superior's) times the letter's height
+    over the x-height (BEAK_BY_HEIGHT), square-ended, with the
+    arm serifs' bracket into the stroke's inner edge. A spur takes at most
+    TERMINAL_ROOM of the white past its terminal. Every spur is its own
+    contour, the same in every master, and a terminal takes one only where
+    every master can cut it.
+    """
     ref = fonts["Regular"]
     sw_ref = stem(ref)
-    gap = 0.5 * sw_ref
+
     def crossbar(font) -> float:
         ys = sorted({round(pt.y) for c in font["H"].contours for pt in c.points if 0 < round(pt.y) < round(font["H"].getBounds(font).yMax)})
         return ys[-1] - ys[0] if len(ys) >= 2 else stem(font)
-    width = {}
-    for name, terms in plan.items():
-        for term in terms:
-            pts = ref[name].contours[term[1]].points
-            a, q = pts[term[2]], pts[term[3]]
-            width[(name, term[1], term[2])] = min(math.hypot(q.x - a.x, q.y - a.y), SERIF_WIDTH_CAP * sw_ref)
     sizes = {}
     for style, f in fonts.items():
         k = (stem(f) / sw_ref) ** SERIF_REACH_POWER
-        sizes[style] = (depth * crossbar(f) * dict(zip(("Thin", "Regular", "Black"), SERIF_DEPTH_SCALE)).get(style, 1.0), k)
-    def shape(style, g, term, inward_part):
-        t, k = sizes[style]
-        return _slab(fonts[style], g, term, t * term[6] ** 0.5, SLAB_REACH * reach * width[(g.name, term[1], term[2])] * k, gap,
-                     inward_part)
-    parts = serif_parts(ref)
-    # a terminal takes a slab, and its inward part, only where every master can draw it, so the masters stay compatible
+        t = depth * crossbar(f) * dict(zip(("Thin", "Regular", "Black"), SERIF_DEPTH_SCALE)).get(style, 1.0)
+        sizes[style] = (t, k)
+
+    xheight = {style: f["x"].getBounds(f).yMax for style, f in fonts.items()}
+    heights = {}
+
+    def _height(f, name):
+        # the letter's height from the baseline (or its own foot, for a superior), before any end is cut
+        if (id(f), name) not in heights:
+            b = f[name].getBounds(f)
+            heights[(id(f), name)] = b.yMax - max(b.yMin, 0.0)
+        return heights[(id(f), name)]
+
+    def face(f, name, term):
+        kind, ci, i, j, outer, way, scale = term
+        return _face(f[name].contours[ci].points, i, j, outer)
+
+    # a terminal takes a beak only where every master can cut it
     kept = {}
     for name, terms in plan.items():
         for term in terms:
-            for inward_part in ((True, False) if SLAB_INWARD and term[0] == "level" else (False,)):
-                if all(shape(style, copy.deepcopy(f[name]), term, inward_part) is not None for style, f in fonts.items()):
-                    kept.setdefault(name, []).append((term, inward_part))
-                    break
-    # two slabs of one letter never come within `gap` of each other (the facing ends of ȣ): both are left off
-    def box(nodes):
-        xs, ys = [x for x, _, _ in nodes], [y for _, y, _ in nodes]
-        return min(xs), min(ys), max(xs), max(ys)
-    def near(b, c):
-        return b[0] < c[2] + gap and c[0] < b[2] + gap and b[1] < c[3] + gap and c[1] < b[3] + gap
-    for name, terms in kept.items():
-        if len(terms) < 2:
-            continue
-        clashing = set()
-        for style, f in fonts.items():
-            g = copy.deepcopy(f[name])
-            boxes = [box(shape(style, g, term, inward_part)) for term, inward_part in terms]
-            for x in range(len(boxes)):
-                for y in range(x + 1, len(boxes)):
-                    if near(boxes[x], boxes[y]):
-                        clashing |= {x, y}
-        kept[name] = [t for k, t in enumerate(terms) if k not in clashing]
-    plan = kept
-    clear = TIP_CLEAR * sw_ref
+            if term[0] == "upright":
+                if all(_upright(copy.deepcopy(f[name].contours[term[1]].points), *term[2:5]) for f in fonts.values()):
+                    kept.setdefault(name, []).append(term)
+                    continue
+                # cut like a level one, its outer corner the one the spur does not grow from
+                kind, ci, i, j, outer, way, scale = term
+                term = ("leaning", ci, i, j, j if outer == i else i, way, scale)
+            if all(face(f, name, term) is not None for f in fonts.values()):
+                kept.setdefault(name, []).append(term)
+    for f in fonts.values():
+        for name in kept:
+            _height(f, name)
     for style, f in fonts.items():
-        before = snapshot(f)
-        widened = {}
-        for name, terms in plan.items():
+        t, k = sizes[style]
+        for name, terms in kept.items():
             g = f[name]
-            ink = g.getBounds(f)
-            for nodes in [shape(style, g, term, inward_part) for term, inward_part in terms]:
+            shapes = []
+            for term in terms:
+                kind, ci, i, j, outer, way, scale = term
+                pts = g.contours[ci].points
+                a, q = pts[i], pts[j]
+                if kind == "upright":
+                    _upright(pts, i, j, outer)
+                    for pt in (a, q):
+                        pt.x = (a.x + q.x) / 2
+                    spur_at = outer
+                    toward = pts[(spur_at + (-1 if spur_at == i else 1)) % len(pts)].x
+                else:
+                    t_out = _face(pts, i, j, outer)
+                    o_side, n_side = _edges(pts, i, j, outer)
+                    x_in, x_out = pts[n_side[0]].x, pts[outer].x
+                    _trim(pts, o_side, t_out)
+                    x_f = x_in + FACE_OUT * (x_out - x_in)
+                    _stretch(pts, o_side, x_f)
+                    _stretch(pts, n_side, x_f)
+                    for pt in (a, q):
+                        pt.x = x_f
+                    spur_at = n_side[0]  # the spur grows from the inner corner
+                    # toward the stroke: its inner edge's far end (its handle may stand straight over the corner, as in 2)
+                    toward = pts[n_side[3]].x
+                x_f = a.x
+                w = BEAK_WIDTH * t * scale
+                share = UPRIGHT_REACH if kind == "upright" else BEAK_REACH
+                length = max(share * reach * sw_ref * k, BEAK_MIN * sw_ref) * scale * (_height(f, name) / xheight[style]) ** BEAK_BY_HEIGHT
+                run = BRACKET[1] * w
+                o = pts[spur_at]
+                step = -1 if spur_at == i else 1
+                h = 1 if toward > x_f else -1
+                x1, x2 = x_f + h * w, x_f + h * (w + run)
+                length = min(length, TERMINAL_ROOM * _room(f, g, x_f + h * w / 2, _walk_to_x(pts, spur_at, step, x_f + h * w / 2), way, 3 * length))
+                dip = 0.3 * abs(q.y - a.y)
+                y2 = _walk_to_x(pts, spur_at, step, x2)
+                shapes.append(_spur_nodes(x_f, o.y, way, h, w, length, _walk_to_x(pts, spur_at, step, x1), x2, y2,
+                                          [(x2, y2 - way * dip), (x_f, o.y - way * dip)]))
+            for nodes in shapes:
                 g.appendContour(_contour(nodes))
-            g.lib["public.truetype.overlap"] = True
-            out = g.getBounds(f)
-            # a slab beyond the letter's ink keeps SLAB_CLEAR of the side's own white past its tip (at
-            # least the stem serifs' TIP_CLEAR): a terminal sits beside the next letter's stem, not its serif
-            keep_l = max(clear, SLAB_CLEAR * ink.xMin)
-            keep_r = max(clear, SLAB_CLEAR * (g.width - ink.xMax))
-            dl = max(0.0, keep_l - out.xMin) if out.xMin < ink.xMin - 1 else 0.0
-            dr = max(0.0, keep_r - (g.width - out.xMax)) if out.xMax > ink.xMax + 1 else 0.0
-            if (dl or dr) and name not in parts:
-                for c in g.contours:
-                    for pt in c.points:
-                        pt.x += dl
-                for an in g.anchors:
-                    an.x += dl
-                g.width = round(g.width + dl + dr)
-                widened[name] = XMap(0, dl, 1)
-        reflow_composites(f, widened, before)
+            if shapes:
+                g.lib["public.truetype.overlap"] = True
         flag_overlaps(f)
 
 
@@ -1759,7 +1787,7 @@ def transform(p: Profile, italic: bool = False) -> tuple[dict, dict]:
         plan = plan_serifs(fonts)  # the same ends, where the narrowed letters now have them
         terminals = plan_terminals(fonts, plan)
         add_contrast(fonts, dict(p.serif_contrast))
-        # before the serifs, which would count in the stems and crossbars the slabs are measured on
+        # before the serifs, which would count in the stems and crossbars the beaks are measured on
         cut_terminals(fonts, terminals, p.serif_depth, p.serif_reach)
         cut_serifs(fonts, plan, p.serif_reach, p.serif_depth, p.serif_head, p.serif_beak)
     straighten_q(fonts)
