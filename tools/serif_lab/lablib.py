@@ -49,9 +49,9 @@ def build(part, text, variant="moved", consts=None):
     the roman slanted 9.4 degrees about half its x-height, as Serif Italic is since 0.2 (every
     glyph whose design differs takes the roman's); or "italic", Inter Italic's own upright
     masters cut the same way and slanted again. variant "0.2" cuts 0.2's beaks; "moved" the
-    moved ones. consts override moved.py's (or 0.2's) constants. Returns (masters, terminal plan)."""
+    moved ones in moved.py (the small spur on every terminal); "build" what tools/build_sans.py cuts now. consts override moved.py's (or 0.2's) constants. Returns (masters, terminal plan)."""
     B = OLD if variant == "0.2" else NEW
-    M = OLD if variant == "0.2" else MOVED
+    M = OLD if variant == "0.2" else NEW if variant == "build" else MOVED
     saved = {}
     for k, v in (consts or {}).items():
         mod = M if hasattr(M, k) else B

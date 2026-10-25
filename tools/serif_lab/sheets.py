@@ -23,7 +23,8 @@ def sheet(out, part, lines, sizes, weights, consts=None, variants=("0.2", "moved
     """Rows of size x weight x line; one column per variant: "0.2", "moved", or
     (label, consts) for the moved beaks with moved.py constants overridden."""
     text = "".join(lines)
-    variants = [(v, v, consts if v == "moved" else None) if isinstance(v, str) else (v[0], "moved", v[1]) for v in variants]
+    variants = [(v, v, consts if v == "moved" else None) if isinstance(v, str) else
+                (v[0], v[2] if len(v) > 2 else "moved", v[1]) for v in variants]
     built = {label: L.build(part, text, v, cs)[0] for label, v, cs in variants}
     variants = [label for label, _, _ in variants]
     cache = {}
@@ -60,8 +61,8 @@ def sheet(out, part, lines, sizes, weights, consts=None, variants=("0.2", "moved
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "custom":
         out, part, lines, sizes, weights = sys.argv[2:7]
-        variants = ["0.2"]
-        for spec in sys.argv[7:] or ["moved="]:
+        variants = ["0.2", "moved", ("build", {}, "build")]
+        for spec in sys.argv[7:]:
             label, _, rest = spec.partition("=")
             variants.append((label, {k: eval(v) for k, v in (kv.split(":", 1) for kv in filter(None, rest.split(";")))}))
         sheet(out, part, lines.split("|"), [float(s) for s in sizes.split(",")], [int(w) for w in weights.split(",")],

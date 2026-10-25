@@ -1,12 +1,12 @@
-"""Proofs of Katagami Serif's terminals rendered from the built font files: 0.2's beaks beside the
-fonts in fonts/serif/, and a grid of every glyph whose outline differs from 0.2's at Thin, Regular
-and Black.
+"""Proofs of Katagami Serif's terminals rendered from the built font files: an earlier build beside
+the fonts in fonts/serif/, and a grid of the changed glyphs at Thin, Regular and Black.
 
-    .venv/bin/python tools/serif_lab/final.py V02_DIR [OUT_DIR]
+    .venv/bin/python tools/serif_lab/final.py BEFORE_DIR OUT_DIR LABEL [ROMAN_NAMES ITALIC_NAMES]
 
-V02_DIR holds 0.2's KatagamiSerif[wght].ttf and KatagamiSerif-Italic[wght].ttf (git show d6880dd:...).
-OUT_DIR defaults to build/proofs/final. The grid shows the glyphs listed in build/small-changed-vs-barb.txt
-(and -italic.txt), the glyphs whose terminals changed, when those lists exist."""
+BEFORE_DIR holds the earlier KatagamiSerif[wght].ttf and KatagamiSerif-Italic[wght].ttf (0.2's from
+git show d6880dd:..., or the previous build), LABEL names it on the sheets. The grid shows the encoded
+base glyphs listed in ROMAN_NAMES and ITALIC_NAMES (serif_check.py --names-out), or every glyph whose
+outline differs from the earlier build's."""
 import sys
 import unicodedata
 from pathlib import Path
@@ -17,6 +17,8 @@ from fontTools.ttLib import TTFont
 ROOT = Path(__file__).resolve().parents[2]
 V02 = Path(sys.argv[1])
 OUT = Path(sys.argv[2]) if len(sys.argv) > 2 else ROOT / "build" / "proofs" / "final"
+BEFORE = sys.argv[3] if len(sys.argv) > 3 else "0.2"
+LISTS = sys.argv[4:6] if len(sys.argv) > 5 else None
 NOW = ROOT / "fonts" / "serif"
 ROMAN, ITALIC = "KatagamiSerif[wght].ttf", "KatagamiSerif-Italic[wght].ttf"
 GLYPHS = "S a c s e g C G J r y f 2 3 5 6 9 ?"
@@ -61,7 +63,7 @@ def sheet(out, lines, sizes, weights, columns):
     c.clear(skia.ColorWHITE)
     x = lab
     for label, _ in columns:
-        c.drawString(label, x, 18, LABEL, GREY if label == "0.2" else RED)
+        c.drawString(label, x, 18, LABEL, GREY if label == BEFORE else RED)
         x += width[label] + gap
     y = 30
     for px, w, ln in rows:
@@ -132,7 +134,7 @@ def grid(prefix, old_path, new_path, only=None, per_band=20, bands=5, em=70.0):
         if shape(sets[("0.2", 400)], n) != shape(sets[("new", 400)], n):
             names.append(n)
     rev = {n: chr(u) for u, n in cmap.items()}
-    rows = [("0.2 Regular", "0.2", 400), ("Thin", "new", 100), ("Regular", "new", 400), ("Black", "new", 900)]
+    rows = [(f"{BEFORE} Regular", "0.2", 400), ("Thin", "new", 100), ("Regular", "new", 400), ("Black", "new", 900)]
     s, cell, lab, small = em / 2048, em * 1.25, 90, skia.Font(skia.Typeface("Helvetica"), 10)
     band_h = 16 + len(rows) * em * 1.2
     outs = []
@@ -164,8 +166,8 @@ def grid(prefix, old_path, new_path, only=None, per_band=20, bands=5, em=70.0):
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     weights = [100, 400, 900]
-    roman = [("0.2", V02 / ROMAN), ("built", NOW / ROMAN)]
-    italic = [("0.2", V02 / ITALIC), ("built", NOW / ITALIC)]
+    roman = [(BEFORE, V02 / ROMAN), ("built", NOW / ROMAN)]
+    italic = [(BEFORE, V02 / ITALIC), ("built", NOW / ITALIC)]
     sheet(OUT / "final-roman-48px.png", [GLYPHS], [48], weights, roman)
     half = GLYPHS.split(" ")
     sheet(OUT / "final-roman-120px.png", [" ".join(half[:9]), " ".join(half[9:])], [120], weights, roman)
@@ -173,9 +175,8 @@ def main():
     sheet(OUT / "final-words.png", WORDS, [48], weights, roman)
     for f in OUT.glob("final-grid-*.png"):
         f.unlink()
-    for part, name in (("roman", ROMAN), ("italic", ITALIC)):
-        listing = OUT.parent.parent / f"small-changed-vs-barb{'' if part == 'roman' else '-italic'}.txt"
-        only = {n.strip() for n in open(listing) if n.strip()} if listing.exists() else None
+    for k, (part, name) in enumerate((("roman", ROMAN), ("italic", ITALIC))):
+        only = {n.strip() for n in open(LISTS[k]) if n.strip()} if LISTS else None
         names = grid(str(OUT / f"final-grid-{part}"), V02 / name, NOW / name, only)
         print(len(names), part, "base glyphs in the grid")
 

@@ -1088,7 +1088,6 @@ TERMINAL_ROOM = 1 / 3  # the most of the white past a terminal its spur may take
 BEAK_WIDTH = 1.0  # the spur's width, as a share of the master's serif thickness
 BEAK_REACH = 0.4  # the spur's reach past the stroke's inner edge, as a share of the stem serifs' reach
 BEAK_MIN = 0.25  # Regular stems: the least a spur reaches past the inner edge, so Thin's still shows as a tick
-UPRIGHT_REACH = 1.0  # the same share for the ends 0.2 cut upright (r, j, y), which keep 0.2's beak
 # How far the face goes back out toward where the stroke ended (its old outer corner): the
 # cut-back end is stretched sideways, so the stroke keeps its reach and meets the face at a
 # slant, as a text face's arc runs out to its beak. 0 leaves the face over the inner corner.
@@ -1098,6 +1097,13 @@ FACE_OUT = 1.0
 # both drop about a third of theirs); 0 gives every beak the stem serifs' reach.
 BEAK_BY_HEIGHT = 1.0
 RIGHT_EXITS = False  # whether a stroke rising out at the foot of a letter's right side (c, C, e, t) takes a beak
+# Only the classic text-serif terminals carry a spur: C, G, S, c and s, and the letters and signs drawn
+# the same way (their Greek and Cyrillic twins, the stroked forms, the currency signs built on them, and
+# their superior, inferior and enclosed forms). Every other terminal keeps its upright face and no spur.
+SPUR_MODELS = set("CGScs")
+SPUR_TWINS = {"С": "C", "с": "c", "Ѕ": "S", "ѕ": "s", "Є": "C", "є": "c", "Ϲ": "C", "ϲ": "c", "Ҫ": "C", "ҫ": "c",
+              "Ȼ": "C", "ȼ": "c", "Ǥ": "G", "$": "S", "¢": "c", "₵": "C", "₡": "C", "€": "C", "₲": "G"}
+UPRIGHT_FACE = True  # an upright cut without a spur (r, j, y) is still recut exactly upright; False leaves Text's cut
 
 
 def _ink_side(font, g, a, q) -> tuple[bool, bool]:
@@ -1413,8 +1419,26 @@ def _room(font, g, x: float, y: float, way: int, most: float) -> float:
     return most
 
 
+def _spurred(font, name: str) -> bool:
+    """Whether a glyph's terminals carry a spur: its character (or, for an unencoded
+    alternate, its base glyph's) is C, G, S, c or s, a twin drawn the same way
+    (SPUR_TWINS), or a superior, inferior or enclosed form of one."""
+    base = name if name in font and font[name].unicodes else name.split(".")[0]
+    if base not in font or not font[base].unicodes:
+        return False
+    ch = chr(font[base].unicodes[0])
+    decomposition = unicodedata.decomposition(ch)
+    if decomposition.startswith("<"):
+        parts = decomposition.split()
+        if len(parts) == 2:
+            ch = chr(int(parts[1], 16))
+    return ch in SPUR_MODELS or ch in SPUR_TWINS
+
+
 def cut_terminals(fonts, plan: dict, depth: float, reach: float) -> None:
-    """Give every terminal plan_terminals found a moved beak.
+    """Give every terminal plan_terminals found an upright face, and the
+    classic text-serif terminals (C, G, S, c, s and their twins, `_spurred`)
+    a small spur on it.
 
     A level cut (the end of a curved stroke) becomes a vertical face at the
     letter's outer extreme. Its inner corner keeps its height. The stroke's
@@ -1428,12 +1452,13 @@ def cut_terminals(fonts, plan: dict, depth: float, reach: float) -> None:
     as in 0.2; one that leans too far for that in some master (the hook of
     f) is cut like a level one, at its back corner.
 
-    The face then carries on past the stroke's inner edge as a spur: as wide
-    as the master's serifs are thick (SERIF_DEPTH_SCALE, so Thin's holds and
-    Black's stays light), reaching past the inner corner the stem serifs'
-    reach (serif_reach of a Regular stem, scaled with the stem as theirs
-    is, and shorter on a short cut, a superior's) times the letter's height
-    over the x-height (BEAK_BY_HEIGHT), square-ended, with the
+    On those letters the face carries on past the stroke's inner edge as a
+    spur: as wide as the master's serifs are thick (SERIF_DEPTH_SCALE, so
+    Thin's holds and Black's stays light), reaching past the inner corner
+    BEAK_REACH of the stem serifs' reach (serif_reach of a Regular stem,
+    scaled with the stem as theirs is, and shorter on a short cut, a
+    superior's), at least BEAK_MIN stems, times the letter's height over the
+    x-height (BEAK_BY_HEIGHT), square-ended, with the
     arm serifs' bracket into the stroke's inner edge. A spur takes at most
     TERMINAL_ROOM of the white past its terminal. Every spur is its own
     contour, the same in every master, and a terminal takes one only where
@@ -1467,8 +1492,11 @@ def cut_terminals(fonts, plan: dict, depth: float, reach: float) -> None:
 
     # a terminal takes a beak only where every master can cut it
     kept = {}
+    spurred = {name for name in plan if _spurred(ref, name)}
     for name, terms in plan.items():
         for term in terms:
+            if term[0] == "upright" and not UPRIGHT_FACE and name not in spurred:
+                continue
             if term[0] == "upright":
                 if all(_upright(copy.deepcopy(f[name].contours[term[1]].points), *term[2:5]) for f in fonts.values()):
                     kept.setdefault(name, []).append(term)
@@ -1509,10 +1537,11 @@ def cut_terminals(fonts, plan: dict, depth: float, reach: float) -> None:
                     spur_at = n_side[0]  # the spur grows from the inner corner
                     # toward the stroke: its inner edge's far end (its handle may stand straight over the corner, as in 2)
                     toward = pts[n_side[3]].x
+                if name not in spurred:
+                    continue  # the upright face alone
                 x_f = a.x
                 w = BEAK_WIDTH * t * scale
-                share = UPRIGHT_REACH if kind == "upright" else BEAK_REACH
-                length = max(share * reach * sw_ref * k, BEAK_MIN * sw_ref) * scale * (_height(f, name) / xheight[style]) ** BEAK_BY_HEIGHT
+                length = max(BEAK_REACH * reach * sw_ref * k, BEAK_MIN * sw_ref) * scale * (_height(f, name) / xheight[style]) ** BEAK_BY_HEIGHT
                 run = BRACKET[1] * w
                 o = pts[spur_at]
                 step = -1 if spur_at == i else 1
