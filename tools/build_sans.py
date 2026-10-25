@@ -1075,36 +1075,20 @@ def flag_overlaps(font) -> None:
 
 def serif_parts(font) -> set[str]:
     """The stems f and t are drawn from (unencoded parts): their ends take
-    serifs and beaks as a letter's do."""
+    serifs and terminal faces as a letter's do."""
     return {font[n].components[0].baseGlyph for n in ("f", "t") if n in font and font[n].components}
 
 
 TERMINAL_FACE = (0.45, 1.6)  # stems (Regular): how long a cut across a stroke may be to count as its end
-TERMINAL_REF = 1.0  # stems: a terminal cut this long or longer takes a full beak; shorter ones (superiors) a smaller one
+TERMINAL_REF = 1.0  # stems: a terminal cut shorter than this (the superiors) is planned with its share of a full one
 TERMINAL_SYMBOLS = set("?¿&§$¢€£@‽")  # symbols drawn with the letters' curved strokes
 SHOULDER = 30  # degrees: the outer edge is cut back no further than where it runs this steep
-LEVEL_BEAK_ANGLE = 6  # degrees: a cut further from level than this (Inter's a.2, £, §) ends plain
-TERMINAL_ROOM = 1 / 3  # the most of the white past a terminal its spur may take, so facing beaks leave a third open
-BEAK_WIDTH = 1.0  # the spur's width, as a share of the master's serif thickness
-BEAK_REACH = 0.4  # the spur's reach past the stroke's inner edge, as a share of the stem serifs' reach
-BEAK_MIN = 0.25  # Regular stems: the least a spur reaches past the inner edge, so Thin's still shows as a tick
+LEVEL_FACE_ANGLE = 6  # degrees: a cut further from level than this (Inter's a.2, £, §) ends plain
 # How far the face goes back out toward where the stroke ended (its old outer corner): the
 # cut-back end is stretched sideways, so the stroke keeps its reach and meets the face at a
-# slant, as a text face's arc runs out to its beak. 0 leaves the face over the inner corner.
+# slant. 0 leaves the face over the inner corner.
 FACE_OUT = 1.0
-# The spur's reach grows with the letter's height over the x-height to this power, so a capital's
-# or a figure's beak keeps the share of its height a lowercase one has (Times New Roman's C and s
-# both drop about a third of theirs); 0 gives every beak the stem serifs' reach.
-BEAK_BY_HEIGHT = 1.0
-RIGHT_EXITS = False  # whether a stroke rising out at the foot of a letter's right side (c, C, e, t) takes a beak
-# Only the classic text-serif terminals carry a spur: C, G, S, c and s, and the letters and signs drawn
-# the same way (their Greek and Cyrillic twins, the stroked forms, the currency signs built on them, and
-# their superior, inferior and enclosed forms). Every other terminal keeps its upright face and no spur.
-SPUR_MODELS = set("CGScs")
-SPUR_TWINS = {"С": "C", "с": "c", "Ѕ": "S", "ѕ": "s", "Є": "C", "є": "c", "Ϲ": "C", "ϲ": "c", "Ҫ": "C", "ҫ": "c",
-              "Ȼ": "C", "ȼ": "c", "Ǥ": "G", "$": "S", "¢": "c", "₵": "C", "₡": "C", "€": "C", "₲": "G"}
-UPRIGHT_FACE = True  # an upright cut without a spur (r, j, y) is still recut exactly upright; False leaves Text's cut
-
+RIGHT_EXITS = False  # whether a stroke rising out at the foot of a letter's right side (c, C, e, t) takes a face
 
 def _ink_side(font, g, a, q) -> tuple[bool, bool]:
     """Whether the ink lies on the left of the cut from a to q and not on its right,
@@ -1122,27 +1106,27 @@ def _ink_side(font, g, a, q) -> tuple[bool, bool]:
 
 
 def plan_terminals(fonts, plan: dict) -> dict:
-    """Where Katagami Serif's terminals take a beak, found on Regular: every
+    """Where Katagami Serif's terminals take an upright face, found on Regular: every
     stroke end the serif plan leaves bare in letters, figures, their
     alternates, the stems of f and t and the symbols drawn like letters.
 
     A stroke end is a straight cut 0.45 to 1.6 stems long between two
     corners whose sides run back the way they came, with ink on one side of
-    it and none on the other. A level cut (within LEVEL_BEAK_ANGLE of
+    it and none on the other. A level cut (within LEVEL_FACE_ANGLE of
     horizontal) between two curves is the end of a curved stroke (C, G, S,
-    a, c, s, the figures); its beak points into the letter. An upright cut
+    a, c, s, the figures); it faces into the letter. An upright cut
     (within 30 degrees of vertical) ends a hook, an arm or a tail (r, f, j,
     y), unless it ends a stub in the middle third of the letter (the waist
     of 3) or a stroke lying on the baseline, x-height or cap height. A bar's
     end (the crossbars of f and t, the foot of 2) is not a terminal. The
     stroke rising out at the foot of a letter's right side (c, C, e, ε, the
     hook of t) ends plain, as in a text face, and so does the lower end of
-    an opening whose upper end has a beak on the same side (ɔ, Ↄ).
+    an opening whose upper end has a face on the same side (ɔ, Ↄ).
     Returns {glyph: [(kind, contour, i, j, outer, way, scale)]}: for a
     level cut the corner on the outside of the letter, for an upright cut
-    the corner the spur grows from; way is 1 for a spur pointing up and -1
-    for one pointing down; scale is the cut's length over TERMINAL_REF
-    stems, at most 1.
+    the corner below or above it; way is 1 where the cut faces up and -1
+    where it faces down; scale is the cut's length over TERMINAL_REF stems,
+    at most 1.
     """
     ref = fonts["Regular"]
     sw = stem(ref)
@@ -1180,12 +1164,12 @@ def plan_terminals(fonts, plan: dict) -> dict:
                 angle = min(angle, 180 - angle)
                 mid_x, mid_y, cut_y = (b.xMin + b.xMax) / 2, (b.yMin + b.yMax) / 2, (a.y + q.y) / 2
                 if angle <= 30:
-                    if angle > LEVEL_BEAK_ANGLE:
+                    if angle > LEVEL_FACE_ANGLE:
                         continue
                     kind = "level"
                     # the ink is left of travel, so the bare side faces up when the cut runs right to left
                     way = 1 if q.x < a.x else -1
-                    # a beak points into the letter, never past its top or foot (the arms of ω)
+                    # the end faces into the letter, never past its top or foot (the arms of ω)
                     if (way > 0) != (cut_y < mid_y):
                         continue
                     # only the end of a curved stroke can be cut back to a face its stroke meets at a slant
@@ -1220,10 +1204,11 @@ def plan_terminals(fonts, plan: dict) -> dict:
 
 
 def _jaw(font, g, term, found, mid_x: float) -> bool:
-    """Whether a rising beak at the foot of an opening would face the beak above
-    it across that opening, as in ɔ and Ↄ: both cuts on the same side of the
-    letter and nothing between them (the white at their mid-height reaches
-    the letter's middle, where 3 has its waist). The upper beak stays."""
+    """Whether the end at the foot of an opening would face the end above it
+    across that opening, a second jaw, as in ɔ and Ↄ: both cuts on the same
+    side of the letter and nothing between them (the white at their
+    mid-height reaches the letter's middle, where 3 has its waist). The
+    upper end keeps its face."""
     from fontTools.pens.pointInsidePen import PointInsidePen
     kind, ci, i, j, outer, way, _ = term
     if kind != "level" or way < 0:
@@ -1247,34 +1232,6 @@ def _jaw(font, g, term, found, mid_x: float) -> bool:
         else:
             return True
     return False
-
-
-def _walk_to_x(pts, k: int, step: int, x: float) -> float:
-    """The height where the outline, followed from point k in direction step
-    (away from a cut), first reaches x; the height of point k if it does not
-    within three segments."""
-    n = len(pts)
-    cur = k
-    for _ in range(3):
-        seg = [pts[cur]]
-        nk = cur
-        while True:
-            nk = (nk + step) % n
-            seg.append(pts[nk])
-            if pts[nk].type is not None:
-                break
-        xy = [(q.x, q.y) for q in seg]
-        samples = []
-        for t in [m / 32 for m in range(33)]:
-            if len(xy) == 4:
-                samples.append(_point(xy, t))
-            else:
-                samples.append((xy[0][0] + (xy[-1][0] - xy[0][0]) * t, xy[0][1] + (xy[-1][1] - xy[0][1]) * t))
-        for (x0, y0), (x1, y1) in zip(samples, samples[1:]):
-            if (x0 - x) * (x1 - x) <= 0 and x0 != x1:
-                return y0 + (y1 - y0) * (x - x0) / (x1 - x0)
-        cur = nk
-    return pts[k].y
 
 
 def _upright(pts, i: int, j: int, outer: int) -> bool:
@@ -1385,178 +1342,58 @@ def _stretch(pts, side, x: float) -> None:
         pts[idx].x = x0 + k * (pts[idx].x - x0)
 
 
-def _spur_nodes(x_f, y_n, way, h, w, length, y_face, x_end, y_end, lip) -> list:
-    """The spur on a vertical face at x_f: its outer edge carries the face on
-    from the inner corner (x_f, y_n) `length` further in the direction way,
-    its square end is `w` wide toward the stroke (h), and its inner edge
-    meets the stroke's inner edge in the arm serifs' bracket: it leaves the
-    spur BRACKET[0] of the spur's length short of the stroke (y_face is the
-    stroke's edge over the spur's inner edge) and lands at (x_end, y_end).
-    `lip` are points inside the stroke the contour returns through, so spur
-    and stroke overlap."""
-    x1 = x_f + h * w
-    rise = BRACKET[0] * length
-    run = x_end - x1
-    nodes = [(x_f, y_n, True), (x_f, y_n + way * length, True), (x1, y_n + way * length, True),
-             (x1, y_face + way * rise, True), (x1, y_face + way * 0.55 * rise, False),
-             (x1 + 0.45 * run, y_end, False), (x_end, y_end, True)] + [(x, y, True) for x, y in lip]
-    on = [(x, y) for x, y, keep in nodes if keep]
-    area = sum(on[k - 1][0] * on[k][1] - on[k][0] * on[k - 1][1] for k in range(len(on)))
-    return nodes if area > 0 else nodes[::-1]
+def cut_terminals(fonts, plan: dict) -> None:
+    """Give every terminal plan_terminals found an upright face.
 
-
-def _room(font, g, x: float, y: float, way: int, most: float) -> float:
-    """How far the white runs from (x, y) straight up (way 1) or down (-1)
-    before it meets ink, looked for up to `most` units."""
-    from fontTools.pens.pointInsidePen import PointInsidePen
-    d = 4.0
-    while d < most:
-        pen = PointInsidePen(font, (x, y + way * d))
-        g.draw(pen)
-        if pen.getResult():
-            return d
-        d += 4.0
-    return most
-
-
-def _spurred(font, name: str) -> bool:
-    """Whether a glyph's terminals carry a spur: its character (or, for an unencoded
-    alternate, its base glyph's) is C, G, S, c or s, a twin drawn the same way
-    (SPUR_TWINS), or a superior, inferior or enclosed form of one."""
-    base = name if name in font and font[name].unicodes else name.split(".")[0]
-    if base not in font or not font[base].unicodes:
-        return False
-    ch = chr(font[base].unicodes[0])
-    decomposition = unicodedata.decomposition(ch)
-    if decomposition.startswith("<"):
-        parts = decomposition.split()
-        if len(parts) == 2:
-            ch = chr(int(parts[1], 16))
-    return ch in SPUR_MODELS or ch in SPUR_TWINS
-
-
-def cut_terminals(fonts, plan: dict, depth: float, reach: float) -> None:
-    """Give every terminal plan_terminals found an upright face, and the
-    classic text-serif terminals (C, G, S, c, s and their twins, `_spurred`)
-    a small spur on it.
-
-    A level cut (the end of a curved stroke) becomes a vertical face at the
+    A level cut (the end of a curved stroke) becomes an upright face at the
     letter's outer extreme. Its inner corner keeps its height. The stroke's
     outer edge is cut back to where it stands over that corner (`_face`),
     where it still runs at a slant, and both edges are then stretched
     sideways about their far ends until the corners stand at the old outer
-    corner's x (FACE_OUT), so the stroke keeps its reach and runs out over
-    the face. Edges are split by de Casteljau and stretched, so they stay
-    single curves and every master keeps its points. An upright cut (the arm
-    of r, the tails of j and y) is cut exactly upright through its middle,
-    as in 0.2; one that leans too far for that in some master (the hook of
-    f) is cut like a level one, at its back corner.
-
-    On those letters the face carries on past the stroke's inner edge as a
-    spur: as wide as the master's serifs are thick (SERIF_DEPTH_SCALE, so
-    Thin's holds and Black's stays light), reaching past the inner corner
-    BEAK_REACH of the stem serifs' reach (serif_reach of a Regular stem,
-    scaled with the stem as theirs is, and shorter on a short cut, a
-    superior's), at least BEAK_MIN stems, times the letter's height over the
-    x-height (BEAK_BY_HEIGHT), square-ended, with the
-    arm serifs' bracket into the stroke's inner edge. A spur takes at most
-    TERMINAL_ROOM of the white past its terminal. Every spur is its own
-    contour, the same in every master, and a terminal takes one only where
-    every master can cut it.
+    corner's x (FACE_OUT), so the stroke keeps its reach and runs into the
+    face at a slant. Edges are split by de Casteljau and stretched, so they
+    stay single curves and every master keeps its points. An upright cut
+    (the arm of r, the tails of j and y) is cut exactly upright through its
+    middle; one that leans too far for that in some master (the hook of f)
+    is cut like a level one, at its back corner. A terminal takes a face only
+    where every master can cut it.
     """
-    ref = fonts["Regular"]
-    sw_ref = stem(ref)
-
-    def crossbar(font) -> float:
-        ys = sorted({round(pt.y) for c in font["H"].contours for pt in c.points if 0 < round(pt.y) < round(font["H"].getBounds(font).yMax)})
-        return ys[-1] - ys[0] if len(ys) >= 2 else stem(font)
-    sizes = {}
-    for style, f in fonts.items():
-        k = (stem(f) / sw_ref) ** SERIF_REACH_POWER
-        t = depth * crossbar(f) * dict(zip(("Thin", "Regular", "Black"), SERIF_DEPTH_SCALE)).get(style, 1.0)
-        sizes[style] = (t, k)
-
-    xheight = {style: f["x"].getBounds(f).yMax for style, f in fonts.items()}
-    heights = {}
-
-    def _height(f, name):
-        # the letter's height from the baseline (or its own foot, for a superior), before any end is cut
-        if (id(f), name) not in heights:
-            b = f[name].getBounds(f)
-            heights[(id(f), name)] = b.yMax - max(b.yMin, 0.0)
-        return heights[(id(f), name)]
-
     def face(f, name, term):
         kind, ci, i, j, outer, way, scale = term
         return _face(f[name].contours[ci].points, i, j, outer)
 
-    # a terminal takes a beak only where every master can cut it
     kept = {}
-    spurred = {name for name in plan if _spurred(ref, name)}
     for name, terms in plan.items():
         for term in terms:
-            if term[0] == "upright" and not UPRIGHT_FACE and name not in spurred:
-                continue
             if term[0] == "upright":
                 if all(_upright(copy.deepcopy(f[name].contours[term[1]].points), *term[2:5]) for f in fonts.values()):
                     kept.setdefault(name, []).append(term)
                     continue
-                # cut like a level one, its outer corner the one the spur does not grow from
+                # cut like a level one, its outer corner the one the stroke runs on from
                 kind, ci, i, j, outer, way, scale = term
                 term = ("leaning", ci, i, j, j if outer == i else i, way, scale)
             if all(face(f, name, term) is not None for f in fonts.values()):
                 kept.setdefault(name, []).append(term)
     for f in fonts.values():
-        for name in kept:
-            _height(f, name)
-    for style, f in fonts.items():
-        t, k = sizes[style]
         for name, terms in kept.items():
             g = f[name]
-            shapes = []
-            for term in terms:
-                kind, ci, i, j, outer, way, scale = term
+            for kind, ci, i, j, outer, way, scale in terms:
                 pts = g.contours[ci].points
                 a, q = pts[i], pts[j]
                 if kind == "upright":
                     _upright(pts, i, j, outer)
                     for pt in (a, q):
                         pt.x = (a.x + q.x) / 2
-                    spur_at = outer
-                    toward = pts[(spur_at + (-1 if spur_at == i else 1)) % len(pts)].x
-                else:
-                    t_out = _face(pts, i, j, outer)
-                    o_side, n_side = _edges(pts, i, j, outer)
-                    x_in, x_out = pts[n_side[0]].x, pts[outer].x
-                    _trim(pts, o_side, t_out)
-                    x_f = x_in + FACE_OUT * (x_out - x_in)
-                    _stretch(pts, o_side, x_f)
-                    _stretch(pts, n_side, x_f)
-                    for pt in (a, q):
-                        pt.x = x_f
-                    spur_at = n_side[0]  # the spur grows from the inner corner
-                    # toward the stroke: its inner edge's far end (its handle may stand straight over the corner, as in 2)
-                    toward = pts[n_side[3]].x
-                if name not in spurred:
-                    continue  # the upright face alone
-                x_f = a.x
-                w = BEAK_WIDTH * t * scale
-                length = max(BEAK_REACH * reach * sw_ref * k, BEAK_MIN * sw_ref) * scale * (_height(f, name) / xheight[style]) ** BEAK_BY_HEIGHT
-                run = BRACKET[1] * w
-                o = pts[spur_at]
-                step = -1 if spur_at == i else 1
-                h = 1 if toward > x_f else -1
-                x1, x2 = x_f + h * w, x_f + h * (w + run)
-                length = min(length, TERMINAL_ROOM * _room(f, g, x_f + h * w / 2, _walk_to_x(pts, spur_at, step, x_f + h * w / 2), way, 3 * length))
-                dip = 0.3 * abs(q.y - a.y)
-                y2 = _walk_to_x(pts, spur_at, step, x2)
-                shapes.append(_spur_nodes(x_f, o.y, way, h, w, length, _walk_to_x(pts, spur_at, step, x1), x2, y2,
-                                          [(x2, y2 - way * dip), (x_f, o.y - way * dip)]))
-            for nodes in shapes:
-                g.appendContour(_contour(nodes))
-            if shapes:
-                g.lib["public.truetype.overlap"] = True
-        flag_overlaps(f)
+                    continue
+                t_out = _face(pts, i, j, outer)
+                o_side, n_side = _edges(pts, i, j, outer)
+                x_in, x_out = pts[n_side[0]].x, pts[outer].x
+                _trim(pts, o_side, t_out)
+                x_f = x_in + FACE_OUT * (x_out - x_in)
+                _stretch(pts, o_side, x_f)
+                _stretch(pts, n_side, x_f)
+                for pt in (a, q):
+                    pt.x = x_f
 
 
 def close_c(fonts, share: float) -> None:
@@ -1816,8 +1653,8 @@ def transform(p: Profile, italic: bool = False) -> tuple[dict, dict]:
         plan = plan_serifs(fonts)  # the same ends, where the narrowed letters now have them
         terminals = plan_terminals(fonts, plan)
         add_contrast(fonts, dict(p.serif_contrast))
-        # before the serifs, which would count in the stems and crossbars the beaks are measured on
-        cut_terminals(fonts, terminals, p.serif_depth, p.serif_reach)
+        # before the serifs, so a face is cut on the stroke alone
+        cut_terminals(fonts, terminals)
         cut_serifs(fonts, plan, p.serif_reach, p.serif_depth, p.serif_head, p.serif_beak)
     straighten_q(fonts)
     small_caps(fonts)

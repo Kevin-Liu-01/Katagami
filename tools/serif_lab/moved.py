@@ -36,8 +36,37 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from build_sans import (  # noqa: E402
     BRACKET, SERIF_DEPTH_SCALE, SERIF_REACH_POWER, TERMINAL_FACE, TERMINAL_REF, TERMINAL_SYMBOLS,
-    _contour, _ink_side, _point, _split, _upright, _walk_to_x, flag_overlaps, serif_parts, stem,
+    _contour, _ink_side, _point, _split, _upright, flag_overlaps, serif_parts, stem,
 )
+
+
+def _walk_to_x(pts, k: int, step: int, x: float) -> float:
+    """The height where the outline, followed from point k in direction step
+    (away from a cut), first reaches x; the height of point k if it does not
+    within three segments."""
+    n = len(pts)
+    cur = k
+    for _ in range(3):
+        seg = [pts[cur]]
+        nk = cur
+        while True:
+            nk = (nk + step) % n
+            seg.append(pts[nk])
+            if pts[nk].type is not None:
+                break
+        xy = [(q.x, q.y) for q in seg]
+        samples = []
+        for t in [m / 32 for m in range(33)]:
+            if len(xy) == 4:
+                samples.append(_point(xy, t))
+            else:
+                samples.append((xy[0][0] + (xy[-1][0] - xy[0][0]) * t, xy[0][1] + (xy[-1][1] - xy[0][1]) * t))
+        for (x0, y0), (x1, y1) in zip(samples, samples[1:]):
+            if (x0 - x) * (x1 - x) <= 0 and x0 != x1:
+                return y0 + (y1 - y0) * (x - x0) / (x1 - x0)
+        cur = nk
+    return pts[k].y
+
 
 SHOULDER = 30  # degrees: the outer edge is cut back no further than where it runs this steep
 LEVEL_BEAK_ANGLE = 6  # degrees: a cut further from level than this (Inter's a.2, £, §) ends plain

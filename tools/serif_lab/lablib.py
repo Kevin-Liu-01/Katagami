@@ -84,7 +84,10 @@ def build(part, text, variant="moved", consts=None):
         plan = B.plan_serifs(fonts)
         terminals = M.plan_terminals(fonts, plan)
         B.add_contrast(fonts, dict(P.serif_contrast))
-        M.cut_terminals(fonts, terminals, P.serif_depth, P.serif_reach)
+        if M is NEW:
+            M.cut_terminals(fonts, terminals)
+        else:
+            M.cut_terminals(fonts, terminals, P.serif_depth, P.serif_reach)
         B.cut_serifs(fonts, plan, P.serif_reach, P.serif_depth, P.serif_head, P.serif_beak)
         respace(fonts, P.spacing)
         B.scale_outlines(fonts, P.scale)
