@@ -1,7 +1,7 @@
 """Serif terminal lab: Katagami Serif's serif block on a few glyphs of the pickled masters
 (prep.py), with 0.2's terminal code or the moved beaks (moved.py), drawn with skia.
 No font build: a sheet takes a few seconds."""
-import copy, importlib.util, math, pickle, subprocess, sys
+import copy, importlib.util, inspect, math, pickle, subprocess, sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 LAB = ROOT / "build" / "serif-lab"
@@ -14,6 +14,7 @@ from kerf_build.fontops import respace, shear  # noqa: E402
 from kerf_build.profiles import PROFILES  # noqa: E402
 import build_sans as NEW  # noqa: E402
 import moved as MOVED  # noqa: E402
+import ends as ENDS  # noqa: E402
 
 P = PROFILES["serif"]
 V02 = "328c6c6"  # the commit whose build_sans.py cut 0.2's beaks
@@ -52,6 +53,9 @@ def build(part, text, variant="moved", consts=None):
     moved ones in moved.py (the small spur on every terminal); "build" what tools/build_sans.py cuts now. consts override moved.py's (or 0.2's) constants. Returns (masters, terminal plan)."""
     B = OLD if variant == "0.2" else NEW
     M = OLD if variant == "0.2" else NEW if variant == "build" else MOVED
+    if variant.startswith("git:"):
+        B = M = _module(variant[4:], variant[4:])
+    option = variant[5:] if variant.startswith("ends:") else None
     saved = {}
     for k, v in (consts or {}).items():
         mod = M if hasattr(M, k) else B
@@ -84,11 +88,15 @@ def build(part, text, variant="moved", consts=None):
         plan = B.plan_serifs(fonts)
         terminals = M.plan_terminals(fonts, plan)
         B.add_contrast(fonts, dict(P.serif_contrast))
-        if M is NEW:
+        if option:
+            kept = ENDS.cut(fonts, terminals, option)
+        elif len(inspect.signature(M.cut_terminals).parameters) == 2:
             M.cut_terminals(fonts, terminals)
         else:
             M.cut_terminals(fonts, terminals, P.serif_depth, P.serif_reach)
         B.cut_serifs(fonts, plan, P.serif_reach, P.serif_depth, P.serif_head, P.serif_beak)
+        if option:
+            ENDS.after_serifs(fonts, kept, option, P.serif_depth)
         respace(fonts, P.spacing)
         B.scale_outlines(fonts, P.scale)
         if part in ("italic", "slanted"):
