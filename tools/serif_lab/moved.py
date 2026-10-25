@@ -43,7 +43,9 @@ SHOULDER = 30  # degrees: the outer edge is cut back no further than where it ru
 LEVEL_BEAK_ANGLE = 6  # degrees: a cut further from level than this (Inter's a.2, £, §) ends plain
 TERMINAL_ROOM = 1 / 3  # the most of the white past a terminal its spur may take, so facing beaks leave a third open
 BEAK_WIDTH = 1.0  # the spur's width, as a share of the master's serif thickness
-BEAK_REACH = 1.0  # the spur's reach past the stroke's inner edge, as a share of the stem serifs' reach
+BEAK_REACH = 0.4  # the spur's reach past the stroke's inner edge, as a share of the stem serifs' reach
+BEAK_MIN = 0.25  # Regular stems: the least a spur reaches past the inner edge, so Thin's still shows as a tick
+UPRIGHT_REACH = 1.0  # the same share for the ends 0.2 cut upright (r, j, y), which keep 0.2's beak
 # How far the face goes back out toward where the stroke ended (its old outer corner): the
 # cut-back end is stretched sideways, so the stroke keeps its reach and meets the face at a
 # slant, as a text face's arc runs out to its beak. 0 leaves the face over the inner corner.
@@ -411,7 +413,8 @@ def cut_terminals(fonts, plan: dict, depth: float, reach: float) -> None:
                     toward = pts[n_side[3]].x
                 x_f = a.x
                 w = BEAK_WIDTH * t * scale
-                length = BEAK_REACH * reach * sw_ref * k * scale * (_height(f, name) / xheight[style]) ** BEAK_BY_HEIGHT
+                share = UPRIGHT_REACH if kind == "upright" else BEAK_REACH
+                length = max(share * reach * sw_ref * k, BEAK_MIN * sw_ref) * scale * (_height(f, name) / xheight[style]) ** BEAK_BY_HEIGHT
                 run = BRACKET[1] * w
                 o = pts[spur_at]
                 step = -1 if spur_at == i else 1

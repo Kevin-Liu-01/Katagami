@@ -1,7 +1,7 @@
 """Proof sheets for Katagami Serif's terminals: 0.2's tooth beaks and the moved beaks side by
 side, cut in the lab (lablib.py) on the pickled masters, no font build.
 
-    .venv/bin/python tools/serif_lab/sheets.py            # the four sheets in build/proofs/moved/
+    .venv/bin/python tools/serif_lab/sheets.py            # the four small-* sheets in build/proofs/moved/
     .venv/bin/python tools/serif_lab/sheets.py custom OUT.png roman|slanted|italic "line|line" 48,120 100,400,900 ["label=CONST:value;CONST:value" ...]
 
 A custom sheet sets 0.2 beside one column per label, each the moved beaks with moved.py
@@ -16,6 +16,7 @@ OUT = L.ROOT / "build" / "proofs" / "moved"
 GLYPHS = "S a c s e g C G J r y f 2 3 5 6 9 ?"
 WORDS = ["Classic saga goes Jersey", "Cascades gracefully"]
 NAMES = {100: "Thin", 400: "Regular", 900: "Black"}
+PREVIOUS = {"BEAK_REACH": 1.0, "BEAK_MIN": 0.0, "UPRIGHT_REACH": 1.0}  # the first moved spur, before Kevin asked for a far smaller one
 
 
 def sheet(out, part, lines, sizes, weights, consts=None, variants=("0.2", "moved")):
@@ -68,13 +69,14 @@ def main():
         return
     OUT.mkdir(parents=True, exist_ok=True)
     weights = [100, 400, 900]
-    sheet(OUT / "moved-roman-48px.png", "roman", [GLYPHS], [48], weights)
+    # 0.2's teeth, the first moved spur (the stem serifs' full reach, Kevin: "far smaller"), the small spur
+    three = ["0.2", ("moved", PREVIOUS), ("small", {})]
+    sheet(OUT / "small-roman-48px.png", "roman", [GLYPHS], [48], weights, variants=three)
     half = GLYPHS.split(" ")
-    sheet(OUT / "moved-roman-120px.png", "roman", [" ".join(half[:9]), " ".join(half[9:])], [120], weights)
-    sheet(OUT / "moved-words.png", "roman", WORDS, [48], weights)
+    sheet(OUT / "small-roman-120px.png", "roman", [" ".join(half[:9]), " ".join(half[9:])], [120], weights, variants=three)
+    sheet(OUT / "small-words.png", "roman", WORDS, [48], weights, variants=three)
     # Serif Italic is the roman slanted: its beaked glyphs take the roman's design
-    sheet(OUT / "moved-italic-48px.png", "slanted", ["S a c s g", "Classic saga goes Jersey"], [48], weights)
-
+    sheet(OUT / "small-italic-48px.png", "slanted", ["S a c s g", "Classic saga goes Jersey"], [48], weights, variants=three)
 
 if __name__ == "__main__":
     main()
