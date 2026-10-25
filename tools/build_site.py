@@ -259,6 +259,12 @@ def outlines() -> dict:
             # until the slider moves from Text toward Serif.
             marked = flatten_marked(serif, text, gname)
             serif_base = [c for c, slab in marked if not slab]
+            # Serif's terminal facets each add a point (a foot) to Text's structure: lift them out
+            # here and put them back into every state at the end, as a zero-length step at the
+            # outer corner in the other four, so the facet grows from the corner toward Serif
+            feet = facet_feet(serif, gname)
+            for ci, k, _ in sorted(feet, reverse=True):
+                serif_base[ci].pop(k)
             text_flat = flatten(text, gname)
             assert [len(c) for c in serif_base] == [len(c) for c in text_flat], f"{ch}: Serif and Text outlines differ"
             dx = serif_base[0][0][0] - text_flat[0][0][0]
@@ -274,7 +280,31 @@ def outlines() -> dict:
                 out[ch][key] = {"adv": o["adv"], "contours": weave(o["contours"], marked, flat)}
             out[ch]["text"] = {"adv": text[gname].width, "contours": weave(expand(text_flat, plan), marked, flat)}
             out[ch]["serif"] = {"adv": serif[gname].width, "contours": weave(expand(serif_base, plan), marked, slabs)}
+            if feet:
+                base_at = [w for w, (_, slab) in enumerate(marked) if not slab]  # base contour -> woven index
+                own = flatten(serif, gname)
+                for ci, k, prev in sorted(feet):
+                    # k counts the feet before it; in Text's structure the foot comes before point k_text,
+                    # and Round's corners before that point each grew by three
+                    k_text = k - sum(1 for c2, k2, _ in feet if c2 == ci and k2 < k)
+                    grown = 3 * sum(1 for pci, idx in plan if pci == ci for i in idx if i < k_text)
+                    for key, state in out[ch].items():
+                        c = state["contours"][base_at[ci]]
+                        at = k + grown
+                        if key == "serif":
+                            c.insert(at, own[ci][k])
+                        else:
+                            x, y, _ = c[at - 1] if prev else c[at % len(c)]
+                            c.insert(at, [x, y, "l"])
+            assert len({tuple(len(c) for c in st["contours"]) for st in out[ch].values()}) == 1, f"{ch}: states differ in structure"
     return out
+
+
+def facet_feet(font, gname: str) -> list:
+    """The feet of Katagami Serif's terminal facets in a glyph's own contours, named by
+    tools/build_sans.py: (contour, index, whether the outer corner is the point before it)."""
+    return [(ci, k, p.name == "facet:prev") for ci, c in enumerate(font[gname].contours)
+            for k, p in enumerate(c.points) if p.name in ("facet:prev", "facet:next")]
 
 
 def segments(contour: list) -> list:

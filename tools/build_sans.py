@@ -1084,6 +1084,7 @@ TERMINAL_REF = 1.0  # stems: a terminal cut shorter than this (the superiors) is
 TERMINAL_SYMBOLS = set("?¿&§$¢€£@‽")  # symbols drawn with the letters' curved strokes
 LEVEL_FACE_ANGLE = 6  # degrees: a cut further from level than this (Inter's a.2, £, §) ends plain
 FACETS_KEY = "com.kerf.facets"
+FACET_PREV, FACET_NEXT = "facet:prev", "facet:next"  # a facet's foot, its outer corner the point before it or after it
 FACET = 0.45  # the facet's height, as a share of the cut's length (about a stem serif's thickness at Regular and Black)
 RIGHT_EXITS = False  # whether a stroke rising out at the foot of a letter's right side (c, C, e, t) takes a facet
 
@@ -1306,9 +1307,12 @@ def _facet(pts, term) -> bool:
     _trim(pts, o_side, t)
     top = pts[o_side[0]]
     d = (top.x - ox) * ux + (top.y - oy) * uy
-    foot = Point(ox + d * ux, oy + d * uy, "line")
     lo, hi = sorted((i, j))
-    if (lo, hi) == (0, len(pts) - 1):
+    wrap = (lo, hi) == (0, len(pts) - 1)
+    # named for the site's morph, which grows the facet out of the outer corner: the one before the foot or after it
+    before = o_side[0] == (hi if wrap else lo)
+    foot = Point(ox + d * ux, oy + d * uy, "line", name=FACET_PREV if before else FACET_NEXT)
+    if wrap:
         pts.append(foot)
     else:
         pts.insert(hi, foot)
