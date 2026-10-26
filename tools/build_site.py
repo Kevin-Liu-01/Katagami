@@ -503,7 +503,11 @@ def web_fonts() -> list[list]:
 # loaded it sets the same text with the same outlines, and the text never changes face in
 # front of the reader. first.css serves every page, first-rows.css the member rows and
 # the glyph tiles that set Round, Text and Serif, and first-map.css the map page, which is
-# set in Round.
+# set in Round, first-features.css the feature cards, with every feature, and first-about.css
+# the about page's opening quote in Serif. first.css also declares "Katagami Round Name", "Katagami Text Name" and
+# "Katagami Serif Name": the members' names alone, for the lists that set each name in its
+# own face (the footer, the header's picker, the download table), so a page that shows
+# only the name never fetches the member's full face.
 # ASCII and the few other characters the pages' first screens show: the non-breaking space,
 # the copyright sign, the superscript two, the middle dot, the multiplication sign, é, ō,
 # the dashes, the curly quotes, the ellipsis, the arrows and the minus sign
@@ -511,8 +515,10 @@ FIRST_LATIN = [(0x20, 0x7E), (0xA0, 0xA0), (0xA9, 0xA9), (0xB2, 0xB2), (0xB7, 0x
                (0x14D, 0x14D), (0x2013, 0x2014), (0x2018, 0x201D), (0x2026, 0x2026), (0x2190, 0x2193), (0x2197, 0x2197),
                (0x2212, 0x2212)]
 FIRST_FEATURES = ["kern", "calt", "liga", "ccmp", "locl", "mark", "mkmk"]
-FIRST = {"first.css": ("latin", ["sans", "mono"]), "first-rows.css": ("rows", ["round", "text", "serif"]),
-         "first-map.css": ("latin", ["round"])}
+FIRST = {"first.css": [("latin", ["sans", "mono"]), ("names", ["round", "text", "serif"])],
+         "first-rows.css": [("rows", ["round", "text", "serif"])], "first-map.css": [("latin", ["round"])],
+         "first-features.css": [("features", ["sans"])], "first-about.css": [("quote", ["serif"])]}
+NAMES_TEXT = "Katagami Sans Round Text Serif Mono Italic"
 
 
 def rows_text() -> str:
@@ -527,6 +533,21 @@ def rows_text() -> str:
     return "".join(sorted(set(text)))
 
 
+def quote_text() -> str:
+    """The about page's opening quote, which it sets in Katagami Serif."""
+    found = re.search(r"<blockquote>(.*?)</blockquote>", (SITE / "about-page.html").read_text(), re.S)
+    return found.group(1) if found else ""
+
+
+def features_text() -> str:
+    """The text of /features at Katagami Sans as the build writes it: every card's samples,
+    from the site's own renderer (public/render.js) run on data.js."""
+    script = ("const vm=require('vm'),fs=require('fs'),p=require('path'),w={},c=vm.createContext({window:w});"
+              "for(const f of ['data.js','hero.js','render.js'])vm.runInContext(fs.readFileSync(p.join(process.argv[1],f),'utf8'),c);"
+              "process.stdout.write(w.KatagamiRender.features(w.KERF,'sans').replace(/<[^>]+>/g,'').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'\"').replace(/&amp;/g,'&'))")
+    return subprocess.run(["node", "-e", script, str(PUBLIC)], capture_output=True, text=True, check=True).stdout
+
+
 def exact_range(cps) -> str:
     runs = []
     for u in sorted(cps):
@@ -537,23 +558,70 @@ def exact_range(cps) -> str:
     return ",".join(f"U+{a:X}" if a == b else f"U+{a:X}-{b:X}" for a, b in runs)
 
 
+# The kanji the pages show, 型紙 (pattern paper). kanji.css comes after katagami.css, so its
+# faces win over the CJK companions for these characters alone, and a page that shows only
+# them never fetches a companion of megabytes. A companion is a font of its own, so no text
+# is shaped across it and a Latin face.
+KANJI_TEXT = "型紙"
+
+
+def kanji_fonts() -> None:
+    import base64
+    import io
+    out = PUBLIC / "fonts" / "kanji.css"
+    srcs = [ROOT / "fonts" / "cjk" / f"{n}[wght].ttf" for n in ("KatagamiCJKSC", "KatagamiCJKTC")]
+    key = hashlib.sha256(KANJI_TEXT.encode()).hexdigest()[:12]
+    if out.exists() and f"key {key}" in out.read_text()[:120] and all(fresh(p, out) for p in srcs if p.exists()):
+        return
+    rules, left = [], {ord(c) for c in KANJI_TEXT}
+    # SC draws what it has, as the stylesheet declares SC after TC, and TC the rest
+    for src in srcs:
+        if not src.exists() or not left:
+            continue
+        font = TTFont(src)
+        have = left & set(font.getBestCmap())
+        if not have:
+            continue
+        left -= have
+        opts = subset.Options()
+        opts.flavor = "woff2"
+        opts.layout_features = FIRST_FEATURES
+        opts.name_IDs = []
+        opts.hinting = False
+        sub = subset.Subsetter(opts)
+        sub.populate(unicodes=have)
+        sub.subset(font)
+        font.flavor = "woff2"
+        buf = io.BytesIO()
+        font.save(buf)
+        data = base64.b64encode(buf.getvalue()).decode()
+        rules.append(f'@font-face{{font-family:"Katagami Sans";src:url(data:font/woff2;base64,{data}) format("woff2");'
+                     f"font-weight:100 900;font-style:normal;font-display:block;unicode-range:{exact_range(have)}}}")
+        print(f"kanji.css: {src.stem} {len(have)} characters, {len(buf.getvalue()) / 1024:.1f} KB")
+    out.write_text(f"/* key {key}: the kanji the pages show, generated by tools/build_site.py --first in the Katagami repo */\n" + "\n".join(rules) + "\n")
+
+
 def first_fonts() -> None:
     import base64
     import io
     latin = {u for lo, hi in FIRST_LATIN for u in range(lo, hi + 1)}
-    for name, (kind, keys) in FIRST.items():
+    sets = {"latin": latin, "rows": {ord(c) for c in rows_text()}, "names": {ord(c) for c in NAMES_TEXT},
+            # the feature cards switch every feature on and off, so their subset keeps all of them
+            "features": latin | {ord(c) for c in features_text()}, "quote": {ord(c) for c in quote_text()}}
+    for name, parts in FIRST.items():
         out = PUBLIC / "fonts" / name
-        wanted = latin if kind == "latin" else {ord(c) for c in rows_text()}
-        key = hashlib.sha256(repr((sorted(wanted), FIRST_FEATURES, keys)).encode()).hexdigest()[:12]
-        if out.exists() and f"key {key}" in out.read_text()[:120] and all(fresh(FONTS[k], out) for k in keys):
+        key = hashlib.sha256(repr([(sorted(sets[kind]), keys) for kind, keys in parts] + FIRST_FEATURES).encode()).hexdigest()[:12]
+        if out.exists() and f"key {key}" in out.read_text()[:120] and all(fresh(FONTS[k], out) for _, keys in parts for k in keys):
             continue
         rules = []
-        for k in keys:
+        for kind, k in ((kind, k) for kind, keys in parts for k in keys):
+            wanted = sets[kind]
+            family = FAMILY[k] + (" Name" if kind == "names" else "")
             font = TTFont(FONTS[k])
             have = wanted & set(font.getBestCmap())
             opts = subset.Options()
             opts.flavor = "woff2"
-            opts.layout_features = FIRST_FEATURES
+            opts.layout_features = ["*"] if kind == "features" else FIRST_FEATURES
             opts.name_IDs = []
             opts.notdef_outline = True
             opts.hinting = False
@@ -564,10 +632,11 @@ def first_fonts() -> None:
             buf = io.BytesIO()
             font.save(buf)
             data = base64.b64encode(buf.getvalue()).decode()
-            rules.append(f'@font-face{{font-family:"{FAMILY[k]}";src:url(data:font/woff2;base64,{data}) format("woff2");'
+            rules.append(f'@font-face{{font-family:"{family}";src:url(data:font/woff2;base64,{data}) format("woff2");'
                          f"font-weight:{WEIGHTS[k]};font-style:normal;font-display:block;unicode-range:{exact_range(have)}}}")
-            print(f"{name}: {FAMILY[k]} {len(have)} characters, {len(buf.getvalue()) / 1024:.1f} KB")
+            print(f"{name}: {family} {len(have)} characters, {len(buf.getvalue()) / 1024:.1f} KB")
         out.write_text(f"/* key {key}: first-paint subsets, generated by tools/build_site.py --first in the Katagami repo */\n" + "\n".join(rules) + "\n")
+    kanji_fonts()
 
 
 def stale_slices(faces: list[list]) -> list[str]:
@@ -735,7 +804,7 @@ MEMBER_PATHS = {"sans": "/katagami-sans", "round": "/katagami-round", "text": "/
 
 
 def asset_stamps() -> dict:
-    assets = ["data.js", "glyphs.js", "hero.js", "render.js", "fontify.js", "katagami-apply.js", *(f"fonts/{name}" for name in FIRST), "site.css", "site.js", "library.css", "glyph-wall.js", "glyph-wall.css", "map/map.json", "download/files.json",
+    assets = ["data.js", "glyphs.js", "hero.js", "render.js", "fontify.js", "katagami-apply.js", *(f"fonts/{name}" for name in FIRST), "fonts/kanji.css", "site.css", "site.js", "library.css", "glyph-wall.js", "glyph-wall.css", "map/map.json", "download/files.json",
               "fonts/katagami.css", *(f"fonts/{name}" for name in (*WOFF2.values(), *WOFF2_ITALIC.values()))]
     return {rel: hashlib.sha256((PUBLIC / rel).read_bytes()).hexdigest()[:10] for rel in assets if (PUBLIC / rel).exists()}
 
