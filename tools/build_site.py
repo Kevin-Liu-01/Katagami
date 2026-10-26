@@ -521,12 +521,14 @@ def web_fonts() -> list[list]:
 FIRST_LATIN = [(0x20, 0x7E), (0xA0, 0xA0), (0xA9, 0xA9), (0xB2, 0xB2), (0xB7, 0xB7), (0xD7, 0xD7), (0xE9, 0xE9),
                (0x14D, 0x14D), (0x2013, 0x2014), (0x2018, 0x201D), (0x2026, 0x2026), (0x2190, 0x2193), (0x2197, 0x2197),
                (0x2212, 0x2212)]
-FIRST_FEATURES = ["kern", "calt", "liga", "ccmp", "locl", "mark", "mkmk"]
+# the features that apply without a request, and tnum, which the site's figures ask for (tabular-nums)
+FIRST_FEATURES = ["kern", "calt", "liga", "ccmp", "locl", "mark", "mkmk", "tnum"]
 FIRST = {"first.js": [("latin", ["sans", "mono"])], "names.js": [("names", ["round", "text", "serif"])],
          "first-rows.js": [("rows", ["round", "text", "serif"])], "first-map.js": [("latin", ["round"])],
          "first-features.js": [("features", ["sans"])], "first-about.js": [("quote", ["serif"])],
          "kanji.js": [("kanji", ["cjk"])]}
-NAMES_TEXT = "Katagami Sans Round Text Serif Mono Italic"
+# every subset holds a 0: a ch unit is the width of 0 in the element's first available face
+NAMES_TEXT = "Katagami Sans Round Text Serif Mono Italic 0"
 KANJI_TEXT = "型紙"
 # Adds the faces, and hands each member over to its full face once that has loaded: `keep`
 # faces stay for good. KatagamiFirst.release(family) loads the full face and hands over, for
@@ -550,14 +552,14 @@ def rows_text(member: str) -> str:
     stops = re.search(r'<span class="mt-names"[^>]*>(.*?)</span>\s*<span class="mt-bar"', page, re.S)
     if stops:
         found += [t for t in re.findall(r">([^<]+)<", stops.group(1)) if t.lower() == member]
-    text = "".join(found).replace("&amp;", "&").replace("&gt;", ">").replace("&lt;", "<") + "R"
+    text = "".join(found).replace("&amp;", "&").replace("&gt;", ">").replace("&lt;", "<") + "R0"
     return "".join(sorted(set(text)))
 
 
 def quote_text() -> str:
     """The about page's opening quote, which it sets in Katagami Serif."""
     found = re.search(r"<blockquote>(.*?)</blockquote>", (SITE / "about-page.html").read_text(), re.S)
-    return found.group(1) if found else ""
+    return (found.group(1) if found else "") + "0"
 
 
 def features_text() -> str:
