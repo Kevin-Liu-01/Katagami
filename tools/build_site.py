@@ -7,7 +7,8 @@ The site lives in its own repo, Katagami-Website, checked out next to this one
     fonts/KatagamiSans-Italic.woff2 ... each member's Italic (Latin, Greek and Cyrillic)
     fonts/KatagamiSans-thai.woff2 ...   one file per merged script, per member
     fonts/KatagamiCJK{SC,JP,KR}.woff2   the CJK companions
-    fonts/first.js, first-rows.js, first-map.js, first-features.js, first-about.js, kanji.js
+    fonts/first.js, first-rows.js, first-round.js, first-text.js, first-serif.js,
+    first-features.js, first-about.js, kanji.js
                                     subsets of a member a page adds for its first paint
     fonts/katagami.css                  @font-face rules: each member is one family whose
                                     faces split by unicode-range, so a page downloads
@@ -509,8 +510,9 @@ def web_fonts() -> list[list]:
 # name in its own face (the footer, the header's picker, the download table, the about page),
 # which no full face replaces: the pages that show them first hold their first paint for it,
 # and every other page loads it after it has painted. first-rows.js serves the member rows and the glyph tiles that set Round,
-# Text and Serif, first-map.js the map page, which is set in Round, first-features.js the
-# feature cards with every feature, and first-about.js the about page's quote in Serif.
+# Text and Serif. first-round.js, first-text.js and first-serif.js hold a member's Latin for the
+# map page, which is set in Round, and for the library pages' specimens. first-features.js serves
+# the feature cards with every feature, and first-about.js the about page's quote in Serif.
 # kanji.js holds 型紙 (pattern paper) alone, which it keeps for good: a page that shows only
 # those two characters never fetches a CJK companion of megabytes, and a companion is a font
 # of its own, so no text is shaped across it and a Latin face.
@@ -524,7 +526,8 @@ FIRST_LATIN = [(0x20, 0x7E), (0xA0, 0xA0), (0xA9, 0xA9), (0xB2, 0xB2), (0xB7, 0x
 # the features that apply without a request, and tnum, which the site's figures ask for (tabular-nums)
 FIRST_FEATURES = ["kern", "calt", "liga", "ccmp", "locl", "mark", "mkmk", "tnum"]
 FIRST = {"first.js": [("latin", ["sans", "mono"])], "names.js": [("names", ["round", "text", "serif"])],
-         "first-rows.js": [("rows", ["round", "text", "serif"])], "first-map.js": [("latin", ["round"])],
+         "first-rows.js": [("rows", ["round", "text", "serif"])], "first-round.js": [("latin", ["round"])],
+         "first-text.js": [("latin", ["text"])], "first-serif.js": [("latin", ["serif"])],
          "first-features.js": [("features", ["sans"])], "first-about.js": [("quote", ["serif"])],
          "kanji.js": [("kanji", ["cjk"])]}
 # every subset holds a 0: a ch unit is the width of 0 in the element's first available face

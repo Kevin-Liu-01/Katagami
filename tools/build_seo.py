@@ -784,7 +784,11 @@ def write() -> None:
     for p in PAGES:
         body, md = render(p["blocks"])
         crumbs = "".join(f'<span><a href="{h}">{html.escape(n)}</a></span>' for n, h in p["crumbs"][:-1])
-        fragment = (f'<link rel="stylesheet" href="/fonts/katagami.css">\n<link rel="stylesheet" href="/library.css">\n<!-- site:nav -->\n'
+        # a specimen in Round, Text or Serif is set in its first frame from the member's Latin
+        # subset, so the line never wraps again when the face arrives. first.js holds Sans and Mono.
+        faces = [f'<script src="/fonts/first-{k}.js"></script>\n' for k in ("round", "text", "serif")
+                 if any(b[0] == "specimen" and b[1] == FACE[k] for b in p["blocks"])]
+        fragment = (f'<link rel="stylesheet" href="/fonts/katagami.css">\n<link rel="stylesheet" href="/library.css">\n{"".join(faces)}<!-- site:nav -->\n'
                     f'<main>\n  <div class="wrap lib-head" style="padding-block: clamp(36px, 6vw, 72px) 24px">\n'
                     f'    <nav class="lib-crumbs" aria-label="Breadcrumb">{crumbs}</nav>\n    <h1>{html.escape(p["h1"])}</h1>\n    <p>{inline(p["lede"])}</p>\n  </div>\n'
                     f'  <article class="wrap lib-body">\n{body}\n  </article>\n</main>\n<!-- site:footer -->\n'
