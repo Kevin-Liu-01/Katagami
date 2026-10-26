@@ -7,18 +7,21 @@ The site lives in its own repo, Katagami-Website, checked out next to this one
     fonts/KatagamiSans-Italic.woff2 ... each member's Italic (Latin, Greek and Cyrillic)
     fonts/KatagamiSans-thai.woff2 ...   one file per merged script, per member
     fonts/KatagamiCJK{SC,JP,KR}.woff2   the CJK companions
+    fonts/first.css, first-rows.css, first-map.css
+                                    subsets of a member inlined for the first paint
     fonts/katagami.css                  @font-face rules: each member is one family whose
                                     faces split by unicode-range, so a page downloads
                                     only the scripts it shows; the merged scripts and
                                     CJK are declared for italic too, so italic text in
                                     them sets the upright letters
-    data.js     window.KERF: metrics, character tables, features, outlines
+    data.js     window.KERF: metrics, features, the hero's outlines and the Curves plate
+    glyphs.js   each member's character table and the Unicode names, merged into window.KERF
     index.html  page.html wrapped in a document, asset URLs stamped with hashes
     katagami-apply.js  its face table, between the generated-faces markers
 
 Run after tools/build.sh, then commit and push Katagami-Website; Vercel deploys it.
 After editing only a page fragment, `tools/build_site.py --pages` rewraps the pages.
-After a change to the Curves plate's data, `tools/build_site.py --data` writes data.js alone.
+After a change to the Curves plate's data, `tools/build_site.py --data` writes data.js and glyphs.js alone.
 """
 
 from __future__ import annotations
@@ -493,6 +496,80 @@ def web_fonts() -> list[list]:
     return faces
 
 
+# The first-paint faces. Each is a small subset of a member holding the characters a page
+# shows before its fonts load, inlined into a stylesheet the page loads before it paints, so
+# the first frame already sets that text in Katagami. The stylesheets come before
+# katagami.css, and a face declared later is tried first: once a member's full face has
+# loaded it sets the same text with the same outlines, and the text never changes face in
+# front of the reader. first.css serves every page, first-rows.css the member rows and
+# the glyph tiles that set Round, Text and Serif, and first-map.css the map page, which is
+# set in Round.
+# ASCII and the few other characters the pages' first screens show: the non-breaking space,
+# the copyright sign, the superscript two, the middle dot, the multiplication sign, é, ō,
+# the dashes, the curly quotes, the ellipsis, the arrows and the minus sign
+FIRST_LATIN = [(0x20, 0x7E), (0xA0, 0xA0), (0xA9, 0xA9), (0xB2, 0xB2), (0xB7, 0xB7), (0xD7, 0xD7), (0xE9, 0xE9),
+               (0x14D, 0x14D), (0x2013, 0x2014), (0x2018, 0x201D), (0x2026, 0x2026), (0x2190, 0x2193), (0x2197, 0x2197),
+               (0x2212, 0x2212)]
+FIRST_FEATURES = ["kern", "calt", "liga", "ccmp", "locl", "mark", "mkmk"]
+FIRST = {"first.css": ("latin", ["sans", "mono"]), "first-rows.css": ("rows", ["round", "text", "serif"]),
+         "first-map.css": ("latin", ["round"])}
+
+
+def rows_text() -> str:
+    """The text the landing page sets in each member's own face above the fold: the
+    member rows' names and sample lines and the track's stops, and the R the glyph tiles show."""
+    page = (SITE / "page.html").read_text()
+    found = re.findall(r'<span class="m-(?:name|sample)"[^>]*>(.*?)</span>', page)
+    stops = re.search(r'<span class="mt-names"[^>]*>(.*?)</span>\s*<span class="mt-bar"', page, re.S)
+    if stops:
+        found += re.findall(r">([^<]+)<", stops.group(1))
+    text = "".join(found).replace("&amp;", "&").replace("&gt;", ">").replace("&lt;", "<") + "R"
+    return "".join(sorted(set(text)))
+
+
+def exact_range(cps) -> str:
+    runs = []
+    for u in sorted(cps):
+        if runs and u == runs[-1][1] + 1:
+            runs[-1][1] = u
+        else:
+            runs.append([u, u])
+    return ",".join(f"U+{a:X}" if a == b else f"U+{a:X}-{b:X}" for a, b in runs)
+
+
+def first_fonts() -> None:
+    import base64
+    import io
+    latin = {u for lo, hi in FIRST_LATIN for u in range(lo, hi + 1)}
+    for name, (kind, keys) in FIRST.items():
+        out = PUBLIC / "fonts" / name
+        wanted = latin if kind == "latin" else {ord(c) for c in rows_text()}
+        key = hashlib.sha256(repr((sorted(wanted), FIRST_FEATURES, keys)).encode()).hexdigest()[:12]
+        if out.exists() and f"key {key}" in out.read_text()[:120] and all(fresh(FONTS[k], out) for k in keys):
+            continue
+        rules = []
+        for k in keys:
+            font = TTFont(FONTS[k])
+            have = wanted & set(font.getBestCmap())
+            opts = subset.Options()
+            opts.flavor = "woff2"
+            opts.layout_features = FIRST_FEATURES
+            opts.name_IDs = []
+            opts.notdef_outline = True
+            opts.hinting = False
+            sub = subset.Subsetter(opts)
+            sub.populate(unicodes=have)
+            sub.subset(font)
+            font.flavor = "woff2"
+            buf = io.BytesIO()
+            font.save(buf)
+            data = base64.b64encode(buf.getvalue()).decode()
+            rules.append(f'@font-face{{font-family:"{FAMILY[k]}";src:url(data:font/woff2;base64,{data}) format("woff2");'
+                         f"font-weight:{WEIGHTS[k]};font-style:normal;font-display:block;unicode-range:{exact_range(have)}}}")
+            print(f"{name}: {FAMILY[k]} {len(have)} characters, {len(buf.getvalue()) / 1024:.1f} KB")
+        out.write_text(f"/* key {key}: first-paint subsets, generated by tools/build_site.py --first in the Katagami repo */\n" + "\n".join(rules) + "\n")
+
+
 def stale_slices(faces: list[list]) -> list[str]:
     """Delete the font files in the site's fonts/ that no face uses any more."""
     used = {f[1].split("?")[0] for f in faces}
@@ -658,7 +735,7 @@ MEMBER_PATHS = {"sans": "/katagami-sans", "round": "/katagami-round", "text": "/
 
 
 def asset_stamps() -> dict:
-    assets = ["data.js", "katagami-apply.js", "site.css", "site.js", "library.css", "glyph-wall.js", "glyph-wall.css", "map/map.json", "download/files.json",
+    assets = ["data.js", "glyphs.js", "fontify.js", "katagami-apply.js", *(f"fonts/{name}" for name in FIRST), "site.css", "site.js", "library.css", "glyph-wall.js", "glyph-wall.css", "map/map.json", "download/files.json",
               "fonts/katagami.css", *(f"fonts/{name}" for name in (*WOFF2.values(), *WOFF2_ITALIC.values()))]
     return {rel: hashlib.sha256((PUBLIC / rel).read_bytes()).hexdigest()[:10] for rel in assets if (PUBLIC / rel).exists()}
 
@@ -890,14 +967,75 @@ def site_data() -> dict:
     return data
 
 
+# glyphs.js puts its tables into window.KERF as it runs: each member's characters, the
+# Unicode names and the Italic's advances. A member that shares Sans's characters
+# carries only its own advances, and this rebuilds its table from Sans's.
+TABLES_JS = """(function(){var T=__TABLES__,D=window.KERF||(window.KERF={});D.names=T.names;
+for(var k in T.members){var m=T.members[k],o=D[k]||(D[k]={});
+o.chars=m.chars||T.members[m.like].chars.map(function(c,i){return[c[0],c[1],m.adv[i],c[3]]});
+if(m.italic)(o.italic||(o.italic={})).adv=m.italic}
+D.tables=true;document.dispatchEvent(new Event("katagami:tables"))})();
+"""
+
+
+def cmap_runs(chars: list, groups: list) -> dict:
+    """A member's characters as runs, small enough for data.js: the gap before each run of
+    consecutive code points and its length, then each run of one group and its length."""
+    runs, kinds, end = [], [], 0
+    for cp, _, _, group in chars:
+        if runs and cp == end:
+            runs[-1] += 1
+        else:
+            runs += [cp - end, 1]
+        end = cp + 1
+        if kinds and kinds[-2] == groups.index(group):
+            kinds[-1] += 1
+        else:
+            kinds += [groups.index(group), 1]
+    return {"runs": runs, "kinds": kinds}
+
+
+def split_data(data: dict) -> tuple[dict, dict]:
+    """data.js keeps what a page draws from at once: the metrics, the features, the hero's
+    outlines, the Curves plate, each member's characters as runs and its ASCII advances, so
+    the glyph wall can set its rows and its ruler before the tables arrive. glyphs.js holds
+    the character tables and the names, which the inspector, the filters' counts and
+    search need."""
+    core = {k: v for k, v in data.items() if k not in FONTS and k != "names"}
+    members = {}
+    base = data["sans"]["chars"]
+    groups = sorted({c[3] for k in FONTS if k in data for c in data[k]["chars"]})
+    core["cmap"] = {"groups": groups}
+    for key in FONTS:
+        if key not in data:
+            continue
+        m = data[key]
+        core[key] = {"metrics": m["metrics"], "features": m["features"]}
+        if "italic" in m:
+            core[key]["italic"] = {"metrics": m["italic"]["metrics"]}
+        chars = m["chars"]
+        same = key != "sans" and len(chars) == len(base) and all(c[0] == b[0] and c[1] == b[1] and c[3] == b[3] for c, b in zip(chars, base))
+        core["cmap"][key] = "sans" if same else cmap_runs(chars, groups)
+        adv = {c[0]: c[2] for c in chars if c[0] < 0x7F}
+        core[key]["ascii"] = [adv.get(cp) for cp in range(0x20, 0x7F)]
+        entry = {"like": "sans", "adv": [c[2] for c in chars]} if same else {"chars": chars}
+        if "italic" in m:
+            entry["italic"] = m["italic"]["adv"]
+        members[key] = entry
+    return core, {"names": data["names"], "members": members}
+
+
 def write_data() -> None:
-    (PUBLIC / "data.js").write_text("window.KERF = " + json.dumps(site_data(), separators=(",", ":")) + ";\n")
+    core, tables = split_data(site_data())
+    (PUBLIC / "data.js").write_text("window.KERF = " + json.dumps(core, separators=(",", ":")) + ";\n")
+    (PUBLIC / "glyphs.js").write_text(TABLES_JS.replace("__TABLES__", json.dumps(tables, separators=(",", ":"))))
 
 
 def main() -> None:
     (PUBLIC / "fonts").mkdir(parents=True, exist_ok=True)
     faces = web_fonts()
     write_faces(faces)
+    first_fonts()
     for name in stale_slices(faces):
         print(f"removed stale fonts/{name}")
     write_downloads()
@@ -912,5 +1050,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     # --pages rewraps the hand-written pages only, for a change to their markup;
-    # --data writes data.js alone and leaves the web fonts, downloads and pages as they are
-    write_pages() if "--pages" in sys.argv else write_data() if "--data" in sys.argv else main()
+    # --data writes data.js and glyphs.js alone and leaves the web fonts, downloads and pages as they are
+    # --first writes the first-paint subsets alone
+    write_pages() if "--pages" in sys.argv else write_data() if "--data" in sys.argv else first_fonts() if "--first" in sys.argv else main()
