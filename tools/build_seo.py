@@ -589,7 +589,7 @@ def agent_pages(F: dict) -> None:
               ["An index", "[/llms.txt](/llms.txt) lists every page, and [/llms-full.txt](/llms-full.txt) holds every page except the language pages in one file."],
               ["A license it can act on", "The SIL Open Font License 1.1 allows bundling the fonts into a repository, an app or a site, so an agent can add them to a project."],
               ["Stable addresses", "The stylesheet is at `/fonts/katagami.css` with open CORS, and [/download/files.json](/download/files.json) lists every font file with its size."],
-              ["Facts as data", "Each member's metrics, characters and OpenType features are in `/data.js`."],
+              ["Facts as data", "Each member's metrics and OpenType features are in `/data.js`, and its characters and their Unicode names are in `/glyphs.js`."],
               ["Shared line metrics", "Every member has the same line metrics. The ascender is 1984 and the descender is -494 on a 2048-unit em, so swapping one member for another does not move the lines."]]),
           ("h2", "A prompt for a coding agent"),
           ("code", "text", AGENT_PROMPT),
