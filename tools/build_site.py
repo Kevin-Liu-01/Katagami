@@ -735,7 +735,7 @@ MEMBER_PATHS = {"sans": "/katagami-sans", "round": "/katagami-round", "text": "/
 
 
 def asset_stamps() -> dict:
-    assets = ["data.js", "glyphs.js", "fontify.js", "katagami-apply.js", *(f"fonts/{name}" for name in FIRST), "site.css", "site.js", "library.css", "glyph-wall.js", "glyph-wall.css", "map/map.json", "download/files.json",
+    assets = ["data.js", "glyphs.js", "hero.js", "render.js", "fontify.js", "katagami-apply.js", *(f"fonts/{name}" for name in FIRST), "site.css", "site.js", "library.css", "glyph-wall.js", "glyph-wall.css", "map/map.json", "download/files.json",
               "fonts/katagami.css", *(f"fonts/{name}" for name in (*WOFF2.values(), *WOFF2_ITALIC.values()))]
     return {rel: hashlib.sha256((PUBLIC / rel).read_bytes()).hexdigest()[:10] for rel in assets if (PUBLIC / rel).exists()}
 
