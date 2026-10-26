@@ -500,11 +500,11 @@ def web_fonts() -> list[list]:
 # page shows before its fonts load. A script in the page's head adds them to the document's
 # fonts from bytes it carries, and a face made from bytes is ready at once, so the first
 # frame already sets that text in Katagami and no text waits or changes face. A face added
-# by script is tried before the stylesheet's faces of its family, so once a member's full
-# face has loaded, because the page asked for a character the subset lacks or the reader
-# opened a tester, the script removes that member's subsets and the full face sets the same
-# text with the same outlines. A page that shows only the subsets' characters never fetches
-# the full face. first.js serves every page with Sans and Mono. names.js holds "Katagami Round
+# by script is tried before the stylesheet's faces of its family, and it keeps setting its
+# characters with the outlines and metrics of the full face, which a page fetches only for a
+# character the subset lacks. A part of a page that needs the whole font, such as the type
+# tester with its features, calls KatagamiFirst.release(family): the full face loads and the
+# subsets step aside, and the full face sets the same text with the same outlines. first.js serves every page with Sans and Mono. names.js holds "Katagami Round
 # Name", "Text Name" and "Serif Name", the members' names alone for the lists that set each
 # name in its own face (the footer, the header's picker, the download table, the about page),
 # which no full face replaces: the pages that show them first hold their first paint for it,
@@ -530,14 +530,11 @@ FIRST = {"first.js": [("latin", ["sans", "mono"])], "names.js": [("names", ["rou
 # every subset holds a 0: a ch unit is the width of 0 in the element's first available face
 NAMES_TEXT = "Katagami Sans Round Text Serif Mono Italic 0"
 KANJI_TEXT = "型紙"
-# Adds the faces, and hands each member over to its full face once that has loaded: `keep`
-# faces stay for good. KatagamiFirst.release(family) loads the full face and hands over, for
-# a part of a page that needs the whole font, such as the type tester.
+# Adds the faces. KatagamiFirst.release(family) loads the full face and hands the member over
+# to it; `keep` faces are never handed over.
 FIRST_RUNTIME = r"""(function(){var K=window.KatagamiFirst;if(!K){K=window.KatagamiFirst={faces:[],
 release:function(fam){var core=null;document.fonts.forEach(function(x){if(!core&&K.faces.indexOf(x)<0&&x.style=="normal"&&x.family.replace(/["']/g,"")==fam&&/^U\+0-/i.test(x.unicodeRange))core=x});
-if(!core)return Promise.resolve();return core.load().then(function(){K.faces=K.faces.filter(function(f){if(f.family!=fam)return true;document.fonts.delete(f);return false})},function(){})}};
-document.addEventListener("DOMContentLoaded",function(){document.fonts.forEach(function(x){var fam=x.family.replace(/["']/g,"");
-if(K.faces.indexOf(x)<0&&x.style=="normal"&&/^U\+0-/i.test(x.unicodeRange))x.loaded.then(function(){K.release(fam)},function(){})})})}
+if(!core)return Promise.resolve();return core.load().then(function(){K.faces=K.faces.filter(function(f){if(f.family!=fam)return true;document.fonts.delete(f);return false})},function(){})}}}
 K.done=K.done||{};K.add=K.add||function(fam,w,range,keep,b){try{var s=atob(b),u=new Uint8Array(s.length);for(var i=0;i<s.length;i++)u[i]=s.charCodeAt(i);
 var f=new FontFace(fam,u.buffer,{weight:w,unicodeRange:range});document.fonts.add(f);if(!keep)K.faces.push(f)}catch(e){}};
 """
