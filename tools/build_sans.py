@@ -1087,9 +1087,9 @@ FACETS_KEY = "com.kerf.facets"
 FACET_PREV, FACET_NEXT = "facet:prev", "facet:next"  # a facet's foot, its outer corner the point before it or after it
 FACET = 0.45  # the facet's height, as a share of the cut's length (about a stem serif's thickness at Regular and Black)
 RIGHT_EXITS = False  # whether a stroke rising out at the foot of a letter's right side (c, C, e, t) takes a facet
-# capitals whose curved ends both stay a level cut, the way C's foot already ends: C, S,
-# Cyrillic Es, Dze and Ukrainian Ie, and the lunate sigma; their alternates and small capitals follow
-PLAIN_ENDS = {"C", "S", "afii10035", "afii10054", "afii10053", "uni03F9"}
+# letters whose curved ends both stay a level cut, the way C's foot already ends: C, S, c, s and G,
+# the letters and signs drawn the same way, and the reversed C; their alternates and small capitals follow
+PLAIN_ENDS = set("CSСЅЄЭϹ€" "csєᶜˢʗ" "Gɢ" "Ↄↄɔ")
 
 def _ink_side(font, g, a, q) -> tuple[bool, bool]:
     """Whether the ink lies on the left of the cut from a to q and not on its right,
@@ -1123,7 +1123,7 @@ def plan_terminals(fonts, plan: dict) -> dict:
     stroke rising out at the foot of a letter's right side (c, C, e, ε, the
     hook of t) ends plain, as in a text face, and so does the lower end of
     an opening whose upper end has a face on the same side (ɔ, Ↄ). The
-    capitals in PLAIN_ENDS end plain at both ends.
+    letters in PLAIN_ENDS end plain at both ends.
     Returns {glyph: [(kind, contour, i, j, outer, way, scale)]}: for a
     level cut the corner on the outside of the letter, for an upright cut
     the corner below or above it; way is 1 where the cut faces up and -1
@@ -1137,13 +1137,14 @@ def plan_terminals(fonts, plan: dict) -> dict:
     names = [g.name for g in ref if g.contours and g.width and (g.name in drawn or (not g.unicodes and g.name.split(".")[0] in drawn))]
     names += sorted(serif_parts(ref) - set(names))
     metrics = (ref["x"].getBounds(ref).yMax, ref["H"].getBounds(ref).yMax)
-    cmap = {u: g.name for g in ref for u in g.unicodes}
     def plain(name):
         base = name.split(".")[0]
-        if base in PLAIN_ENDS:
-            return True
-        up = chr(ref[base].unicodes[0]).upper() if name.endswith(".smcp") and base in ref and ref[base].unicodes else ""
-        return len(up) == 1 and cmap.get(ord(up)) in PLAIN_ENDS
+        if ref[name].unicodes:
+            return chr(ref[name].unicodes[0]) in PLAIN_ENDS
+        if base not in ref or not ref[base].unicodes:
+            return False
+        ch = chr(ref[base].unicodes[0])
+        return (ch.upper() if name.endswith(".smcp") else ch) in PLAIN_ENDS
     out = {}
     for name in names:
         if plain(name):
