@@ -237,7 +237,8 @@ def member_pages(F: dict, C: dict, M: dict) -> None:
                   "Quarter arcs reach 0.59 of the way to their corners. No other member has rounder arcs."]),
         "serif": ("a free serif font with rectangular serifs",
                   "Katagami Serif is Katagami Text with rectangular serifs. Each serif ends square and meets the stroke in a short bracket.",
-                  ["Each serif reaches 0.65 of a stem past the stroke, and its thickness is 0.6 of the H crossbar's thickness.",
+                  ["Each serif reaches 0.85 of a stem past the stroke, and its thickness is 0.8 of the H crossbar's thickness.",
+                   "At Regular the thin side of o is 0.48 of its stem, so horizontal strokes are thinner than in Katagami Text.",
                    "A short bracket joins the back of the serif to the side of the stroke, so the serifs of diagonals meet the diagonal.",
                    "The top of a lowercase stem takes a triangular serif.",
                    "The arms of E, F, L, T and Z end in short vertical serifs.",
@@ -460,10 +461,10 @@ def guide_pages(F: dict, C: dict, M: dict, T: dict) -> None:
           ("h2", "Katagami Text"), ("specimen", FACE["text"], "A katagami is a paper stencil for dyeing cloth.", 30, 400),
           ("p", f"Katagami Text has an x-height of {text['xh'] / text['cap']:.2f} of its cap height. It is set 4 percent smaller and tighter, and its bold is drawn lighter. Weight 700 sits at 640 on the design axis. The [Katagami Text page](/katagami-text) has the full specifications."),
           ("h2", "Katagami Serif"), ("specimen", FACE["serif"], "A katagami is a paper stencil for dyeing cloth.", 30, 400),
-          ("p", "Katagami Serif is Katagami Text with rectangular serifs and a light contrast. It is for text that should read as a serif. The [Katagami Serif page](/katagami-serif) has the full specifications."),
+          ("p", "Katagami Serif is Katagami Text with rectangular serifs and moderate contrast. It is for text that should read as a serif. The [Katagami Serif page](/katagami-serif) has the full specifications."),
           ("table", ["Font", "License", "Weights", "Variable axes", "Notable features"],
            [["Katagami Text", "SIL Open Font License 1.1", "100 to 900", "wght", "Lower x-height, tighter spacing, lighter bold"],
-            ["Katagami Serif", "SIL Open Font License 1.1", "100 to 900", "wght", "Rectangular serifs, light contrast"],
+            ["Katagami Serif", "SIL Open Font License 1.1", "100 to 900", "wght", "Rectangular serifs, moderate contrast"],
             *[row(n) for n in ("Source Serif 4", "IBM Plex Serif", "NewsSerif", "Signifier")]])],
          [("Library", "/library"), ("Guides", "/library#guides"), ("Fonts for long reading", "/fonts-for/reading")], image="guide", group="Guides")
     st = M["stats"]["sans"]

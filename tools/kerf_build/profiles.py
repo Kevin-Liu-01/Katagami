@@ -130,7 +130,7 @@ TEXT = Profile(
 )
 
 # Katagami Text with bracketed serifs, after NewsSerif, kept close to Text:
-# Text's outlines and widths with a light contrast, serifs that run flat to a
+# Text's outlines and widths with moderate contrast, serifs that run flat to a
 # short flat end and curve back into the stroke, lowercase heads cut on a slant,
 # and spurs on arms and level terminals. SPEC.md, Katagami Serif.
 SERIF = replace(
@@ -138,11 +138,11 @@ SERIF = replace(
     key="serif",
     family="Katagami Serif",
     file_stem="KatagamiSerif",
-    serif_reach=0.65,  # the square end, past each side of a stroke, at Regular
-    serif_depth=0.6,  # of the H crossbar
+    serif_reach=0.85,  # the square end, past each side of a stroke, at Regular
+    serif_depth=0.8,  # of the H crossbar
     serif_head=0.35,  # stems the head serif's tip drops
     serif_beak=0.55,  # stems
-    serif_contrast=(("Regular", 0.3), ("Black", 0.3)),  # of the way to the next lighter master's y
+    serif_contrast=(("Regular", 0.6), ("Black", 0.3)),  # of the way to the next lighter master's y
 )
 
 PROFILES = {p.key: p for p in (SANS, ROUND, TEXT, SERIF)}

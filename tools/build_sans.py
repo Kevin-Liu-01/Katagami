@@ -30,6 +30,7 @@ from pathlib import Path
 from ufoLib2.objects import Contour, Point
 
 from fontTools.designspaceLib import AxisDescriptor, DesignSpaceDocument, InstanceDescriptor, SourceDescriptor
+from fontTools.pens.basePen import BasePen
 
 sys.path.insert(0, str(Path(__file__).parent))
 from kerf_build.fontops import (  # noqa: E402
@@ -863,11 +864,13 @@ def add_contrast(fonts, amounts: dict) -> None:
     the way from its y to the same point's y in the next lighter master (Regular
     toward Thin, Black toward Regular), so vertical stems keep their width and
     horizontal strokes take part of the lighter master's. A neighbouring master
-    keeps the joins of diagonals close to where they were. Thin is unchanged."""
+    keeps the joins of diagonals close to where they were. A dot keeps its shape
+    and moves with its centre. Thin is unchanged."""
     order = [s for s in ("Thin", "Regular", "Black") if s in fonts]
     lighter = {heavy: fonts[light] for light, heavy in zip(order, order[1:])}
     snap = {style: {g.name: ([[pt.y for pt in c.points] for c in g.contours], [a.y for a in g.anchors],
                              [c.transformation[5] for c in g.components]) for g in f} for style, f in fonts.items()}
+    dots = _dots(fonts["Regular"])
     for style, f in fonts.items():
         amount = amounts.get(style, 0.0)
         if style not in lighter or not amount:
@@ -875,7 +878,12 @@ def add_contrast(fonts, amounts: dict) -> None:
         light = {name: snap[order[order.index(style) - 1]][name] for name in snap[style]}
         for g in f:
             ys, ays, cys = light[g.name]
-            for c, cy in zip(g.contours, ys):
+            for ci, (c, cy) in enumerate(zip(g.contours, ys)):
+                if ci in dots.get(g.name, ()):
+                    shift = amount * (min(cy) + max(cy) - min(pt.y for pt in c.points) - max(pt.y for pt in c.points)) / 2
+                    for pt in c.points:
+                        pt.y += shift
+                    continue
                 for pt, y in zip(c.points, cy):
                     pt.y += amount * (y - pt.y)
             for an, y in zip(g.anchors, ays):
@@ -883,6 +891,30 @@ def add_contrast(fonts, amounts: dict) -> None:
             for comp, y in zip(g.components, cys):
                 xx, xy, yx, yy, dx, dy = comp.transformation
                 comp.transformation = (xx, xy, yx, yy, dx, dy + amount * (y - dy))
+
+
+DOT_SIZE = 1.8  # stems (Regular): the most a dot measures across
+
+
+def _dots(font) -> dict[str, set[int]]:
+    """Each glyph's dots, by contour index: outer contours at most DOT_SIZE stems
+    across, about as wide as tall, whose boxes touch no other contour's (the dots
+    of i, j, ! and ?, periods, diaereses)."""
+    sw = stem(font)
+    out = {}
+    for g in font:
+        boxes = [(min(p.x for p in c.points), min(p.y for p in c.points), max(p.x for p in c.points), max(p.y for p in c.points))
+                 for c in g.contours]
+        for i, c in enumerate(g.contours):
+            x0, y0, x1, y1 = boxes[i]
+            w, h = x1 - x0, y1 - y0
+            pts = [(p.x, p.y) for p in c.points]
+            outer = sum(xa * yb - xb * ya for (xa, ya), (xb, yb) in zip(pts, pts[1:] + pts[:1])) > 0
+            if not (outer and 0 < w <= DOT_SIZE * sw and 0 < h <= DOT_SIZE * sw and 0.75 <= w / h <= 1.33):
+                continue
+            if all(b[2] < x0 or b[0] > x1 or b[3] < y0 or b[1] > y1 for j, b in enumerate(boxes) if j != i):
+                out.setdefault(g.name, set()).add(i)
+    return out
 
 
 SERIF_TIP = 0.3  # the flat end of a head serif, as a share of its thickness
@@ -894,9 +926,10 @@ ARM_WIDTH = 0.4  # an arm's serif, in stems
 # Serif thickness per master, times serif_depth's share of the H crossbar: Thin's
 # serifs as thick as its hairlines, so they hold at text sizes; Black's a little
 # lighter than Regular's, so the heavy weights stay a text face and not a slab.
-SERIF_DEPTH_SCALE = (1.65, 1.0, 0.8)  # Thin, Regular, Black
-SERIF_REACH_POWER = 0.3  # toward Thin and Black a serif's reach scales with the stem to this power
-TIP_CLEAR = 0.15  # stems (Regular) a serif tip keeps from the edge of the advance
+SERIF_DEPTH_SCALE = (1.24, 1.0, 0.6)  # Thin, Regular, Black
+SERIF_REACH_POWER = (0.3, 0.0)  # toward Thin and toward Black, a serif's reach scales with the stem to this power
+TIP_CLEAR = 0.23  # stems (Regular) a serif tip keeps from the edge of the advance, before the profile's spacing
+SERIF_CLEAR = 0.25  # stems (Regular) of white a serif leaves to other ink it does not join
 SERIF_FIT = 0.75  # share of the serifs' reach past a letter's ink taken back by narrowing the letter, stems kept
 HEAD_BY_REACH = True  # a head serif's drop follows the reach (Regular stem times the reach scale), not the master's stem
 
@@ -919,6 +952,43 @@ def _side_x(side, y: float) -> float:
         return x0
     u = min(1.0, max(0.0, (y - y0) / (y1 - y0)))
     return x0 + u * (x1 - x0)
+
+
+def _ink_runs(font, g, y: float) -> list[tuple[float, float]]:
+    """The spans of g's ink along height y, left to right, overlapping contours merged."""
+    class Flat(BasePen):
+        def __init__(self):
+            super().__init__(font)
+            self.segs, self.cur, self.start = [], None, None
+        def _moveTo(self, p):
+            self.cur = self.start = p
+        def _lineTo(self, p):
+            self.segs.append((self.cur, p))
+            self.cur = p
+        def _curveToOne(self, a, b, c):
+            p0 = self.cur
+            for k in range(1, 17):
+                s = k / 16
+                m = 1 - s
+                q = tuple(m ** 3 * p0[i] + 3 * m * m * s * a[i] + 3 * m * s * s * b[i] + s ** 3 * c[i] for i in (0, 1))
+                self.segs.append((self.cur, q))
+                self.cur = q
+        def _closePath(self):
+            if self.cur != self.start:
+                self.segs.append((self.cur, self.start))
+            self.cur = self.start
+    pen = Flat()
+    g.draw(pen)
+    cross = sorted((x0 + (y - y0) * (x1 - x0) / (y1 - y0), 1 if y1 > y0 else -1)
+                   for (x0, y0), (x1, y1) in pen.segs if min(y0, y1) <= y < max(y0, y1))
+    out, wind, start = [], 0, 0.0
+    for x, d in cross:
+        if not wind:
+            start = x
+        wind += d
+        if not wind:
+            out.append((start, x))
+    return out
 
 
 def _bracket(side, y: float, s: int, t: float, tip: float, way: int) -> list:
@@ -985,10 +1055,11 @@ def cut_serifs(fonts, plan: dict, reach: float, depth: float, head_drop: float, 
         ys = sorted({round(pt.y) for c in font["H"].contours for pt in c.points if 0 < round(pt.y) < round(font["H"].getBounds(font).yMax)})
         return ys[-1] - ys[0] if len(ys) >= 2 else stem(font)
     gap = 0.5 * sw_ref  # the least white left between two serifs, inside a letter or between two
+    ink_clear = SERIF_CLEAR * sw_ref
     parts = serif_parts(fonts["Regular"])
     for style, f in fonts.items():
         sw = stem(f)
-        k = (sw / sw_ref) ** SERIF_REACH_POWER
+        k = (sw / sw_ref) ** SERIF_REACH_POWER[sw > sw_ref]
         t = depth * crossbar(f) * dict(zip(("Thin", "Regular", "Black"), SERIF_DEPTH_SCALE)).get(style, 1.0)
         before = snapshot(f)
         widened = {}
@@ -1022,6 +1093,28 @@ def cut_serifs(fonts, plan: dict, reach: float, depth: float, head_drop: float, 
                         s1[5] = min(s1[5], max(0, room))
                     elif s2[4]:
                         s2[4] = min(s2[4], max(0, room))
+            # a serif that does not run SERIF_CLEAR into other ink on its line stops SERIF_CLEAR short of it
+            # (the foot of ß, the arm of a narrowed k)
+            for sp in spans:
+                if sp[6]:
+                    continue
+                band = [sp[2] + (-u if sp[3] else u) * t for u in (0.1, 0.5, 0.9)]
+                lines = [_ink_runs(f, g, yb) for yb in band]
+                for side in (4, 5):
+                    if not sp[side]:
+                        continue
+                    if side == 4:
+                        tip = sp[0] - sp[4]
+                        edges = [max(near) for yb, line in zip(band, lines)
+                                 if (near := [b for a, b in line if b < _side_x(sp[9], yb) - 1])]
+                        if edges and not all(e >= tip + ink_clear for e in edges):
+                            sp[4] = min(sp[4], max(0.0, sp[0] - max(edges) - ink_clear))
+                    else:
+                        tip = sp[1] + sp[5]
+                        edges = [min(near) for yb, line in zip(band, lines)
+                                 if (near := [a for a, b in line if a > _side_x(sp[10], yb) + 1])]
+                        if edges and not all(e <= tip - ink_clear for e in edges):
+                            sp[5] = min(sp[5], max(0.0, min(edges) - sp[1] - ink_clear))
             shapes = []
             for x0, x1, y, top, ol, orr, head, corner, o, lside, rside, has_l, has_r in spans:
                 if head:

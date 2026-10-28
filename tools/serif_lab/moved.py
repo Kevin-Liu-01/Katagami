@@ -380,7 +380,7 @@ def cut_terminals(fonts, plan: dict, depth: float, reach: float) -> None:
         return ys[-1] - ys[0] if len(ys) >= 2 else stem(font)
     sizes = {}
     for style, f in fonts.items():
-        k = (stem(f) / sw_ref) ** SERIF_REACH_POWER
+        k = (stem(f) / sw_ref) ** SERIF_REACH_POWER[stem(f) > sw_ref]
         t = depth * crossbar(f) * dict(zip(("Thin", "Regular", "Black"), SERIF_DEPTH_SCALE)).get(style, 1.0)
         sizes[style] = (t, k)
 
