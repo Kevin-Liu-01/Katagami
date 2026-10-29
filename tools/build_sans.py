@@ -27,10 +27,11 @@ import sys
 import unicodedata
 from pathlib import Path
 
-from ufoLib2.objects import Contour, Point
+from ufoLib2.objects import Component, Contour, Point
 
 from fontTools.designspaceLib import AxisDescriptor, DesignSpaceDocument, InstanceDescriptor, SourceDescriptor
 from fontTools.pens.basePen import BasePen
+from fontTools.pens.recordingPen import DecomposingRecordingPen
 
 sys.path.insert(0, str(Path(__file__).parent))
 from kerf_build.fontops import (  # noqa: E402
@@ -42,6 +43,7 @@ from kerf_build.outline import (  # noqa: E402
     XMap,
     apply_squaring, embolden_x, embolden_y, handles, keep_stroke, plan_corners, plan_squaring, round_corners, straighten_runs,
 )
+from kerf_build.missing import add_missing, complete_anchors, declare_scripts, patch_ccmp, turned_small_f  # noqa: E402
 from kerf_build.profiles import PROFILES, Profile  # noqa: E402
 
 FEATURES = ROOT / "vendor" / "inter" / "src" / "features"
@@ -106,7 +108,10 @@ def promote_square_punctuation(fonts) -> None:
     pairs = [(a, b) for a, b in pairs if a in ref]
     for f in fonts.values():
         for a, b in pairs:
+            mark = f[a].width == 0
             swap_glyph_outlines(f, a, b)
+            if mark:
+                f[a].width = 0  # Inter's dotbelow.ss07 has an advance; the combining dot below must not
         f.features.text = f.features.text.replace('name "Square punctuation";', 'name "Round punctuation";')
 
 
@@ -344,6 +349,37 @@ def straighten_q(fonts) -> None:
 
 
 SMALL_CAP_TRACK = 0.03  # of the em, added around each small capital
+SMALL_CAP_MARKS = ("_top", "_bottom", "_ogonek", "_cedilla")  # the anchors a mark attaches by
+# ɤ, ѿ and ỻ close their counters at Black, the strokes of ⱥ, ƀ, ǥ and ҹ fill them,
+# and ѹ, ŀ and ҋ run their parts together
+SMALL_CAP_SKIP = (0x0264, 0x047F, 0x1EFB, 0x2C65, 0x0180, 0x01E5, 0x04B9, 0x0479, 0x0140, 0x048B)
+SMALL_CAP_FLAT = (0x044D, 0x0454)  # э and є, whose openings close at Black when their bars are emboldened
+
+
+def letter_marks(f, name):
+    """The glyph under name's marks and each mark component with the anchor it attaches to,
+    or None unless name is a letter set from an unmoved component and marks. A glyph that is
+    one unmoved component (ӓ is ä) is followed, and a base that is itself a letter with marks
+    is opened, so į, a dotless i with an ogonek under i's dot, gives the dotless i with the
+    ogonek; the dot of i or j is dropped."""
+    g = f[name]
+    if g.contours or not g.components or tuple(g.components[0].transformation) != (1, 0, 0, 1, 0, 0):
+        return None
+    if len(g.components) == 1:
+        return letter_marks(f, g.components[0].baseGlyph)
+    marks = []
+    for c in g.components[1:]:
+        attach = next((a.name[1:] for a in f[c.baseGlyph].anchors if a.name in SMALL_CAP_MARKS), None)
+        if attach is None:
+            return None
+        marks.append((c, attach))
+    base = g.components[0].baseGlyph
+    inner = letter_marks(f, base)
+    if inner:
+        base, marks = inner[0], inner[1] + marks
+    if base in ("idotless", "jdotless"):
+        marks = [(c, a) for c, a in marks if not c.baseGlyph.startswith("dotaccentcomb")]
+    return base, marks
 
 
 def small_caps(fonts) -> None:
@@ -352,8 +388,12 @@ def small_caps(fonts) -> None:
     Inter has none (its 13 .sc glyphs are phonetic letters). Each small cap is
     its capital scaled to the x-height, emboldened back to the lowercase stem
     (and 0.4 of that on horizontal strokes), and tracked a little wider.
-    Accented small caps are built like the accented lowercase: the small-cap
-    base with the same marks, moved by the difference in top anchors.
+    Accented small caps are built like the accented lowercase: the small cap of
+    the capital's base with the lowercase's marks, each moved by the difference
+    in the anchor it attaches to, and the capital's ogonek scaled with the letter,
+    because the lowercase shapes its own to its letter. A capital set from other capitals (Ĳ, Ы) is set
+    from their small caps. Every other letter (ø, ł, ď, and α, whose capital is
+    a component of A) is drawn from its capital, components drawn in.
     """
     ref = fonts["Regular"]
     cmap = {u: g.name for g in ref for u in g.unicodes}
@@ -364,10 +404,56 @@ def small_caps(fonts) -> None:
         up = chr(g.unicodes[0]).upper()
         if len(up) == 1 and ord(up) in cmap and cmap[ord(up)] != g.name:
             pairs[g.name] = cmap[ord(up)]
-    drawn = [lc for lc, uc in pairs.items() if ref[uc].contours and not ref[uc].components]
-    built = [lc for lc in pairs if lc not in drawn and ref[lc].components and ref[lc].components[0].baseGlyph in drawn
-             and all(not ref[c.baseGlyph].width for c in ref[lc].components[1:])]
+    if 0x00DF in cmap and 0x1E9E in cmap:
+        pairs[cmap[0x00DF]] = cmap[0x1E9E]  # ß capitalises to SS; its small capital is ẞ
+    for u in SMALL_CAP_SKIP:
+        pairs.pop(cmap.get(u), None)
     anchor = lambda g, name: next(((a.x, a.y) for a in g.anchors if a.name == name), None)  # noqa: E731
+    shape = lambda m: m and (m[0], [(c.baseGlyph, a) for c, a in m[1]])  # noqa: E731
+    drawn = [lc for lc, uc in pairs.items() if ref[uc].contours and not ref[uc].components]
+    marked = {lc: letter_marks(ref, lc) for lc in pairs if lc not in drawn}
+    marked = {lc: m for lc, m in marked.items() if m and m[1]}  # ј is j, its dot dropped: a letter with no marks
+
+    def parts(uc):
+        """The capitals a capital is set from side by side (Ĳ is I and J), or None."""
+        g = ref[uc]
+        if g.contours or len(g.components) < 2 or any(tuple(c.transformation[:4]) != (1, 0, 0, 1) for c in g.components):
+            return None
+        names = [c.baseGlyph for c in g.components]
+        letters = all(ref[n].unicodes and unicodedata.category(chr(ref[n].unicodes[0])) == "Lu" for n in names)
+        return names if letters else None
+
+    # the rest (ø, ł, ď, œ, ư with its horn, and α, в and the other letters whose
+    # capital is a component) are drawn from their capitals' outlines, components drawn in
+    redrawn = [lc for lc in pairs if lc not in drawn and lc not in marked]
+    small = {}  # capital -> the lowercase whose small capital draws it
+    for lc in drawn + redrawn:
+        small.setdefault(pairs[lc], lc)
+    have = set(drawn) | set(redrawn)
+
+    def plan(f, lc):
+        """The base lowercase, the small capital it sits on, its marks and the capital's marks."""
+        b, marks = letter_marks(f, lc)
+        cap = letter_marks(f, pairs[lc])
+        if not cap:  # Ἀ moves its A to make room for the breathing
+            return b, b if b in have else None, marks, []
+        # ӱ is ÿ with a dieresis, and its small capital is У's
+        return b, b if pairs.get(b) == cap[0] and b in have else small.get(cap[0]), marks, cap[1]
+
+    # an accented letter is set when every master has the same marks, the capital's base
+    # has a small capital, and each mark has its anchor on both
+    built = []
+    for lc, m in marked.items():
+        if not all(shape(letter_marks(f, lc)) == shape(m) for f in fonts.values()):
+            continue
+        b, base, marks, _ = plan(ref, lc)
+        if base and all(anchor(ref[b], a) and anchor(ref[pairs[base]], a) for _, a in marks):
+            built.append(lc)
+    for lc in built:
+        small.setdefault(pairs[lc], lc)
+    compound = [lc for lc in redrawn if parts(pairs[lc]) and all(n in small and small[n] != lc for n in parts(pairs[lc]))]
+    redrawn = [lc for lc in redrawn if lc not in compound]
+    flat = {cmap[u] for u in SMALL_CAP_FLAT if u in cmap}
     for f in fonts.values():
         upm, xh, cap = f.info.unitsPerEm, f.info.xHeight, f.info.capHeight
         lc_stem = stem(f)
@@ -377,39 +463,53 @@ def small_caps(fonts) -> None:
         dy = 0.4 * dx  # less on horizontals, or Black's bars close the counters of E and S
         k = (xh - dy) / cap
         track = SMALL_CAP_TRACK * upm
-        for lc in drawn:
+        for lc in drawn + redrawn:
             src = f[pairs[lc]]
             g = f.newGlyph(f"{lc}.smcp")
-            for c in src.contours:
-                g.appendContour(copy.deepcopy(c))
+            pen = DecomposingRecordingPen(f, reverseFlipped=True)  # И is N mirrored; emboldening needs its contours the right way round
+            src.draw(pen)
+            pen.replay(g.getPen())
+            kk, ddy = (xh / cap, 0) if lc in flat else (k, dy)
             for c in g.contours:
                 for pt in c.points:
-                    pt.x, pt.y = pt.x * k, pt.y * k
+                    pt.x, pt.y = pt.x * kk, pt.y * kk
             embolden_x(g, dx)
-            embolden_y(g, dy)
+            embolden_y(g, ddy)
             for c in g.contours:
                 for pt in c.points:
-                    pt.x, pt.y = pt.x + dx / 2 + track / 2, pt.y + dy / 2
+                    pt.x, pt.y = pt.x + dx / 2 + track / 2, pt.y + ddy / 2
+            for a in src.anchors:
+                g.appendAnchor({"name": a.name, "x": a.x * kk + dx / 2 + track / 2, "y": a.y * kk + ddy / 2})
+            g.width = round(src.width * kk + dx + track)
+        for lc in compound:
+            src = f[pairs[lc]]
+            g = f.newGlyph(f"{lc}.smcp")
+            for i, c in enumerate(src.components):
+                x = c.transformation[4] * k + i * (dx + track)
+                g.components.append(Component(f"{small[c.baseGlyph]}.smcp", (1, 0, 0, 1, round(x), round(c.transformation[5] * k))))
             for a in src.anchors:
                 g.appendAnchor({"name": a.name, "x": a.x * k + dx / 2 + track / 2, "y": a.y * k + dy / 2})
-            g.width = round(src.width * k + dx + track)
+            g.width = round(src.width * k + len(src.components) * (dx + track))
         for lc in built:
-            src = f[lc]
-            base = src.components[0].baseGlyph
+            b, base, marks, cap_marks = plan(f, lc)
+            sc = f[f"{base}.smcp"]
             g = f.newGlyph(f"{lc}.smcp")
-            g.width = f[f"{base}.smcp"].width
-            old, new = anchor(f[base], "top"), anchor(f[f"{base}.smcp"], "top")
-            shift = (new[0] - old[0]) if old and new else (g.width - f[base].width) / 2
-            for i, c in enumerate(src.components):
-                comp = copy.deepcopy(c)
-                if i == 0:
-                    comp.baseGlyph = f"{base}.smcp"
-                else:
-                    t = list(comp.transformation)
-                    t[4] += shift
-                    comp.transformation = tuple(t)
-                g.components.append(comp)
-    made = drawn + built
+            g.width = sc.width
+            g.components.append(Component(sc.name))
+            ogonek = next((c for c, a in cap_marks if a == "ogonek"), None)
+            for c, a in marks:
+                # the capital's ogonek scaled with the letter: the lowercase's is shaped to its letter (ę's hangs from the bowl)
+                if a == "ogonek" and ogonek:
+                    (x1, y1), (mx, my) = anchor(sc, a), anchor(f[ogonek.baseGlyph], "_ogonek")
+                    g.components.append(Component(ogonek.baseGlyph, (k, 0, 0, k, round(x1 - k * mx), round(y1 - k * my))))
+                    continue
+                (x0, y0), (x1, y1) = anchor(f[b], a), anchor(sc, a)
+                t = list(c.transformation)
+                t[4], t[5] = t[4] + x1 - x0, t[5] + y1 - y0
+                g.components.append(Component(c.baseGlyph, tuple(t)))
+            for a in sc.anchors:
+                g.appendAnchor({"name": a.name, "x": a.x, "y": a.y})
+    made = drawn + redrawn + compound + built
     lc_names = " ".join(made)
     sc_names = " ".join(f"{lc}.smcp" for lc in made)
     # one small cap per capital: dotless i, long s and final sigma share theirs with i, s and sigma
@@ -418,6 +518,29 @@ def small_caps(fonts) -> None:
         upper.setdefault(pairs[lc], f"{lc}.smcp")
     uc_names = " ".join(upper)
     uc_sc_names = " ".join(upper.values())
+    # Turkish and Azerbaijani i keeps its dot in small capitals, as İ does
+    dotted = "i.smcp" in ref and 0x0130 in cmap
+    for f in fonts.values():
+        if dotted:
+            sc, dot = f["i.smcp"], f["dotaccentcomb"]
+            top = next(a for a in sc.anchors if a.name == "top")
+            mark = next(a for a in dot.anchors if a.name == "_top")
+            g = f.newGlyph("i.smcp.TRK")
+            g.width = sc.width
+            g.components.append(Component("i.smcp"))
+            g.components.append(Component("dotaccentcomb", (1, 0, 0, 1, round(top.x - mark.x), round(top.y - mark.y))))
+    turkic = f"""
+feature smcp {{
+  script latn;
+  language TRK;
+  sub i.smcp by i.smcp.TRK;
+  language AZE;
+  sub i.smcp by i.smcp.TRK;
+}} smcp;
+feature c2sc {{
+  sub {cmap[0x0130]} by i.smcp.TRK;
+}} c2sc;
+""" if dotted else ""
     for f in fonts.values():
         f.features.text += f"""
 
@@ -432,7 +555,7 @@ feature smcp {{
 feature c2sc {{
   sub @kerfUpperSC by @kerfUpperSmallCaps;
 }} c2sc;
-"""
+""" + turkic
 
 
 def scale_outlines(fonts, k: float) -> None:
@@ -1692,11 +1815,15 @@ def transform(p: Profile, italic: bool = False) -> tuple[dict, dict]:
     if italic:
         decompose_transformed(fonts)
         shear(fonts, -slant_tangent(fonts["Regular"]), fonts["Regular"].info.xHeight / 2)
+    add_missing(fonts)
+    declare_scripts(fonts)
     if p.square_punctuation:
         promote_square_punctuation(fonts)
     if p.promote:
         promote_alternates(fonts, p.promote, FEATURES)
         relabel_features(fonts, p.promote)
+    # after the swaps, which carry each alternate's own anchors into the default
+    complete_anchors(fonts)
     shape_curves(fonts, p)
     square_two(fonts, p.two_square)
     if p.terminal_angle is not None:
@@ -1722,6 +1849,7 @@ def transform(p: Profile, italic: bool = False) -> tuple[dict, dict]:
         cut_serifs(fonts, plan, p.serif_reach, p.serif_depth, p.serif_head, p.serif_beak)
     straighten_q(fonts)
     small_caps(fonts)
+    turned_small_f(fonts)
     if p.serif_reach:
         # after the serifs (a facet adds a point, and their plan holds point numbers) and after the
         # small capitals, so each takes its own facets on its own curve, not its capital's re-emboldened
@@ -1749,6 +1877,8 @@ def build(p: Profile, italic: bool = False) -> Path:
         faceted = set(fonts["Regular"].lib.get(FACETS_KEY, [])) ^ set(roman["Regular"].lib.get(FACETS_KEY, []))
         replaced = sorted(name for name, d in distances.items() if d > ITALIC_MATCH or name in faceted)
         romanize(fonts, roman, replaced)
+        for f in fonts.values():
+            f["notequal"].width = f["equal"].width  # ≠ takes the roman's a unit narrower than the Italic's other math signs
         corners = {name: plan for name, plan in corners.items() if name in roman["Regular"] and name not in replaced}
         corners |= {name: roman_corners[name] for name in replaced if name in roman_corners}
         shear(fonts, slant_tangent(fonts["Regular"]), fonts["Regular"].info.xHeight / 2)
@@ -1761,6 +1891,7 @@ def build(p: Profile, italic: bool = False) -> Path:
         shutil.rmtree(out)
     out.mkdir(parents=True)
     shutil.copytree(FEATURES, out / "features")
+    patch_ccmp(out / "features")
     paths = {}
     for style, f in fonts.items():
         set_names(f, p.family, italic_style(style) if italic else style, MASTERS[style])

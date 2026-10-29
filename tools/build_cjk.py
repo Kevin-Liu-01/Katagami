@@ -12,8 +12,8 @@ Each is Noto's variable font subset to a national character standard:
     JP  JIS X 0208: 6,355 kanji, hiragana, katakana and its symbols
     KR  all 11,172 Hangul syllables and the jamo
 
-plus CJK punctuation and the full-width forms. Latin, Greek and Cyrillic
-are left out so a page sets them in Katagami. Each file is scaled to Katagami's
+plus CJK punctuation, the full-width forms and the space and no-break space.
+Latin, Greek and Cyrillic are left out so a page sets them in Katagami. Each file is scaled to Katagami's
 2048-unit em and takes Katagami's line metrics, so it can sit in the same CSS
 family as a Katagami member (the website does this with unicode-range).
 """
@@ -25,17 +25,20 @@ from pathlib import Path
 import sys
 
 from fontTools import subset
-from fontTools.ttLib import TTFont
+from fontTools.ttLib import TTFont, newTable
 from fontTools.ttLib.scaleUpem import scale_upem
 
 sys.path.insert(0, str(Path(__file__).parent))
-from kerf_build.fontops import VERSION  # noqa: E402
+from finish import unhinted  # noqa: E402
+from kerf_build.fontops import VENDOR, VERSION  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 NOTO = ROOT / "vendor" / "noto"
 OUT = ROOT / "fonts" / "cjk"
 KERF_LINE = {"ascender": 1984, "descender": -494, "lineGap": 0}  # Katagami Sans's hhea and typo metrics
+SCRIPT = {"SC": "Hans", "TC": "Hant", "JP": "Jpan", "KR": "Kore"}  # the meta table's script tags
 SHARED = [(0x3000, 0x303F), (0xFF00, 0xFFEF), (0x3200, 0x32FF), (0x3300, 0x33FF)]  # punctuation, full width, enclosed
+SPACES = {0x0020, 0x00A0}
 
 
 def euc_chars(codec: str) -> set[int]:
@@ -67,7 +70,7 @@ def big5_chars() -> set[int]:
 
 
 def charset(region: str) -> set[int]:
-    shared = {u for lo, hi in SHARED for u in range(lo, hi + 1)}
+    shared = {u for lo, hi in SHARED for u in range(lo, hi + 1)} | SPACES
     if region == "SC":
         return {u for u in euc_chars("gb2312") if u >= 0x2E80} | shared
     if region == "TC":
@@ -82,26 +85,40 @@ def charset(region: str) -> set[int]:
 
 
 def rename(font: TTFont, family: str) -> None:
+    """Names the default instance, Thin in Noto's variable fonts, as Google Fonts names it."""
     ps = family.replace(" ", "")
     name = font["name"]
     version = f"{VERSION[0]}.{VERSION[1]:03d}"
     font["head"].fontRevision = float(version)
+    default = {a.axisTag: a.defaultValue for a in font["fvar"].axes}
+    style = next(name.getDebugName(i.subfamilyNameID) for i in font["fvar"].instances if i.coordinates == default)
     for rec in list(name.names):
-        if rec.nameID in (1, 16):
+        if rec.nameID in (1, 4):
+            rec.string = family if rec.nameID == 1 and style == "Regular" else f"{family} {style}"
+        elif rec.nameID == 2:
+            rec.string = "Regular"
+        elif rec.nameID == 16:
             rec.string = family
-        elif rec.nameID == 4:
-            rec.string = f"{family} {name.getDebugName(2) or 'Regular'}"
+        elif rec.nameID == 17:
+            rec.string = style
         elif rec.nameID == 6:
-            rec.string = f"{ps}-{(name.getDebugName(2) or 'Regular').replace(' ', '')}"
+            rec.string = f"{ps}-{style}"
         elif rec.nameID == 3:
-            rec.string = f"{version};KERF;{ps}-{(name.getDebugName(2) or 'Regular').replace(' ', '')}"
+            rec.string = f"{version};{VENDOR};{ps}-{style}"
         elif rec.nameID == 5:
             rec.string = f"Version {version}"
         elif rec.nameID == 25:
             rec.string = ps
+        elif rec.nameID == 13:
+            rec.string = ("This Font Software is licensed under the SIL Open Font License, Version 1.1. "
+                          "This license is available with a FAQ at: https://openfontlicense.org")
+        elif rec.nameID == 14:
+            rec.string = "https://openfontlicense.org"
     for rec in name.names:
         if rec.nameID == 0:
-            rec.string = rec.toUnicode() + " Katagami CJK: subset and rescaled from Noto Sans CJK."
+            noto = rec.toUnicode().replace("(c)", "Copyright")
+            rec.string = ("Copyright 2026 The Katagami Project Authors (https://github.com/Kevin-Liu-01/Katagami). "
+                          f"Derived from Noto Sans CJK, {noto}")
 
 
 def build(region: str) -> Path:
@@ -123,6 +140,12 @@ def build(region: str) -> Path:
     os2.sTypoAscender, os2.sTypoDescender, os2.sTypoLineGap = hhea.ascent, hhea.descent, hhea.lineGap
     os2.fsSelection |= 1 << 7  # use the typo metrics, as Katagami does
     rename(font, f"Katagami CJK {region}")
+    os2.achVendID = VENDOR
+    os2.recalcAvgCharWidth(font)
+    unhinted(font)
+    meta = newTable("meta")
+    meta.data = {"dlng": SCRIPT[region], "slng": SCRIPT[region]}
+    font["meta"] = meta
     OUT.mkdir(parents=True, exist_ok=True)
     path = OUT / f"KatagamiCJK{region}[wght].ttf"
     font.save(path)

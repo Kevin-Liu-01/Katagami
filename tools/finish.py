@@ -7,8 +7,8 @@ Runs on fonts/<member>/<Stem>[wght].ttf and fonts/<member>/<Stem>-Italic[wght].t
 in place, after fontmake (and, for the roman, the script merge):
 
   1. Version: head.fontRevision, the version string (name 5) and the unique ID
-     (name 3) all read VERSION. The script merge otherwise leaves Noto's
-     revision in the head table.
+     (name 3) all read VERSION, and the vendor ID is VENDOR. The script merge
+     otherwise leaves Noto's revision in the head table.
   2. Names: the default instance is Regular or Italic; every named instance
      has a PostScript name, and the variations PostScript prefix (name 25) is set.
   3. Style bits: fsSelection has REGULAR or ITALIC and USE_TYPO_METRICS, and
@@ -24,6 +24,9 @@ in place, after fontmake (and, for the roman, the script merge):
   7. Components: every glyph built from a flipped, rotated or scaled component
      (Inter's d from b, q from p, И from N) is drawn in, point for point from
      the compiled component at each master, so its outline does not change.
+  8. Unreachable glyphs (the merge's .notdef copies, the parts components were
+     drawn from) are dropped, layout records are put in tag order, and a meta
+     table names the design and supported scripts.
 """
 
 from __future__ import annotations
@@ -41,7 +44,7 @@ from fontTools.ttLib.tables._g_l_y_f import (
 from fontTools.ttLib.tables.TupleVariation import TupleVariation
 
 sys.path.insert(0, str(Path(__file__).parent))
-from kerf_build.fontops import VERSION  # noqa: E402
+from kerf_build.fontops import VENDOR, VERSION  # noqa: E402
 from kerf_build.profiles import PROFILES  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -56,7 +59,8 @@ def version(font: TTFont, ps: str) -> None:
     font["head"].fontRevision = float(text)
     name = font["name"]
     name.setName(f"Version {text}", 5, 3, 1, 0x409)
-    name.setName(f"{text};KERF;{ps}", 3, 3, 1, 0x409)
+    name.setName(f"{text};{VENDOR};{ps}", 3, 3, 1, 0x409)
+    font["OS/2"].achVendID = VENDOR
 
 
 def names(font: TTFont, family: str, italic: bool) -> str:
@@ -142,6 +146,73 @@ def prune_names(font: TTFont) -> None:
         if params is not None and getattr(params, "FirstParamUILabelNameID", None):
             used |= set(range(params.FirstParamUILabelNameID, params.FirstParamUILabelNameID + params.NumNamedParameters))
     font["name"].names = [r for r in font["name"].names if r.nameID < 256 or r.nameID in used]
+
+
+def prune_unreachable(font: TTFont) -> int:
+    """Drop the glyphs no character and no feature reaches: the .notdef copies
+    the script merge leaves and the parts that components were drawn from.
+    Returns how many went."""
+    from fontTools import subset
+
+    before = len(font.getGlyphOrder())
+    opts = subset.Options()
+    opts.layout_features = ["*"]
+    opts.layout_scripts = ["*"]
+    opts.name_IDs = ["*"]
+    opts.name_languages = ["*"]
+    opts.name_legacy = True
+    opts.glyph_names = True
+    opts.notdef_glyph = True
+    opts.notdef_outline = True
+    opts.legacy_kern = True
+    opts.symbol_cmap = True
+    opts.legacy_cmap = True
+    opts.drop_tables = []
+    opts.passthrough_tables = True
+    opts.prune_unicode_ranges = False
+    sub = subset.Subsetter(opts)
+    sub.populate(unicodes=font.getBestCmap().keys())
+    sub.subset(font)
+    return before - len(font.getGlyphOrder())
+
+
+def sort_layout(font: TTFont) -> None:
+    """Script, language and feature records in tag order, as OpenType asks;
+    the script merge appends them in merge order. Feature indices are remapped."""
+    for tag in ("GSUB", "GPOS"):
+        if tag not in font:
+            continue
+        t = font[tag].table
+        t.ScriptList.ScriptRecord.sort(key=lambda r: r.ScriptTag)
+        records = t.FeatureList.FeatureRecord
+        order = sorted(range(len(records)), key=lambda i: records[i].FeatureTag)
+        index = {old: new for new, old in enumerate(order)}
+        t.FeatureList.FeatureRecord = [records[i] for i in order]
+        for sr in t.ScriptList.ScriptRecord:
+            sr.Script.LangSysRecord.sort(key=lambda r: r.LangSysTag)
+            for ls in [sr.Script.DefaultLangSys] + [r.LangSys for r in sr.Script.LangSysRecord]:
+                if ls is None:
+                    continue
+                ls.FeatureIndex = sorted(index[i] for i in ls.FeatureIndex)
+                if ls.ReqFeatureIndex != 0xFFFF:
+                    ls.ReqFeatureIndex = index[ls.ReqFeatureIndex]
+        if getattr(t, "FeatureVariations", None):
+            for rec in t.FeatureVariations.FeatureVariationRecord:
+                for sub in rec.FeatureTableSubstitution.SubstitutionRecord:
+                    sub.FeatureIndex = index[sub.FeatureIndex]
+
+
+def meta(font: TTFont) -> None:
+    """A meta table: Latin, Greek and Cyrillic are the scripts Katagami draws,
+    and every script with ten or more characters in the cmap is supported."""
+    from collections import Counter
+    from fontTools.unicodedata import script
+
+    counts = Counter(script(chr(u)) for u in font.getBestCmap())
+    supported = sorted(s for s, n in counts.items() if n >= 10 and s not in ("Zyyy", "Zinh", "Zzzz"))
+    table = newTable("meta")
+    table.data = {"dlng": "Latn, Grek, Cyrl", "slng": ", ".join(supported)}
+    font["meta"] = table
 
 
 def unhinted(font: TTFont) -> None:
@@ -324,6 +395,9 @@ def finish(key: str, only: str | None = None) -> None:
         drawn = draw_in_transformed(font)
         if drawn:
             print(f"{path.relative_to(ROOT)}: {len(drawn)} glyphs with transformed components drawn in")
+        pruned = prune_unreachable(font)
+        if pruned:
+            print(f"{path.relative_to(ROOT)}: {pruned} unreachable glyphs dropped")
         ps = names(font, family, italic)
         version(font, ps)
         style_bits(font, italic)
@@ -332,6 +406,8 @@ def finish(key: str, only: str | None = None) -> None:
             metrics_from(font, roman)
         clipping(font, family_fonts)
         unhinted(font)
+        sort_layout(font)
+        meta(font)
         prune_names(font)  # what an earlier STAT or a second run left behind
         font.save(path)
         print(f"{path.relative_to(ROOT)}: finished")

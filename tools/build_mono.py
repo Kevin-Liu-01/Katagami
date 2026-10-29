@@ -49,10 +49,11 @@ from kerf_build.boxdraw import draw_box_glyphs  # noqa: E402
 from kerf_build.terminal import draw_terminal_glyphs  # noqa: E402
 from kerf_build.fontops import (  # noqa: E402
     FILTERS_KEY, ITALIC_MATCH, ROOT, assign_categories, combining_double_acute, composites_to_flatten, decompose, design_distances, dot_size,
-    dotted_circle_anchors, draw_dotted_circle, italic_style, reflow_composites, romanize, set_names, shear, slant_tangent, snapshot, swap_glyph_outlines,
+    dotted_circle_anchors, draw_dotted_circle, italic_style, promote_alternates, reflow_composites, romanize, set_names, shear, slant_tangent, snapshot,
 )
 from kerf_build.outline import XMap, embolden_x, straighten_runs  # noqa: E402
 from build_sans import relabel_features  # noqa: E402
+from kerf_build.missing import complete_anchors, patch_ccmp  # noqa: E402
 from fontTools.pens.recordingPen import DecomposingRecordingPen  # noqa: E402
 
 FAMILY = "Katagami Mono"
@@ -122,18 +123,6 @@ def interpolate_bold(italic: bool, out: Path) -> Path:
         check=True, capture_output=True,
     )
     return next(out.glob("*Bold Italic.ufo" if italic else "*Bold.ufo"))
-
-
-def promote_alternates(fonts) -> None:
-    ref = fonts["Regular"]
-    pairs = []
-    for fea in PROMOTE:
-        for a, b in re.findall(r"^sub (\S+) by (\S+);", (FEATURES / fea).read_text(), re.M):
-            if a in ref and b in ref:
-                pairs.append((a, b))
-    for f in fonts.values():
-        for a, b in pairs:
-            swap_glyph_outlines(f, a, b)
 
 
 def mono_features(sans_features: str, glyphs) -> str:
@@ -489,7 +478,8 @@ def fit(italic: bool, work: Path) -> tuple[dict, dict]:
     if italic:
         # stand the Italic upright about half its x-height, as build_sans.py slanted it
         shear(fonts, -slant_tangent(fonts["Regular"]), fonts["Regular"].info.xHeight / 2)
-    promote_alternates(fonts)
+    promote_alternates(fonts, PROMOTE, FEATURES)  # Í and the other accented forms follow I to the serif form
+    complete_anchors(fonts)  # the serif I has no cedilla anchor until it is planned again
     features = mono_features(fonts["Regular"].features.text, set(fonts["Regular"].keys()))
     flatten = composites_to_flatten(fonts["Regular"])
     for f in fonts.values():
@@ -568,6 +558,7 @@ def main(italic: bool = False) -> None:
 
     relabel_features(fonts, PROMOTE)
     shutil.copytree(FEATURES, out / "features")
+    patch_ccmp(out / "features")
     paths = {}
     for style, f in fonts.items():
         p = out / f"KatagamiMono-{(italic_style(style) if italic else style).replace(' ', '')}.ufo"

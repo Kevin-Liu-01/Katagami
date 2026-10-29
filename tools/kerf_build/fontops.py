@@ -21,6 +21,7 @@ INTER_UFO = ROOT / "build" / "ufo"
 INTER_ITALIC_UFO = ROOT / "build" / "ufo-italic"
 MASTERS = {"Thin": 100, "Regular": 400, "Black": 900}
 VERSION = (0, 200)  # major, minor: "Version 0.200"
+VENDOR = "KATA"  # OS/2 achVendID and the vendor in each unique ID (name 3)
 # The style name of each master in an Italic. The masters keep the roman keys
 # (Thin, Regular, Black) inside the build, so every transform reads them alike.
 ITALIC_STYLES = {"Thin": "Thin Italic", "Regular": "Italic", "Black": "Black Italic"}
@@ -321,7 +322,7 @@ def set_names(font, family: str, style: str, weight: int) -> None:
     i.postscriptFullName = f"{family} {style}"
     i.openTypeNameUniqueID = None
     i.openTypeOS2WeightClass = weight
-    i.openTypeOS2VendorID = "KERF"
+    i.openTypeOS2VendorID = VENDOR
     i.copyright = (
         "Copyright 2026 The Katagami Project Authors (https://github.com/Kevin-Liu-01/Katagami). "
         "Derived from Inter, Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)."
