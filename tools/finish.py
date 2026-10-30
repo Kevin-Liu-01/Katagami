@@ -27,10 +27,22 @@ in place, after fontmake (and, for the roman, the script merge):
   8. Unreachable glyphs (the merge's .notdef copies, the parts components were
      drawn from) are dropped, layout records are put in tag order, and a meta
      table names the design and supported scripts.
+  9. Shared segments: where two contours of a glyph run along the same segment,
+     one of them moves a unit into the other's ink, takes a one-unit notch, or
+     goes if it repeats the other (kerf_build.contours); a composite that
+     shares one is drawn in first. The filled shape stays the same at every
+     master; where the two segments meet only near the default, the points
+     that move return to place at each master and move less than a unit between.
+ 10. Glyph classes: spacing signs of the merged scripts leave the GDEF mark
+     class and unclassified Tibetan signs join it, where HarfBuzz shapes the
+     same either way (GLYPH_CLASSES).
+ 11. Glyph names: a name longer than 31 characters is shortened in the post
+     table, to uniXXXX where it names a character.
 """
 
 from __future__ import annotations
 
+import hashlib
 import sys
 from pathlib import Path
 
@@ -44,6 +56,7 @@ from fontTools.ttLib.tables._g_l_y_f import (
 from fontTools.ttLib.tables.TupleVariation import TupleVariation
 
 sys.path.insert(0, str(Path(__file__).parent))
+from kerf_build.contours import fix_shared_segments  # noqa: E402
 from kerf_build.fontops import VENDOR, VERSION  # noqa: E402
 from kerf_build.profiles import PROFILES  # noqa: E402
 
@@ -51,6 +64,43 @@ ROOT = Path(__file__).resolve().parents[1]
 STEMS = {key: p.file_stem for key, p in PROFILES.items()} | {"mono": "KatagamiMono"}
 WEIGHTS = {100: "Thin", 200: "ExtraLight", 300: "Light", 400: "Regular", 500: "Medium", 600: "SemiBold",
            700: "Bold", 800: "ExtraBold", 900: "Black"}
+
+# GDEF classes for glyphs of the merged scripts that fontbakery's gdef checks flag, each kept only
+# because HarfBuzz shapes every affected sign after each consonant, in conjuncts and in sample text
+# the same in either class (glyph, cluster, advance and offset at Thin, Regular and Black). A sign
+# with no advance stays a mark: a base without one fails base_has_width.
+GLYPH_CLASSES = {
+    # spacing vowel signs, visargas and anusvaras (Mc): base
+    0x0C83: 1, 0x0CC0: 1, 0x0D02: 1, 0x0D03: 1, 0x0D3E: 1, 0x0D3F: 1, 0x0D40: 1, 0x0D46: 1, 0x0D47: 1,
+    0x0D48: 1, 0x0D4A: 1, 0x0D4B: 1, 0x0D4C: 1, 0x0DDA: 1, 0x0DDC: 1, 0x0DDD: 1, 0x0DDE: 1,
+    # Tibetan vowel signs, subjoined letters and signs the merge left without a class: mark
+    0x0F71: 3, 0x0F73: 3, 0x0F76: 3, 0x0F77: 3, 0x0F78: 3, 0x0F79: 3, 0x0F81: 3, 0x0F8E: 3, 0x0F8F: 3,
+    0x0FA9: 3, 0x0FAA: 3, 0x0FAB: 3, 0x0FC6: 3,
+    # spacing forms of Kannada and Telugu subjoined letters and vowel signs, Tamil vowel sign forms: base
+    "bapostscripttelu.spacing": 1, "basubscriptaltknda": 1, "baviramaknda": 1, "bhapostscripttelu.spacing": 1,
+    "bharasubscriptknda": 1, "bhasubscriptaltknda": 1, "casubscriptaltknda": 1, "chapostscripttelu.spacing": 1,
+    "chasubscriptaltknda": 1, "darasubscriptknda": 1, "dasubscriptaltknda": 1, "ddarasubscriptknda": 1,
+    "ddasubscriptaltknda": 1, "ddhasubscriptaltknda": 1, "ddhasubscripttelu.spacing": 1,
+    "dhasubscriptaltknda": 1, "garasubscriptknda": 1, "gasubscriptaltknda": 1, "ghasubscriptaltknda": 1,
+    "hasubscriptaltknda": 1, "ivowelsign4tamil": 1, "januktasubscriptknda": 1, "jasubscriptaltknda": 1,
+    "jhasubscriptaltknda": 1, "jhasubscripttelu.spacing": 1, "karasubscriptknda": 1, "kasubscriptaltknda": 1,
+    "khasubscriptaltknda": 1, "lasubscriptaltknda": 1, "llapostscripttelu.spacing": 1, "llasubscriptaltknda": 1,
+    "lllasubscripttelu.spacing": 1, "llvocalicvowelsigntelu.spacing": 1, "lvocalicvowelsigntelu.spacing": 1,
+    "mapostscripttelu.spacing": 1, "masubscriptaltknda": 1, "napostscripttelu.spacing": 1,
+    "nasubscriptaltknda": 1, "ngasubscriptaltknda": 1, "nnasubscriptaltknda": 1, "nyasubscriptaltknda": 1,
+    "nyasubscripttelu.spacing": 1, "papostscripttelu.spacing": 1, "parasubscriptknda": 1,
+    "pasubscriptaltknda": 1, "phanuktasubscriptknda": 1, "phapostscripttelu.spacing": 1,
+    "phasubscriptaltknda": 1, "rasubscriptaltknda": 1, "rrasubscriptaltknda": 1, "rrasubscripttelu.spacing": 1,
+    "rrvocalicvowelsigntelu.spacing": 1, "rvocalicvowelsigntelu.spacing": 1, "sapostscripttelu.spacing": 1,
+    "sasubscriptaltknda": 1, "shapostscripttelu.spacing": 1, "shasubscriptaltknda": 1, "ssasubscriptaltknda": 1,
+    "tarasubscriptknda": 1, "tasubscriptaltknda": 1, "thasubscriptaltknda": 1, "ttarasubscriptknda": 1,
+    "ttasubscriptaltknda": 1, "tthasubscriptaltknda": 1, "tthasubscripttelu.spacing": 1,
+    "uuvowelsignalt2knda": 1, "uuvowelsignaltknda": 1, "uuvowelsignalttamil": 1, "uuvowelsigntelu.spacing": 1,
+    "uuvoweltelu.spacing2": 1, "uuvoweltelu.spacing3": 1, "uvowelsignalt2knda": 1, "uvowelsignaltknda": 1,
+    "uvowelsignalttamil": 1, "uvowelsigntelu.spacing": 1, "uvoweltelu.spacing2": 1, "uvoweltelu.spacing3": 1,
+    "vapostscripttelu.spacing": 1, "vasubscriptaltknda": 1, "yapostscripttelu.spacing": 1,
+    "yasubscriptaltknda": 1,
+}
 
 
 def version(font: TTFont, ps: str) -> None:
@@ -77,8 +127,11 @@ def names(font: TTFont, family: str, italic: bool) -> str:
     name.setName(ps, 6, 3, 1, 0x409)
     name.setName(ps_family + ("Italic" if italic else ""), 25, 3, 1, 0x409)
     for inst in font["fvar"].instances:
-        sub = name.getDebugName(inst.subfamilyNameID)
-        inst.postscriptNameID = name.addName(f"{ps_family}-{sub.replace(' ', '')}", platforms=((3, 1, 0x409),), minNameID=256)
+        text = f"{ps_family}-{name.getDebugName(inst.subfamilyNameID).replace(' ', '')}"
+        # a record with the same text is reused, so finishing a font twice keeps its name IDs
+        inst.postscriptNameID = next((r.nameID for r in name.names if r.nameID >= 256 and r.platformID == 3
+                                      and r.toUnicode() == text), None) or name.addName(
+            text, platforms=((3, 1, 0x409),), minNameID=256)
     # only Windows English names: the Mac records fontmake writes duplicate them
     name.names = [r for r in name.names if r.platformID == 3]
     return ps
@@ -106,7 +159,7 @@ def stat(font: TTFont, italic: bool) -> None:
     buildStatTable(font, [
         {"tag": "wght", "name": "Weight", "values": values},
         {"tag": "ital", "name": "Italic", "values": [ital]},
-    ], elidedFallbackName=2)
+    ], elidedFallbackName=2, macNames=False)  # Windows names only, as names() keeps, so existing IDs are reused
 
 
 def metrics_from(font: TTFont, roman: TTFont) -> None:
@@ -381,6 +434,63 @@ def _reuses(g, single: dict) -> bool:
     return all(getattr(c, "transform", None) is None or _part_for(c, single) is not None for c in g.components)
 
 
+def glyph_classes(font: TTFont) -> list[str]:
+    """Put the glyphs in GLYPH_CLASSES (a code point, or the name of a glyph no
+    character maps to) in the GDEF class given there. Returns those moved."""
+    cmap, order = font.getBestCmap(), set(font.getGlyphOrder())
+    classes = font["GDEF"].table.GlyphClassDef.classDefs
+    moved = []
+    for key, cls in GLYPH_CLASSES.items():
+        name = cmap.get(key) if isinstance(key, int) else key
+        if name in order and classes.get(name) != cls:
+            classes[name] = cls
+            moved.append(name)
+    return moved
+
+
+def short_names(font: TTFont) -> list[str]:
+    """Write every glyph name longer than 31 characters, the most some legacy
+    systems read, to the post table in a shorter form. Each part of the name
+    that names a character (in the cmap or the Adobe Glyph List) becomes
+    uniXXXX, so chedescenderabkhasiancyrillic.smcp is uni04BF.smcp. A name
+    still too long keeps its start and takes four hex digits of a hash of the
+    whole name, so every run gives the same unique name. The font keeps its
+    own names in memory; the post table's unused names are dropped. Returns
+    the names shortened."""
+    from fontTools import agl
+
+    order = font.getGlyphOrder()
+    codes = {}
+    for cp, name in sorted(font.getBestCmap().items()):
+        codes.setdefault(name, cp)
+
+    def uni(part: str) -> str:
+        cp = codes.get(part)
+        if cp is None:
+            text = agl.toUnicode(part)
+            cp = ord(text) if len(text) == 1 else None
+        return part if cp is None else f"uni{cp:04X}" if cp <= 0xFFFF else f"u{cp:X}"
+
+    post = font["post"]
+    mapping = dict(getattr(post, "mapping", {}))
+    taken = set(order) | set(mapping.values())
+    for name in order:
+        if len(mapping.get(name, name)) <= 31:
+            continue
+        base, dot, suffix = name.partition(".")
+        new = "_".join(uni(p) for p in base.split("_")) + dot + suffix
+        if len(new) > 31 or new in taken:
+            keep = 31 - len(dot + suffix) - 4
+            new = new.partition(".")[0][:keep] + hashlib.sha1(name.encode()).hexdigest()[:4].upper() + dot + suffix
+        if new in taken or len(new) > 31:
+            raise ValueError(f"{name}: no short name ({new})")
+        taken.add(new)
+        mapping[name] = new
+    post.mapping = mapping
+    post.extraNames = []
+    return sorted(n for n in mapping if mapping[n] != n)
+
+
 def finish(key: str, only: str | None = None) -> None:
     stem = STEMS[key]
     family = PROFILES[key].family if key in PROFILES else "Katagami Mono"
@@ -395,6 +505,11 @@ def finish(key: str, only: str | None = None) -> None:
         drawn = draw_in_transformed(font)
         if drawn:
             print(f"{path.relative_to(ROOT)}: {len(drawn)} glyphs with transformed components drawn in")
+        changed, faded, left = fix_shared_segments(font)
+        if changed or left:
+            print(f"{path.relative_to(ROOT)}: shared segments removed in {len(changed)} glyphs"
+                  + (f" ({len(faded)} only near the default: {' '.join(faded)})" if faded else "")
+                  + (f"; still shared in {' '.join(left)}" if left else ""))
         pruned = prune_unreachable(font)
         if pruned:
             print(f"{path.relative_to(ROOT)}: {pruned} unreachable glyphs dropped")
@@ -408,7 +523,13 @@ def finish(key: str, only: str | None = None) -> None:
         unhinted(font)
         sort_layout(font)
         meta(font)
+        moved = glyph_classes(font)
+        if moved:
+            print(f"{path.relative_to(ROOT)}: {len(moved)} glyphs moved to their GDEF class")
         prune_names(font)  # what an earlier STAT or a second run left behind
+        shortened = short_names(font)  # last: only the post table sees the new names
+        if shortened:
+            print(f"{path.relative_to(ROOT)}: {len(shortened)} glyph names shortened")
         font.save(path)
         print(f"{path.relative_to(ROOT)}: finished")
 

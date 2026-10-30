@@ -33,7 +33,9 @@ BELOW_MARKS = (
     (0x0325, "ringcomb"),
 )
 # the accents above that the soft-dotted rule must also see
-ABOVE_MARKS = ("uni0311", "uni030D", "hungarumlautcomb")
+ABOVE_MARKS = ("uni0311", "uni030D", "hungarumlautcomb", "threedotsabovecomb", "fourdotsabovecomb")
+# the joiners and direction marks Arabic and Persian text uses: invisible, with no advance
+CONTROLS = (0x200C, 0x200D, 0x200E, 0x200F)
 
 
 def _new(font, unicode: int, width: float):
@@ -320,6 +322,32 @@ def _more_letters(fonts) -> None:
             _resized(f, u, src, o_k, d, d, b.xMin * o_k, _bounds(f, "O").yMin, f[src].width * o_k - b.xMax * o_k)
         g = _new(f, 0xA7B7, f["omega"].width)
         g.components.append(Component("omega"))
+        # ꞵ is β, and Ꞵ is β with its stem cut at the baseline: β's bowls close on
+        # the baseline and its top is at the capital height already
+        g = _new(f, 0xA7B5, f["beta"].width)
+        g.components.append(Component("beta"))
+        g = _new(f, 0xA7B4, f["beta"].width)
+        _draw(f, "beta", g)
+        for c in g.contours:
+            for p in c.points:
+                if p.y < -0.5 * lc:
+                    p.y = 0
+        # Ɐ is A turned, as ɐ is a turned
+        g = _new(f, 0x2C6F, f["A"].width)
+        g.components.append(Component("A", (-1, 0, 0, -1, f["A"].width, cap)))
+        # ⓐ to ⓩ: in the circle Ⓐ to Ⓩ are set in, each letter at 0.92 of its height,
+        # centred across it and all on one baseline that puts the x-height in the middle
+        circle = _bounds(f, "largeCircle")
+        for letter in "abcdefghijklmnopqrstuvwxyz":
+            if f"{letter.upper()}.circled" not in f:
+                continue
+            b = _bounds(f, letter)
+            g = _new(f, 0x24D0 + ord(letter) - ord("a"), f["largeCircle"].width)
+            g.components.append(Component("largeCircle"))
+            z = 0.92  # ascenders and descenders clear the ring at Black; the stems keep their weight
+            g.components.append(Component(letter, (1, 0, 0, z, round((circle.xMin + circle.xMax - b.xMin - b.xMax) / 2), round((circle.yMin + circle.yMax - z * xh) / 2))))
+        for u in CONTROLS:
+            _new(f, u, 0)
 
         # Ⱳ and ⱳ: W and w whose last stroke turns right at the top into a flag
         for u, base, top, s in ((0x2C72, "W", cap, uc), (0x2C73, "w", xh, lc)):
@@ -397,8 +425,10 @@ def _more_letters(fonts) -> None:
             g = _new(f, u, f[base].width)
             g.components.append(Component(base))
             _rect(g, mid - half, joint, mid + half, high)
-            for x in (mid - half, mid - 0.33 * s, mid + half - 0.65 * s):
-                _rect(g, x, low, x + 0.65 * s, joint + 0.2 * s)
+            # the legs thin where a stem would close the gaps between them to under 0.45 stem
+            leg = min(0.65 * s, (2 * half - 0.9 * s) / 3)
+            for x in (mid - half, mid - leg / 2, mid + half - leg):
+                _rect(g, x, low, x + leg, joint + 0.2 * s)
 
         # Ꙍ and ꙍ: Ѡ and ѡ with the middle stem starting 0.43 of the way down
         for u, base, h in ((0xA64C, "Omegacyrillic", cap), (0xA64D, "omegacyrillic", xh)):
@@ -515,6 +545,47 @@ def complete_anchors(fonts) -> None:
                     x = cx
                     y = {"cap": cap, "xh": xh, "base": 0}.get(rule, round(b.yMax if anchor in ("top", "_top") else b.yMin))
                 g.appendAnchor({"name": anchor, "x": x, "y": y})
+
+
+def dot_marks(fonts) -> None:
+    """⃛ and ⃜: the dieresis's dots at the dieresis's spacing, centred where its
+    two are. Runs after the alternates are promoted, so they take the dots the
+    dieresis has then."""
+    for f in fonts.values():
+        pair = f["dieresiscomb"].components
+        if len(pair) != 2 or f["dieresiscomb"].contours:
+            continue
+        step = pair[1].transformation[4] - pair[0].transformation[4]
+        middle = (pair[0].transformation[4] + pair[1].transformation[4]) / 2
+        for name, n in (("threedotsabovecomb", 3), ("fourdotsabovecomb", 4)):
+            if name in f:
+                g = f[name]
+                g.clearComponents()
+                g.clearContours()
+                g.clearAnchors()
+                # Inter's Black dieresis sets its dots smaller than the dot accent's, by its components' scale
+                xx, xy, yx, yy = pair[0].transformation[:4]
+                for i in range(n):
+                    g.components.append(Component(pair[0].baseGlyph, (xx, xy, yx, yy, round(middle + (i - (n - 1) / 2) * step), round(pair[0].transformation[5]))))
+
+
+def unseat_marks(font) -> None:
+    """A base anchor where a mark already sits unmoved (ɛ's top in Round
+    Italic, under U+1DC7) moves 1 unit right: a shaper's zero offset reads as
+    a mark that never attached. Runs on the default master after its last change."""
+    pairs = (("top", "_top"), ("bottom", "_bottom"), ("cedilla", "_cedilla"), ("ogonek", "_ogonek"))
+    rest = {}
+    for g in font:
+        if g.width == 0:
+            for a in g.anchors:
+                rest.setdefault(a.name, set()).add((round(a.x), round(a.y)))
+    for g in font:
+        if g.width == 0:
+            continue
+        for a in g.anchors:
+            for base, mark in pairs:
+                if a.name == base and (round(a.x) - round(g.width), round(a.y)) in rest.get(mark, ()):
+                    a.x = round(a.x) + 1
 
 
 def add_missing(fonts) -> None:
