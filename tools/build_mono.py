@@ -334,13 +334,14 @@ def compensation(scale: float) -> float:
 
 
 def condense(g: Glyph, font, scale: float, stem: float) -> None:
-    """Scale the outline about its ink centre, holding (part of) the stem weight."""
+    """Scale the outline about its ink centre, holding (part of) the stem weight
+    without closing a counter (the zeros of ‰ and ‱ at Bold)."""
     b = g.getBounds(font)
     cx = (b.xMin + b.xMax) / 2
     for c in g.contours:
         for p in c.points:
             p.x = cx + (p.x - cx) * scale
-    embolden_x(g, stem * (1 - scale) * compensation(scale))
+    embolden_x(g, stem * (1 - scale) * compensation(scale), keep_counters=True)
 
 
 def fit_to_cell(font, g: Glyph, scale: float, stem: float, origin: float | None = None) -> XMap:

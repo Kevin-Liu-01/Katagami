@@ -41,6 +41,7 @@ from fontTools.varLib import build as build_variable
 from fontTools.varLib.instancer import instantiateVariableFont
 
 sys.path.insert(0, str(Path(__file__).parent))
+from kerf_build.outline import signed_area, sound  # noqa: E402
 from kerf_build.profiles import PROFILES  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -98,59 +99,78 @@ def noto_file(script: str) -> Path:
     return found[0]
 
 
-def embolden(font: TTFont, strength: float) -> None:
+def _moved(pts: list, half: float, truetype: bool) -> list:
+    """The contour's points moved along their bisectors by `half`, as FT_Outline_EmboldenXY moves them."""
+    n = len(pts)
+    out = []
+    for k in range(n):
+        prv, cur, nxt = pts[k - 1], pts[k], pts[(k + 1) % n]
+        vin = (cur[0] - prv[0], cur[1] - prv[1])
+        vout = (nxt[0] - cur[0], nxt[1] - cur[1])
+        l_in, l_out = math.hypot(*vin), math.hypot(*vout)
+        sx = sy = 0.0
+        if n >= 3 and l_in > 1e-6 and l_out > 1e-6:
+            ix, iy, ox, oy = vin[0] / l_in, vin[1] / l_in, vout[0] / l_out, vout[1] / l_out
+            d = ix * ox + iy * oy
+            if d > -0.9375:
+                d += 1
+                lx, ly = iy + oy, ix + ox
+                if truetype:
+                    lx = -lx
+                else:
+                    ly = -ly
+                q = ox * iy - oy * ix
+                if truetype:
+                    q = -q
+                lim = min(l_in, l_out)
+                scale = half / d if half * q <= lim * d else lim / q
+                sx, sy = lx * scale, ly * scale
+        out.append((cur[0] + sx, cur[1] + sy))
+    return out
+
+
+def embolden(font: TTFont, strength: float) -> list[str]:
     """Thicken (or, below zero, thin) every simple glyph by `strength` units on
     each axis, as FreeType's FT_Outline_EmboldenXY does: each point moves along
     the bisector of its two edges, so the point structure stays and the three
     masters still interpolate. Ink and advances grow by `strength`, and the
-    outlines move right by half of it, so sidebearings stay."""
+    outlines move right by half of it, so sidebearings stay. A contour that the
+    move shrinks (a counter when thickening, an outer contour when thinning)
+    moves only as far as it stays the same way round with no lobe inside out,
+    so small counters stay open at Black. Returns the glyphs so limited."""
     if not strength:
-        return
+        return []
     glyf, hmtx = font["glyf"], font["hmtx"]
     half = strength / 2
     order = font.getGlyphOrder()
+    limited = []
     for name in order:
         g = glyf[name]
         if g.isComposite() or g.numberOfContours <= 0:
             continue
         coords = list(g.coordinates)
         ends = list(g.endPtsOfContours)
-        area = 0.0
-        start = 0
+        contours, start = [], 0
         for end in ends:
-            pts = coords[start:end + 1]
-            area += sum(pts[k - 1][0] * pts[k][1] - pts[k][0] * pts[k - 1][1] for k in range(len(pts)))
+            contours.append(coords[start:end + 1])
             start = end + 1
-        truetype = area < 0  # outer contours clockwise
+        total = sum(signed_area(pts) for pts in contours)
+        truetype = total < 0  # outer contours clockwise
         new = []
-        start = 0
-        for end in ends:
-            pts = coords[start:end + 1]
-            n = len(pts)
-            for k in range(n):
-                prv, cur, nxt = pts[k - 1], pts[k], pts[(k + 1) % n]
-                vin = (cur[0] - prv[0], cur[1] - prv[1])
-                vout = (nxt[0] - cur[0], nxt[1] - cur[1])
-                l_in, l_out = math.hypot(*vin), math.hypot(*vout)
-                sx = sy = 0.0
-                if n >= 3 and l_in > 1e-6 and l_out > 1e-6:
-                    ix, iy, ox, oy = vin[0] / l_in, vin[1] / l_in, vout[0] / l_out, vout[1] / l_out
-                    d = ix * ox + iy * oy
-                    if d > -0.9375:
-                        d += 1
-                        lx, ly = iy + oy, ix + ox
-                        if truetype:
-                            lx = -lx
-                        else:
-                            ly = -ly
-                        q = ox * iy - oy * ix
-                        if truetype:
-                            q = -q
-                        lim = min(l_in, l_out)
-                        scale = half / d if half * q <= lim * d else lim / q
-                        sx, sy = lx * scale, ly * scale
-                new.append((cur[0] + sx + half, cur[1] + sy))
-            start = end + 1
+        for pts in contours:
+            moved = _moved(pts, half, truetype)
+            counter = (signed_area(pts) < 0) != truetype
+            if counter == (strength > 0) and not sound(pts, moved):
+                lo, hi = 0.0, 1.0
+                for _ in range(8):
+                    mid = (lo + hi) / 2
+                    if sound(pts, _moved(pts, half * mid, truetype)):
+                        lo = mid
+                    else:
+                        hi = mid
+                moved = _moved(pts, half * lo, truetype)
+                limited.append(name)
+            new += [(x + half, y) for x, y in moved]
         g.coordinates = type(g.coordinates)([(round(x), round(y)) for x, y in new])
         g.recalcBounds(glyf)
         width, _ = hmtx[name]
@@ -161,30 +181,7 @@ def embolden(font: TTFont, strength: float) -> None:
             g.recalcBounds(glyf)
             width, _ = hmtx[name]
             hmtx[name] = (max(0, round(width + strength)) if width else 0, g.xMin)
-
-
-def _subset(script: str, unicodes: list[int]) -> TTFont:
-    """Noto's font for the script, subset to `unicodes` with its layout closure."""
-    font = TTFont(noto_file(script))
-    opts = subset.Options()
-    opts.layout_features = ["*"]
-    opts.layout_scripts = ["*"]
-    opts.glyph_names = True
-    opts.name_IDs = ["*"]
-    opts.notdef_outline = False
-    opts.hinting = False
-    # vertical metrics (Ethiopic has them), hinting and metadata: Katagami has none of these
-    opts.drop_tables += ["STAT", "vhea", "vmtx", "VVAR", "gasp", "prep", "meta", "hdmx", "LTSH", "VDMX", "DSIG", "kern"]
-    sub = subset.Subsetter(opts)
-    sub.populate(unicodes=unicodes)
-    sub.subset(font)
-    # Some Noto fonts swap glyphs by weight (FeatureVariations). Instancing applies the swap
-    # at one master and not another, so the masters' feature lists would differ; drop it.
-    for tag in ("GSUB", "GPOS"):
-        if tag in font and getattr(font[tag].table, "FeatureVariations", None) is not None:
-            font[tag].table.FeatureVariations = None
-            font[tag].table.Version = 0x00010000
-    return font
+    return sorted(set(limited))
 
 
 def _statics(font: TTFont, factor: float, work: Path, stem: str) -> dict[str, TTFont]:
@@ -200,7 +197,9 @@ def _statics(font: TTFont, factor: float, work: Path, stem: str) -> dict[str, TT
         else:
             static = TTFont(_save(font, work / f"{stem}.ttf"))
         # a weight Noto does not draw, from the nearest one it does
-        embolden(static, (NOTO_STEM[wght] - NOTO_STEM[near]) * static["head"].unitsPerEm / 1000)
+        limited = embolden(static, (NOTO_STEM[wght] - NOTO_STEM[near]) * static["head"].unitsPerEm / 1000)
+        if limited:
+            print(f"  {stem} {style}: {len(limited)} glyphs keep a counter open by emboldening it less")
         scale_upem(static, round(2048 * factor))  # Noto's units times 2048 / its em, times factor
         static["head"].unitsPerEm = 2048
         out[style] = static

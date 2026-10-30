@@ -10,6 +10,7 @@ import math
 from dataclasses import dataclass
 
 import numpy as np
+import pathops
 
 from ufoLib2.objects import Contour, Glyph, Point
 
@@ -283,56 +284,101 @@ def keep_stroke(glyph: Glyph, plan, before, floor: float) -> int:
 # outward by strength/2 on each side; negative strength thins.
 
 
-def _embolden(glyph: Glyph, strength: float, axis: int) -> None:
+def signed_area(pts: list) -> float:
+    return sum(pts[k - 1][0] * pts[k][1] - pts[k][0] * pts[k - 1][1] for k in range(len(pts))) / 2
+
+
+def inside_out(pts: list) -> float:
+    """How much more a contour fills than its signed area: the area of its lobes that run the other way round, twice."""
+    path = pathops.Path()
+    pen = path.getPen()
+    pen.moveTo(pts[0])
+    for pt in pts[1:]:
+        pen.lineTo(pt)
+    pen.closePath()
+    path.simplify()
+    return path.area - abs(signed_area(pts))
+
+
+def sound(old: list, new: list) -> bool:
+    """Whether a shrunk contour keeps its direction, a fifth of its area and no more of it inside out than before."""
+    a0, a1 = signed_area(old), signed_area(new)
+    if not a0:
+        return True
+    if a0 * a1 <= 0 or abs(a1) < 0.2 * abs(a0):
+        return False
+    return inside_out(new) <= inside_out(old) + 0.01 * abs(a1) + 4
+
+
+def _shifted(orig: list, half: float, axis: int) -> list:
+    """Each point's new coordinate on `axis` when every edge moves outward by `half`."""
+    n = len(orig)
+    new = []
+    for i in range(n):
+        prv, cur, nxt = orig[i - 1], orig[i], orig[(i + 1) % n]
+        vin = (cur[0] - prv[0], cur[1] - prv[1])
+        vout = (nxt[0] - cur[0], nxt[1] - cur[1])
+        l_in, l_out = math.hypot(*vin), math.hypot(*vout)
+        if l_in < 1e-6 or l_out < 1e-6:
+            # degenerate: borrow the neighbour that has length
+            j = i
+            while l_in < 1e-6 and j > i - n:
+                j -= 1
+                prv = orig[j % n]
+                vin = (cur[0] - prv[0], cur[1] - prv[1])
+                l_in = math.hypot(*vin)
+            j = i
+            while l_out < 1e-6 and j < i + n:
+                j += 1
+                nxt = orig[j % n]
+                vout = (nxt[0] - cur[0], nxt[1] - cur[1])
+                l_out = math.hypot(*vout)
+            if l_in < 1e-6 or l_out < 1e-6:
+                new.append(cur[axis])
+                continue
+        ix, iy = vin[0] / l_in, vin[1] / l_in
+        ox, oy = vout[0] / l_out, vout[1] / l_out
+        d = ix * ox + iy * oy
+        shift = 0.0
+        if d > -0.9375:
+            d += 1
+            # lateral bisector, PostScript orientation: x outward is +(iy + oy), y outward is -(ix + ox)
+            lateral = iy + oy if axis == 0 else -(ix + ox)
+            q = ox * iy - oy * ix
+            l = min(l_in, l_out)
+            if abs(half) * q <= l * d:
+                shift = lateral * half / d
+            else:
+                shift = lateral * l / q * (1 if half >= 0 else -1)
+        new.append(cur[axis] + shift)
+    return new
+
+
+def _embolden(glyph: Glyph, strength: float, axis: int, keep_counters: bool = False) -> None:
     """FreeType-style emboldening along one axis (0 = x, 1 = y): every edge
     moves outward by half the strength, so stems (x) or horizontal strokes (y)
-    gain `strength` in thickness and the outline grows by it on that axis."""
+    gain `strength` in thickness and the outline grows by it on that axis. With
+    `keep_counters`, a counter that thickening would close or turn inside out
+    shrinks only as far as it stays `sound`."""
     half = strength / 2
     for contour in glyph.contours:
         pts = contour.points
-        n = len(pts)
-        if n < 3:
+        if len(pts) < 3:
             continue
         # UFO outlines are PostScript-oriented (outer contours counter-clockwise).
         orig = [(p.x, p.y) for p in pts]
-        new = []
-        for i in range(n):
-            prv, cur, nxt = orig[i - 1], orig[i], orig[(i + 1) % n]
-            vin = (cur[0] - prv[0], cur[1] - prv[1])
-            vout = (nxt[0] - cur[0], nxt[1] - cur[1])
-            l_in, l_out = math.hypot(*vin), math.hypot(*vout)
-            if l_in < 1e-6 or l_out < 1e-6:
-                # degenerate: borrow the neighbour that has length
-                j = i
-                while l_in < 1e-6 and j > i - n:
-                    j -= 1
-                    prv = orig[j % n]
-                    vin = (cur[0] - prv[0], cur[1] - prv[1])
-                    l_in = math.hypot(*vin)
-                j = i
-                while l_out < 1e-6 and j < i + n:
-                    j += 1
-                    nxt = orig[j % n]
-                    vout = (nxt[0] - cur[0], nxt[1] - cur[1])
-                    l_out = math.hypot(*vout)
-                if l_in < 1e-6 or l_out < 1e-6:
-                    new.append(cur[axis])
-                    continue
-            ix, iy = vin[0] / l_in, vin[1] / l_in
-            ox, oy = vout[0] / l_out, vout[1] / l_out
-            d = ix * ox + iy * oy
-            shift = 0.0
-            if d > -0.9375:
-                d += 1
-                # lateral bisector, PostScript orientation: x outward is +(iy + oy), y outward is -(ix + ox)
-                lateral = iy + oy if axis == 0 else -(ix + ox)
-                q = ox * iy - oy * ix
-                l = min(l_in, l_out)
-                if abs(half) * q <= l * d:
-                    shift = lateral * half / d
-                else:
-                    shift = lateral * l / q * (1 if half >= 0 else -1)
-            new.append(cur[axis] + shift)
+        new = _shifted(orig, half, axis)
+        if keep_counters and strength > 0 and signed_area(orig) < 0:
+            placed = lambda vals: [(v, y) if axis == 0 else (x, v) for (x, y), v in zip(orig, vals)]  # noqa: E731
+            if not sound(orig, placed(new)):
+                lo, hi = 0.0, 1.0
+                for _ in range(8):
+                    mid = (lo + hi) / 2
+                    if sound(orig, placed(_shifted(orig, half * mid, axis))):
+                        lo = mid
+                    else:
+                        hi = mid
+                new = _shifted(orig, half * lo, axis)
         for p, v in zip(pts, new):
             if axis == 0:
                 p.x = v
@@ -340,8 +386,8 @@ def _embolden(glyph: Glyph, strength: float, axis: int) -> None:
                 p.y = v
 
 
-def embolden_x(glyph: Glyph, strength: float) -> None:
-    _embolden(glyph, strength, 0)
+def embolden_x(glyph: Glyph, strength: float, keep_counters: bool = False) -> None:
+    _embolden(glyph, strength, 0, keep_counters)
 
 
 def embolden_y(glyph: Glyph, strength: float) -> None:
