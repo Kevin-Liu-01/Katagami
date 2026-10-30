@@ -30,8 +30,10 @@ from pathlib import Path
 from ufoLib2.objects import Component, Contour, Point
 
 from fontTools.designspaceLib import AxisDescriptor, DesignSpaceDocument, InstanceDescriptor, SourceDescriptor
+from fontTools.pens.areaPen import AreaPen
 from fontTools.pens.basePen import BasePen
 from fontTools.pens.recordingPen import DecomposingRecordingPen
+from fontTools.pens.transformPen import TransformPen
 
 sys.path.insert(0, str(Path(__file__).parent))
 from kerf_build.fontops import (  # noqa: E402
@@ -43,7 +45,7 @@ from kerf_build.outline import (  # noqa: E402
     XMap,
     apply_squaring, embolden_x, embolden_y, handles, keep_stroke, plan_corners, plan_squaring, round_corners, straighten_runs,
 )
-from kerf_build.missing import add_missing, complete_anchors, declare_scripts, patch_ccmp, turned_small_f  # noqa: E402
+from kerf_build.missing import add_missing, complete_anchors, declare_scripts, dot_marks, patch_ccmp, turned_small_f, unseat_marks  # noqa: E402
 from kerf_build.profiles import PROFILES, Profile  # noqa: E402
 
 FEATURES = ROOT / "vendor" / "inter" / "src" / "features"
@@ -350,10 +352,45 @@ def straighten_q(fonts) -> None:
 
 SMALL_CAP_TRACK = 0.03  # of the em, added around each small capital
 SMALL_CAP_MARKS = ("_top", "_bottom", "_ogonek", "_cedilla")  # the anchors a mark attaches by
-# ɤ, ѿ and ỻ close their counters at Black, the strokes of ⱥ, ƀ, ǥ and ҹ fill them,
-# and ѹ, ŀ and ҋ run their parts together
-SMALL_CAP_SKIP = (0x0264, 0x047F, 0x1EFB, 0x2C65, 0x0180, 0x01E5, 0x04B9, 0x0479, 0x0140, 0x048B)
 SMALL_CAP_FLAT = (0x044D, 0x0454)  # э and є, whose openings close at Black when their bars are emboldened
+# A capital's bar, dot, tail or stroke emboldened with it closes the small capital's counters at Black,
+# so these small capitals are their base's small capital with the parts set apart. A "scaled" part is
+# the capital's, scaled and placed as the capital's outline is but not emboldened, so it keeps the
+# capital's room ("full" keeps its size, "thick" its thickness; "middle" centres it in the white it
+# crosses near its top, "cross" the white at its own centre, "clip" keeps it 0.3 stem off the walls, and "retract" ends a bar that would leave less than
+# that each side at the stem it crosses); any other part is the lowercase's,
+# at its own size, and keeps its place against the base: x against the ink's left, right or centre
+# or after the advance, y as drawn or centred. A "fit" part shrinks to under 0.45 of the white it
+# sits in and moves to where that white is widest.
+SMALL_CAP_PARTS = {
+    0x0140: ("left", "keep"),  # ŀ: L and ŀ's dot
+    0x0180: ("scaled", "retract"),  # ƀ: B and Ƀ's bar, which ends at the stem where B's counter is too small for it
+    0x01E5: ("scaled", "full", "clip"),  # ǥ: G and Ǥ's bar, at its own size so it reaches past the jaw, clear of the bowl
+    0x2C65: ("scaled", "thick", "cross"),  # ⱥ: A and Ⱥ's stroke, as thick as the capital's, across the middle of A's counter
+    0x04B9: ("scaled", "thick", "middle"),  # ҹ: Ч and Ҹ's stroke, as thick as the capital's, in the middle of the white
+    0x047F: ("center", "keep"),  # ѿ: Ѡ and ѿ's т
+    0x048B: ("right", "keep"),  # ҋ: Й and ҋ's tail
+    0x0479: ("after", "keep"),  # ѹ: О and ѹ's у, as Ѹ is О and у
+    0x0298: ("center", "center", "fit"),  # ʘ: O and ʘ's dot; ʘ has no capital
+    0x037D: ("center", "center", "fit"),  # ͽ: Ͻ and ͽ's dot, set back from the mouth where Black's terminals curl in
+    0x01F0: ("center", "keep"),  # ǰ: J and ǰ's caron; ǰ has no capital
+    0x1E96: ("center", "keep"),  # ẖ: H and ẖ's line; ẖ has no capital
+}
+# Black's emboldening closes these small capitals' counters (ß's channel, ω's legs, ỿ's loop,
+# the hook of ʕ, A's triangle, Ч's bowl): at Black they are drawn this much wider and emboldened
+# this share of the way back to the lowercase stem across, and this share of the horizontal strokes' way up
+SMALL_CAP_OPEN = {
+    0x00DF: (1.14, 0.3, 1),
+    0x03C9: (1.10, 0.3, 1),
+    0x1EFF: (1.12, 0.5, 0.4),
+    0x0295: (1.10, 1, 1),
+    0x0061: (1.14, 0.45, 1),
+    0x0250: (1.14, 0.45, 1),
+    0x0447: (1.12, 0.6, 1),
+}
+SMALL_CAP_SELF = (0x0295,)  # ʕ is drawn at the cap height and has no capital: its small capital is ʕ redrawn
+# Ɤ is ɤ with its arms drawn up and Ʝ is ʝ's tail under a stem, so their small capitals are ɤ and dotless ʝ, tracked
+SMALL_CAP_LOWER = {0x0264: None, 0x029D: "jcrosstail.ccmp"}
 
 
 def letter_marks(f, name):
@@ -382,6 +419,131 @@ def letter_marks(f, name):
     return base, marks
 
 
+def _contour_points(font, glyph, transform=(1, 0, 0, 1, 0, 0), steps: int = 8) -> list[list[tuple[float, float]]]:
+    """Each contour of glyph, components drawn in and curves flattened, as points."""
+    rec = DecomposingRecordingPen(font)
+    glyph.draw(rec)
+    xx, xy, yx, yy, dx, dy = transform
+    contours, cur = [], []
+    for op, args in rec.value:
+        if op == "moveTo":
+            cur = [args[0]]
+            contours.append(cur)
+        elif op == "curveTo":
+            (ax, ay), ((bx, by), (cx, cy), (ex, ey)) = cur[-1], args
+            cur += [((1 - t) ** 3 * ax + 3 * (1 - t) ** 2 * t * bx + 3 * (1 - t) * t * t * cx + t**3 * ex,
+                     (1 - t) ** 3 * ay + 3 * (1 - t) ** 2 * t * by + 3 * (1 - t) * t * t * cy + t**3 * ey)
+                    for t in (j / steps for j in range(1, steps + 1))]
+        elif args:
+            cur.append(args[-1])
+    return [[(xx * x + yx * y + dx, xy * x + yy * y + dy) for x, y in c] for c in contours]
+
+
+def _gap(a: list[tuple[float, float]], b: list[tuple[float, float]]) -> float:
+    return min(math.dist(p, q) for p in a for q in b)
+
+
+def _spans(font, glyph, x: float, y: float):
+    """The nearest ink left, right, below and above (x, y), each None where there is none."""
+    xs, ys = [], []
+    for c in _contour_points(font, glyph):
+        for (x0, y0), (x1, y1) in zip(c, c[1:] + c[:1]):
+            if (y0 <= y < y1) or (y1 <= y < y0):
+                xs.append(x0 + (y - y0) * (x1 - x0) / (y1 - y0))
+            if (x0 <= x < x1) or (x1 <= x < x0):
+                ys.append(y0 + (x - x0) * (y1 - y0) / (x1 - x0))
+    return (max((v for v in xs if v < x), default=None), min((v for v in xs if v > x), default=None),
+            max((v for v in ys if v < y), default=None), min((v for v in ys if v > y), default=None))
+
+
+def _room(font, glyph, x: float, y: float) -> tuple[tuple[float, float], tuple[float, float]]:
+    """The white around (x, y) along the horizontal and the vertical through it. A side open
+    to the outside (ͽ's mouth) closes where the ink above and below it ends."""
+    left, right, low, high = _spans(font, glyph, x, y)
+    b = glyph.getBounds(font)
+    for side, step in (("left", -8), ("right", 8)):
+        if (left if side == "left" else right) is None:
+            edge = x
+            while b.xMin <= edge <= b.xMax and all(v is not None for v in _spans(font, glyph, edge + step, y)[2:]):
+                edge += step
+            if side == "left":
+                left = edge
+            else:
+                right = edge
+    return (left, right), (b.yMin if low is None else low, b.yMax if high is None else high)
+
+
+def _widest_white(font, glyph, x: float, y: float) -> tuple[float, float, float]:
+    """Along the horizontal through (x, y), inside the white it lies in, the point whose
+    white is widest both ways, and that width: a dot there clears the walls on every side.
+    An open side (ͽ's mouth) does not count as a wall."""
+    left, right, _, _ = _spans(font, glyph, x, y)
+    lo = left if left is not None else glyph.getBounds(font).xMin
+    hi = right if right is not None else glyph.getBounds(font).xMax
+    best = (x, y, 0.0)
+    for i in range(1, 64):
+        cx = lo + (hi - lo) * i / 64
+        _, _, low, high = _spans(font, glyph, cx, y)
+        if low is None or high is None:
+            continue
+        across = 2 * min(cx - left if left is not None else math.inf, right - cx if right is not None else math.inf)
+        room = min(across, high - low)
+        if room > best[2]:
+            best = (cx, (low + high) / 2, room)
+    return best
+
+
+def fit_part(font, base, part, rule, gap: float) -> None:
+    """Seat a small capital's bar or stroke in the white of its base: "middle" and "cross" centre it
+    across the white it crosses, "clip" keeps its far end and top `gap` off the walls of
+    the counter its left end sits in, and "retract" ends a bar at the wall it crosses
+    when the counter beyond leaves it less than `gap` above, below or after it."""
+    b = part.getBounds(font)
+    cy = (b.yMin + b.yMax) / 2
+    points = [p for c in part.contours for p in c.points]
+    if "middle" in rule or "cross" in rule:  # "middle" measures near its top, clear of the stroke it crosses
+        y = b.yMax - 0.2 * (b.yMax - b.yMin) if "middle" in rule else cy
+        (x0, x1), _ = _room(font, base, (b.xMin + b.xMax) / 2, y)
+        for p in points:
+            p.x += (x0 + x1 - b.xMin - b.xMax) / 2
+    if "clip" in rule:
+        (x0, x1), (y0, y1) = _room(font, base, b.xMin + 0.25 * (b.xMax - b.xMin), cy)
+        down = max(min(0, y1 - gap - b.yMax), y0 + gap - b.yMin)
+        for p in points:
+            p.x, p.y = max(p.x, x0 + gap), p.y + down
+    if "retract" in rule:
+        (x0, x1), (y0, y1) = _room(font, base, b.xMax - 1, cy)
+        if x1 - b.xMax < gap or b.yMin - y0 < gap or y1 - b.yMax < gap:
+            for p in points:
+                p.x = min(p.x, x0)
+
+
+def clear_horns(f, letters: dict[str, tuple[str, str]]) -> None:
+    """The accents above a horned small capital (ữ, ớ) clear the horn by as
+    much as the lowercase's do at the same weight: they move left by up to
+    48 units, then up, because the small capital's horn rises nearer them.
+    letters maps each to its lowercase base and its small capital base."""
+    for lc, (b, base) in letters.items():
+        g = f[f"{lc}.smcp"]
+        above = lambda comps: [c for c in comps if any(a.name == "_top" for a in f[c.baseGlyph].anchors)]  # noqa: E731
+        horn = lambda name: max(_contour_points(f, f[name]), key=lambda c: max(x for x, _ in c))  # noqa: E731
+        ink = lambda comps: [p for c in comps for contour in _contour_points(f, f[c.baseGlyph], c.transformation) for p in contour]  # noqa: E731
+        marks, h = above(g.components), horn(f"{base}.smcp")
+        if not marks or not above(f[lc].components):  # ự has only a dot below
+            continue
+        want = _gap(horn(b), ink(above(f[lc].components)))
+        shift = lift = 0
+        while shift + lift < 200 and _gap(h, [(x - shift, y + lift) for x, y in ink(marks)]) < want:
+            if shift < 48:
+                shift += 8
+            else:
+                lift += 8
+        for c in marks:
+            t = list(c.transformation)
+            t[4], t[5] = t[4] - shift, t[5] + lift
+            c.transformation = tuple(t)
+
+
 def small_caps(fonts) -> None:
     """Small capitals for every lowercase letter with a capital, as smcp and c2sc.
 
@@ -393,7 +555,11 @@ def small_caps(fonts) -> None:
     in the anchor it attaches to, and the capital's ogonek scaled with the letter,
     because the lowercase shapes its own to its letter. A capital set from other capitals (Ĳ, Ы) is set
     from their small caps. Every other letter (ø, ł, ď, and α, whose capital is
-    a component of A) is drawn from its capital, components drawn in.
+    a component of A) is drawn from its capital, components drawn in. The
+    letters in SMALL_CAP_PARTS are their base's small cap with the capital's
+    bar or stroke scaled, or the lowercase's own dot, tail or mark; ʕ is
+    redrawn from itself, ɤ is ɤ tracked, and the accents of ữ and the other
+    horned letters clear the horn as the lowercase's do.
     """
     ref = fonts["Regular"]
     cmap = {u: g.name for g in ref for u in g.unicodes}
@@ -406,9 +572,27 @@ def small_caps(fonts) -> None:
             pairs[g.name] = cmap[ord(up)]
     if 0x00DF in cmap and 0x1E9E in cmap:
         pairs[cmap[0x00DF]] = cmap[0x1E9E]  # ß capitalises to SS; its small capital is ẞ
-    for u in SMALL_CAP_SKIP:
-        pairs.pop(cmap.get(u), None)
+    for u in SMALL_CAP_SELF:
+        if u in cmap:
+            pairs[cmap[u]] = cmap[u]
+    capital = dict(pairs)
     anchor = lambda g, name: next(((a.x, a.y) for a in g.anchors if a.name == name), None)  # noqa: E731
+
+    def part_shape(f, lc):
+        """lc's base and its other parts, or None unless lc is a base, moved at most, with other parts."""
+        g = f[lc]
+        if not g.components or tuple(g.components[0].transformation)[:4] != (1, 0, 0, 1):
+            return None
+        return g.components[0].baseGlyph, [c.baseGlyph for c in g.components[1:]], len(g.contours)
+
+    # every master must set the letter from the same parts
+    source = lambda lc, rule: capital.get(lc) if rule[0] == "scaled" else lc  # noqa: E731
+    parted = {cmap[u]: rule for u, rule in SMALL_CAP_PARTS.items()
+              if u in cmap and source(cmap[u], rule) and part_shape(ref, source(cmap[u], rule))
+              and all(part_shape(f, source(cmap[u], rule)) == part_shape(ref, source(cmap[u], rule)) for f in fonts.values())}
+    lowered = {cmap[u]: src or cmap[u] for u, src in SMALL_CAP_LOWER.items() if u in cmap and (src or cmap[u]) in ref}
+    for lc in [*parted, *lowered]:
+        pairs.pop(lc, None)
     shape = lambda m: m and (m[0], [(c.baseGlyph, a) for c, a in m[1]])  # noqa: E731
     drawn = [lc for lc, uc in pairs.items() if ref[uc].contours and not ref[uc].components]
     marked = {lc: letter_marks(ref, lc) for lc in pairs if lc not in drawn}
@@ -451,10 +635,18 @@ def small_caps(fonts) -> None:
             built.append(lc)
     for lc in built:
         small.setdefault(pairs[lc], lc)
+    # an accented letter that cannot be built (ɉ's capital is J with a bar, ʝ's is drawn) is drawn
+    # from its capital, unless the capital carries marks, which emboldening would fuse
+    has_marks = lambda uc: any(anchor(ref[c.baseGlyph], a) for c in ref[uc].components for a in SMALL_CAP_MARKS)  # noqa: E731
+    unbuilt = [lc for lc in marked if lc not in built and not has_marks(pairs[lc])]
+    redrawn += unbuilt
+    for lc in unbuilt:
+        small.setdefault(pairs[lc], lc)
     compound = [lc for lc in redrawn if parts(pairs[lc]) and all(n in small and small[n] != lc for n in parts(pairs[lc]))]
     redrawn = [lc for lc in redrawn if lc not in compound]
     flat = {cmap[u] for u in SMALL_CAP_FLAT if u in cmap}
-    for f in fonts.values():
+    opened = {cmap[u]: v for u, v in SMALL_CAP_OPEN.items() if u in cmap}
+    for style, f in fonts.items():
         upm, xh, cap = f.info.unitsPerEm, f.info.xHeight, f.info.capHeight
         lc_stem = stem(f)
         b = f["I"].getBounds(f)
@@ -470,17 +662,19 @@ def small_caps(fonts) -> None:
             src.draw(pen)
             pen.replay(g.getPen())
             kk, ddy = (xh / cap, 0) if lc in flat else (k, dy)
+            wide, share, up = opened.get(lc, (1, 1, 1)) if style == "Black" else (1, 1, 1)
+            kx, ddx, ddy = kk * wide, dx * share, ddy * up
             for c in g.contours:
                 for pt in c.points:
-                    pt.x, pt.y = pt.x * kk, pt.y * kk
-            embolden_x(g, dx)
+                    pt.x, pt.y = pt.x * kx, pt.y * kk
+            embolden_x(g, ddx)
             embolden_y(g, ddy)
             for c in g.contours:
                 for pt in c.points:
-                    pt.x, pt.y = pt.x + dx / 2 + track / 2, pt.y + ddy / 2
+                    pt.x, pt.y = pt.x + ddx / 2 + track / 2, pt.y + ddy / 2
             for a in src.anchors:
-                g.appendAnchor({"name": a.name, "x": a.x * kk + dx / 2 + track / 2, "y": a.y * kk + ddy / 2})
-            g.width = round(src.width * kk + dx + track)
+                g.appendAnchor({"name": a.name, "x": a.x * kx + ddx / 2 + track / 2, "y": a.y * kk + ddy / 2})
+            g.width = round(src.width * kx + ddx + track)
         for lc in compound:
             src = f[pairs[lc]]
             g = f.newGlyph(f"{lc}.smcp")
@@ -509,13 +703,86 @@ def small_caps(fonts) -> None:
                 g.components.append(Component(c.baseGlyph, tuple(t)))
             for a in sc.anchors:
                 g.appendAnchor({"name": a.name, "x": a.x, "y": a.y})
-    made = drawn + redrawn + compound + built
+        clear_horns(f, {lc: plan(f, lc)[:2] for lc in built if plan(f, lc)[1] in ("uhorn", "ohorn")})
+        for lc, rule in parted.items():
+            scaled = rule[0] == "scaled"
+            src = f[source(lc, rule)]
+            base = src.components[0].baseGlyph
+            lower = small.get(base, {"idotless": "i", "jdotless": "j"}.get(base, base))
+            sc = f[f"{lower}.smcp"]
+            lb, sb = f[base].getBounds(f), sc.getBounds(f)
+            g = f.newGlyph(f"{lc}.smcp")
+            g.components.append(Component(sc.name))
+            right = sb.xMax
+            ox, oy = src.components[0].transformation[4:]  # Black's Ƀ sets its B 80 units in
+            pieces = [(c.baseGlyph, c) for c in src.components[1:]] + ([(None, src)] if src.contours else [])
+            for name, c in pieces:
+                a = name and next((a.name[1:] for a in f[name].anchors if a.name in SMALL_CAP_MARKS), None)
+                if not scaled and a and anchor(f[base], a) and anchor(sc, a):  # a mark moves as its anchor does
+                    (x0, y0), (x1, y1) = anchor(f[base], a), anchor(sc, a)
+                    t = list(c.transformation)
+                    t[4], t[5] = round(t[4] + x1 - x0), round(t[5] + y1 - y0)
+                    g.components.append(Component(name, tuple(t)))
+                    continue
+                piece = f.newGlyph("_smcp_piece")
+                if name:
+                    piece.components.append(Component(name, c.transformation))
+                else:
+                    for contour in src.contours:
+                        contour.drawPoints(piece.getPointPen())
+                pb = piece.getBounds(f)
+                pcx, pcy = (pb.xMin + pb.xMax) / 2, (pb.yMin + pb.yMax) / 2
+                if scaled:
+                    t = (k, 0, 0, k, dx / 2 + track / 2 - k * ox, dy / 2 - k * oy)
+                    if "full" in rule:
+                        t = (1, 0, 0, 1, (k - 1) * pcx + dx / 2 + track / 2 - k * ox, (k - 1) * pcy + dy / 2 - k * oy)
+                else:
+                    xrule, yrule = rule[:2]
+                    sx = {"left": sb.xMin - lb.xMin, "right": sb.xMax - lb.xMax,
+                          "center": (sb.xMin + sb.xMax - lb.xMin - lb.xMax) / 2, "after": sc.width - f[base].width}[xrule] - ox
+                    sy = {"keep": 0, "center": (sb.yMin + sb.yMax - lb.yMin - lb.yMax) / 2}[yrule] - oy
+                    t = (1, 0, 0, 1, round(sx), round(sy))
+                    if "fit" in rule:
+                        cx, cy, room = _widest_white(f, sc, pcx + sx, pcy + sy)
+                        z = min(1, 0.45 * room / max(pb.xMax - pb.xMin, pb.yMax - pb.yMin))
+                        t = (z, 0, 0, z, cx - z * pcx, cy - z * pcy)
+                if name and not scaled and "fit" not in rule:  # every master sets it the same way
+                    t0 = c.transformation
+                    g.components.append(Component(name, (1, 0, 0, 1, t0[4] + t[4], t0[5] + t[5])))
+                else:
+                    pen = DecomposingRecordingPen(f)
+                    piece.draw(pen)
+                    drawn_piece = f.newGlyph("_smcp_drawn")
+                    pen.replay(TransformPen(drawn_piece.getPen(), t))
+                    if "thick" in rule:  # back to the capital's thickness: its area over its length
+                        area = AreaPen(f)
+                        piece.draw(area)
+                        e = abs(area.value) / math.hypot(pb.xMax - pb.xMin, pb.yMax - pb.yMin) * (1 - k)
+                        embolden_x(drawn_piece, e)
+                        embolden_y(drawn_piece, e)
+                    fit_part(f, sc, drawn_piece, rule, 0.3 * lc_stem)
+                    for contour in drawn_piece.contours:
+                        contour.drawPoints(g.getPointPen())
+                    del f["_smcp_drawn"]
+                right = max(right, t[0] * pb.xMax + t[4])
+                del f["_smcp_piece"]
+            g.width = round(sc.width + src.width - f[base].width) if rule[0] == "after" else round(sc.width + right - sb.xMax)
+            for a in sc.anchors:
+                g.appendAnchor({"name": a.name, "x": a.x, "y": a.y})
+        for lc, src in lowered.items():
+            g = f.newGlyph(f"{lc}.smcp")
+            g.components.append(Component(src, (1, 0, 0, 1, round(track / 2), 0)))
+            g.width = round(f[src].width + track)
+            for a in f[src].anchors:
+                g.appendAnchor({"name": a.name, "x": a.x + round(track / 2), "y": a.y})
+    made = drawn + redrawn + compound + built + list(parted) + list(lowered)
     lc_names = " ".join(made)
     sc_names = " ".join(f"{lc}.smcp" for lc in made)
     # one small cap per capital: dotless i, long s and final sigma share theirs with i, s and sigma
     upper = {}
     for lc in made:
-        upper.setdefault(pairs[lc], f"{lc}.smcp")
+        if capital.get(lc, lc) != lc:  # c2sc has nothing to do for ʕ, ʘ, ǰ and ẖ, which have no capital
+            upper.setdefault(capital[lc], f"{lc}.smcp")
     uc_names = " ".join(upper)
     uc_sc_names = " ".join(upper.values())
     # Turkish and Azerbaijani i keeps its dot in small capitals, as İ does
@@ -1822,6 +2089,7 @@ def transform(p: Profile, italic: bool = False) -> tuple[dict, dict]:
     if p.promote:
         promote_alternates(fonts, p.promote, FEATURES)
         relabel_features(fonts, p.promote)
+    dot_marks(fonts)
     # after the swaps, which carry each alternate's own anchors into the default
     complete_anchors(fonts)
     shape_curves(fonts, p)
@@ -1881,10 +2149,12 @@ def build(p: Profile, italic: bool = False) -> Path:
             f["notequal"].width = f["equal"].width  # ≠ takes the roman's a unit narrower than the Italic's other math signs
         corners = {name: plan for name, plan in corners.items() if name in roman["Regular"] and name not in replaced}
         corners |= {name: roman_corners[name] for name in replaced if name in roman_corners}
+        decompose_transformed(fonts)  # the scaled and turned parts built since the Italic was stood upright
         shear(fonts, slant_tangent(fonts["Regular"]), fonts["Regular"].info.xHeight / 2)
     for f in fonts.values():
         f.lib.pop(FACETS_KEY, None)
     erase_open_corners(fonts)
+    unseat_marks(fonts["Regular"])
 
     out = ROOT / "build" / (f"{p.key}-italic" if italic else p.key)
     if out.exists():

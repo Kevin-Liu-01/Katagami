@@ -4,9 +4,11 @@ Copyright 2022 The Noto Project Authors (https://github.com/notofonts), for the
 scripts merged into Katagami Sans, Katagami Round and Katagami Text from Noto Sans
 Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name
 'Source', for Katagami CJK SC, TC, JP and KR, from Noto Sans CJK
+
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
-http://scripts.sil.org/OFL
+https://openfontlicense.org
+
 
 -----------------------------------------------------------
 SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
@@ -47,7 +49,7 @@ new environment.
 "Author" refers to any designer, engineer, programmer, technical
 writer or other person who contributed to the Font Software.
 
-PERMISSION AND CONDITIONS
+PERMISSION & CONDITIONS
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of the Font Software, to use, study, copy, merge, embed, modify,
 redistribute, and sell modified and unmodified copies of the Font

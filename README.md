@@ -184,7 +184,7 @@ After a build, these commands write the website into a checkout of [Katagami-Web
 
 ## Status
 
-Version 0.2 adds an Italic for every member, a reworked Katagami Serif (serifs that hold at Thin, a lighter Black, crisper brackets, even spacing and beaks on its curved terminals), two hand corrections (a straight Q tail and a squarer 2), Greek and Cyrillic fitted to Katagami Mono's cell, nine more scripts, the 60 characters Google Fonts' case and language checks ask for, accents that attach to Cyrillic and Greek letters, and fixes for fontbakery's naming, STAT, gasp, prep, version and clipping checks. Next come hinting and redrawing the 28 merged scripts in Katagami's style.
+Version 0.2 adds an Italic for every member, a reworked Katagami Serif (serifs that hold at Thin, a lighter Black, crisper brackets, even spacing and beaks on its curved terminals), two hand corrections (a straight Q tail and a squarer 2), Greek and Cyrillic fitted to Katagami Mono's cell, nine more scripts, the 93 characters Google Fonts' case and language checks ask for, small capitals for 620 letters, accents that attach to Cyrillic and Greek letters, and fixes for fontbakery's naming, STAT, gasp, prep, version and clipping checks. Next come hinting and redrawing the 28 merged scripts in Katagami's style.
 
 ## Credits
 

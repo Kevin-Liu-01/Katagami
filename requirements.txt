@@ -6,3 +6,5 @@ skia-pathops
 drawbot-skia
 uharfbuzz
 numpy
+chws-tool
+glyphsets

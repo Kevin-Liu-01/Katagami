@@ -11,7 +11,8 @@ Katagami Sans -> Katagami Mono:
      rules as Latin, their rounds and wide letters with the Latin ones
   5. box drawing and block elements are drawn on the cell grid, and so are
      Braille patterns and the status symbols terminal agents print
-  6. composites re-seated; kerning dropped
+  6. composites re-seated; kerning dropped; ď, ľ, ť and Ľ, fitted whole,
+     are set again from their fitted letter and caron
   7. Katagami Sans's OpenType features (all of Inter's, plus small capitals) with
      capital spacing left out, and code ligatures as an opt-in dlig: each
      character keeps its cell and the last one draws the symbol across them
@@ -42,7 +43,7 @@ from pathlib import Path
 
 import ufoLib2
 from fontTools.designspaceLib import AxisDescriptor, DesignSpaceDocument, InstanceDescriptor, SourceDescriptor
-from ufoLib2.objects import Contour, Glyph, Point
+from ufoLib2.objects import Component, Contour, Glyph, Point
 
 sys.path.insert(0, str(Path(__file__).parent))
 from kerf_build.boxdraw import draw_box_glyphs  # noqa: E402
@@ -53,7 +54,7 @@ from kerf_build.fontops import (  # noqa: E402
 )
 from kerf_build.outline import XMap, embolden_x, straighten_runs  # noqa: E402
 from build_sans import relabel_features  # noqa: E402
-from kerf_build.missing import complete_anchors, patch_ccmp  # noqa: E402
+from kerf_build.missing import complete_anchors, patch_ccmp, unseat_marks  # noqa: E402
 from fontTools.pens.recordingPen import DecomposingRecordingPen  # noqa: E402
 
 FAMILY = "Katagami Mono"
@@ -463,6 +464,36 @@ def write_designspace(paths, italic: bool = False) -> Path:
     return out
 
 
+CARONS = ("dcaron", "lcaron", "tcaron", "Lcaron")  # ď ľ ť Ľ, whose caron is Inter's comma-like alternate
+
+
+def caron_splits(ref, flatten: list[str]) -> dict[str, int]:
+    """For ď, ľ, ť and Ľ, which are flattened to be fitted whole, how many of
+    their contours come from the letter; the rest are the caron."""
+    counts = {}
+    for name in CARONS:
+        if name in flatten and len(ref[name].components) == 2:
+            pen = DecomposingRecordingPen(ref)
+            ref[name].components[0].draw(pen)
+            counts[name] = sum(op == "closePath" for op, _ in pen.value)
+    return counts
+
+
+def split_carons(font, counts: dict[str, int]) -> None:
+    """ď, ľ, ť and Ľ as two components again, the fitted letter and the fitted
+    caron, so a reader of the font can tell the caron is not an apostrophe."""
+    for name, n in counts.items():
+        g = font[name]
+        for suffix, contours in ((".letter", g.contours[:n]), (".caron", g.contours[n:])):
+            part = font.newGlyph(name + suffix)
+            part.width = g.width
+            for c in contours:
+                c.drawPoints(part.getPointPen())
+        g.clearContours()
+        g.components.append(Component(name + ".letter"))
+        g.components.append(Component(name + ".caron"))
+
+
 def fit(italic: bool, work: Path) -> tuple[dict, dict]:
     """Katagami Sans's masters (an Italic's stood upright) with a Bold
     interpolated in `work`, fitted to the cell: alternates promoted, every
@@ -482,6 +513,7 @@ def fit(italic: bool, work: Path) -> tuple[dict, dict]:
     complete_anchors(fonts)  # the serif I has no cedilla anchor until it is planned again
     features = mono_features(fonts["Regular"].features.text, set(fonts["Regular"].keys()))
     flatten = composites_to_flatten(fonts["Regular"])
+    carons = caron_splits(fonts["Regular"], flatten)
     for f in fonts.values():
         decompose(f, flatten)
     scales = plan_scales(fonts["Regular"])
@@ -522,6 +554,7 @@ def fit(italic: bool, work: Path) -> tuple[dict, dict]:
         # the dotted circle is drawn again on the cell, not fitted to it, so its dots stay round
         draw_dotted_circle(f, dot_size(stem, regular_stem), min(f.info.xHeight, MAX_INK["other"] * CELL), CELL, dotted_anchors)
         combining_double_acute(f)  # again from the fitted double acute
+        split_carons(f, carons)
     return fonts, measures
 
 
@@ -555,6 +588,7 @@ def main(italic: bool = False) -> None:
             f.info.styleMapStyleName = "italic" if style == "Regular" else None
         f.lib[FILTERS_KEY] = []  # Katagami Sans's corners are already erased where every master agrees
         assign_categories(f)
+    unseat_marks(fonts["Regular"])
 
     relabel_features(fonts, PROMOTE)
     shutil.copytree(FEATURES, out / "features")
