@@ -119,13 +119,15 @@ def group(cp: int) -> str:
     return {"L": "letters", "N": "figures", "P": "punctuation", "S": "symbols", "M": "marks"}.get(cat[0], "other")
 
 
-def feature_chars(font: TTFont, feature, limit: int = 48) -> str:
-    """The characters a feature's single, alternate and ligature substitutions
-    start from, in code point order: what turning it on changes."""
+def feature_chars(font: TTFont, records: list, limit: int = 48) -> str:
+    """The characters the single, alternate and ligature substitutions of all of
+    a tag's records start from, in code point order: what turning it on changes.
+    Latin, Greek and Cyrillic come alone when the tag changes any of them, since
+    a merged script's record (Devanagari's ss01) would otherwise lead the sample."""
     lookups = font["GSUB"].table.LookupList.Lookup
     rev = {g: cp for cp, g in font.getBestCmap().items()}
     found = set()
-    for li in feature.LookupListIndex:
+    for li in {li for feature in records for li in feature.LookupListIndex}:
         lookup = lookups[li]
         for st in lookup.SubTable:
             kind = lookup.LookupType
@@ -133,26 +135,27 @@ def feature_chars(font: TTFont, feature, limit: int = 48) -> str:
                 kind, st = st.ExtensionLookupType, st.ExtSubTable
             keys = (st.mapping if kind == 1 else st.alternates if kind == 3 else st.ligatures if kind == 4 else {})
             found |= {rev[g] for g in keys if g in rev}
-    return "".join(chr(cp) for cp in sorted(found) if not unicodedata.category(chr(cp)).startswith(("C", "Z", "M")))[:limit]
+    found = {cp for cp in found if not unicodedata.category(chr(cp)).startswith(("C", "Z", "M"))}
+    core = {cp for cp in found if cp not in SCRIPT_OF}
+    return "".join(chr(cp) for cp in sorted(core or found))[:limit]
 
 
 def features(font: TTFont) -> list[dict]:
     name = font["name"]
-    out, seen = [], set()
+    records: dict[str, list] = {}
     for rec in font["GSUB"].table.FeatureList.FeatureRecord:
-        tag = rec.FeatureTag
-        if tag in seen:
-            continue
-        seen.add(tag)
+        records.setdefault(rec.FeatureTag, []).append(rec.Feature)
+    out = []
+    for tag, feats in records.items():
         label = ""
-        params = rec.Feature.FeatureParams
+        params = feats[0].FeatureParams
         if params is not None:
             nid = getattr(params, "UINameID", None) or getattr(params, "FeatUILabelNameID", None)
             if nid:
                 label = name.getDebugName(nid) or ""
         entry = {"tag": tag, "label": label}
         if OPTIONAL.match(tag):
-            entry["chars"] = feature_chars(font, rec.Feature)
+            entry["chars"] = feature_chars(font, feats)
         out.append(entry)
     return out
 
