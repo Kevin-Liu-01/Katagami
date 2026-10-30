@@ -184,6 +184,30 @@ def embolden(font: TTFont, strength: float) -> list[str]:
     return sorted(set(limited))
 
 
+def _subset(script: str, unicodes: list[int]) -> TTFont:
+    """Noto's font for the script, subset to `unicodes` with its layout closure."""
+    font = TTFont(noto_file(script))
+    opts = subset.Options()
+    opts.layout_features = ["*"]
+    opts.layout_scripts = ["*"]
+    opts.glyph_names = True
+    opts.name_IDs = ["*"]
+    opts.notdef_outline = False
+    opts.hinting = False
+    # vertical metrics (Ethiopic has them), hinting and metadata: Katagami has none of these
+    opts.drop_tables += ["STAT", "vhea", "vmtx", "VVAR", "gasp", "prep", "meta", "hdmx", "LTSH", "VDMX", "DSIG", "kern"]
+    sub = subset.Subsetter(opts)
+    sub.populate(unicodes=unicodes)
+    sub.subset(font)
+    # Some Noto fonts swap glyphs by weight (FeatureVariations). Instancing applies the swap
+    # at one master and not another, so the masters' feature lists would differ; drop it.
+    for tag in ("GSUB", "GPOS"):
+        if tag in font and getattr(font[tag].table, "FeatureVariations", None) is not None:
+            font[tag].table.FeatureVariations = None
+            font[tag].table.Version = 0x00010000
+    return font
+
+
 def _statics(font: TTFont, factor: float, work: Path, stem: str) -> dict[str, TTFont]:
     """A subset Noto font at Katagami's three master weights, at Katagami's units and size."""
     axes = {a.axisTag: (a.minValue, a.maxValue) for a in font["fvar"].axes} if "fvar" in font else {}
