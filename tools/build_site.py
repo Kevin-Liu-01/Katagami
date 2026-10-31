@@ -8,7 +8,7 @@ The site lives in its own repo, Katagami-Website, checked out next to this one
     fonts/KatagamiSans-thai.woff2 ...   one file per merged script, per member
     fonts/KatagamiCJK{SC,JP,KR}.woff2   the CJK companions
     fonts/first.js, first-rows.js, first-round.js, first-text.js, first-serif.js,
-    first-features.js, first-about.js, kanji.js
+    first-features.js, kanji.js
                                     subsets of a member a page adds for its first paint
     fonts/katagami.css                  @font-face rules: each member is one family whose
                                     faces split by unicode-range, so a page downloads
@@ -515,7 +515,7 @@ def web_fonts() -> list[list]:
 # and every other page loads it after it has painted. first-rows.js serves the member rows and the glyph tiles that set Round,
 # Text and Serif. first-round.js, first-text.js and first-serif.js hold a member's Latin for the
 # map page, which is set in Round, and for the library pages' specimens. first-features.js serves
-# the feature cards with every feature, and first-about.js the about page's quote in Serif.
+# the feature cards with every feature.
 # kanji.js holds 型紙 (pattern paper) alone, which it keeps for good: a page that shows only
 # those two characters never fetches a CJK companion of megabytes, and a companion is a font
 # of its own, so no text is shaped across it and a Latin face.
@@ -531,7 +531,7 @@ FIRST_FEATURES = ["kern", "calt", "liga", "ccmp", "locl", "mark", "mkmk", "tnum"
 FIRST = {"first.js": [("latin", ["sans", "mono"])], "names.js": [("names", ["round", "text", "serif"])],
          "first-rows.js": [("rows", ["round", "text", "serif"])], "first-round.js": [("latin", ["round"])],
          "first-text.js": [("latin", ["text"])], "first-serif.js": [("latin", ["serif"])],
-         "first-features.js": [("features", ["sans"])], "first-about.js": [("quote", ["serif"])],
+         "first-features.js": [("features", ["sans"])],
          "kanji.js": [("kanji", ["cjk"])]}
 # every subset holds a 0: a ch unit is the width of 0 in the element's first available face
 NAMES_TEXT = "Katagami Sans Round Text Serif Mono Italic 0"
@@ -557,12 +557,6 @@ def rows_text(member: str) -> str:
         found += [t for t in re.findall(r">([^<]+)<", stops.group(1)) if t.lower() == member]
     text = "".join(found).replace("&amp;", "&").replace("&gt;", ">").replace("&lt;", "<") + "R0"
     return "".join(sorted(set(text)))
-
-
-def quote_text() -> str:
-    """The about page's opening quote, which it sets in Katagami Serif."""
-    found = re.search(r"<blockquote>(.*?)</blockquote>", (SITE / "about-page.html").read_text(), re.S)
-    return (found.group(1) if found else "") + "0"
 
 
 def features_text() -> str:
@@ -607,7 +601,7 @@ def first_fonts() -> None:
     latin = {u for lo, hi in FIRST_LATIN for u in range(lo, hi + 1)}
     sets = {"latin": latin, "names": {ord(c) for c in NAMES_TEXT},
             # the feature cards switch every feature on and off, so their subset keeps all of them
-            "features": latin | {ord(c) for c in features_text()}, "quote": {ord(c) for c in quote_text()},
+            "features": latin | {ord(c) for c in features_text()},
             "kanji": {ord(c) for c in KANJI_TEXT}}
     # SC draws a kanji it has, as katagami.css tries SC before TC, and TC the rest
     cjk = [ROOT / "fonts" / "cjk" / f"{n}[wght].ttf" for n in ("KatagamiCJKSC", "KatagamiCJKTC")]
@@ -751,7 +745,6 @@ def footer_html(facts: dict) -> str:
   <div class="wrap">
     <section class="f-use" aria-label="Use Katagami">
       <div class="f-say">
-        <h2>Katagami is free for any project</h2>
         <p>The SIL Open Font License 1.1 lets you use, change and ship the fonts in any product, paid or free.</p>
       </div>
       <div class="f-acts">

@@ -736,19 +736,19 @@ LIB_CSS = """/* The library pages: a head, then one reading column. Space follow
 .lib-crumbs a { color: var(--ink-2); text-decoration: none; }
 .lib-crumbs a:hover { color: var(--cut); }
 .lib-crumbs span + span::before { content: "/"; margin-right: 6px; color: var(--rule); }
-.lib-head h1 { font-size: clamp(2.5rem, 6vw, 4.75rem); line-height: 0.98; letter-spacing: -0.035em; font-weight: 650; max-width: 18ch; }
+.lib-head h1 { font-size: clamp(2.5rem, 6vw, 4.75rem); line-height: 0.98; font-weight: 650; max-width: 18ch; }
 .lib-head p { margin-top: 16px; font-size: 1.1875rem; line-height: 1.5; color: var(--ink-2); max-width: 60ch; }
 .lib-body { padding-block: 8px clamp(56px, 6.67vw, 96px); max-width: 920px; }
 .lib-body > * { margin-block: 0; }
 .lib-body > * + * { margin-top: clamp(24px, 2.22vw, 32px); }
-.lib-body > h2 { font-size: var(--step-2); letter-spacing: -0.02em; margin-top: clamp(56px, 6.67vw, 96px); }
+.lib-body > h2 { font-size: var(--step-2); margin-top: clamp(56px, 6.67vw, 96px); }
 .lib-body > h2:first-child { margin-top: 0; }
 .lib-body > h2 + *, .lib-body > p + p, .lib-body > .specimen + .specimen, .lib-body > pre + pre { margin-top: 16px; }
 .lib-body p, .lib-body li { font-size: 1.0625rem; line-height: 1.6; max-width: 68ch; }
 .lib-body ul { padding-left: 1.2rem; display: grid; gap: 8px; }
 .lib-body ul.lib-cols { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 32px; }
 .lib-body code { font-family: var(--mono); font-size: 0.875em; background: var(--panel); padding: 1px 5px; border-radius: 4px; }
-.lib-body .specimen { line-height: 1.15; letter-spacing: -0.01em; overflow-wrap: anywhere; max-width: none; }
+.lib-body .specimen { line-height: 1.15; overflow-wrap: anywhere; max-width: none; }
 .lib-body .specimen.strip { line-height: 1.6; white-space: nowrap; overflow-wrap: normal; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
 .lib-body .specimen.strip::-webkit-scrollbar { display: none; }
 .t-scroll { overflow-x: auto; }
