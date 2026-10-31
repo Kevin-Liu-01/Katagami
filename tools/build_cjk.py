@@ -29,7 +29,8 @@ Katagami member with unicode-range, and its @font-face rules give it the same
 line with ascent-override, descent-override and line-gap-override.
 
 Each file also has chws and vchw from googlefonts' chws_tool, carets for its
-ligatures, glyph names (post format 2), and clockwise outer contours.
+ligatures, glyph names (post format 2), clockwise outer contours, and no two
+contours that share a segment.
 """
 
 from __future__ import annotations
@@ -48,6 +49,7 @@ from finish import unhinted  # noqa: E402
 from chws_tool import add_chws  # noqa: E402
 from kerf_build.cjk import (build_latin, glyph_names, lig_carets, ligatures, merge_latin,  # noqa: E402
                             reverse_ccw_outers, unicode_marks)
+from kerf_build.contours import fix_shared_segments  # noqa: E402
 from kerf_build.fontops import VENDOR, VERSION  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -203,6 +205,7 @@ def build(region: str, cache: dict) -> Path:
     font["OS/2"].achVendID = VENDOR
     unhinted(font)
     scale_upem(font, FILE_UPM)
+    shared, _, left = fix_shared_segments(font)
     meta = newTable("meta")
     meta.data = {"dlng": SCRIPT[region], "slng": f"{SCRIPT[region]},Latn"}
     font["meta"] = meta
@@ -214,7 +217,8 @@ def build(region: str, cache: dict) -> Path:
     add_chws(path, path)  # adds the chws and vchw lookups to the file in place
     font = TTFont(path)
     print(f"{path.relative_to(ROOT)}: {len(font.getGlyphOrder())} glyphs ({len(added)} Latin), "
-          f"{len(font.getBestCmap())} characters, {path.stat().st_size / 1e6:.1f} MB; contours reversed in {reversed_}")
+          f"{len(font.getBestCmap())} characters, {path.stat().st_size / 1e6:.1f} MB; contours reversed in {reversed_}; "
+          f"shared segments repaired in {len(shared)}, left in {left}")
     return path
 
 
