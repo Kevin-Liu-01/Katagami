@@ -33,11 +33,11 @@ The drawing above is the first thing on [the website](https://katagami.kevinliu.
 
 | Member | For | Weights | Glyphs | Files |
 |---|---|---|---|---|
-| **Katagami Sans** | Interfaces and display: squared bowls, level cuts and square punctuation | 100 to 900 | 14,913 and 3,254 | `fonts/sans/KatagamiSans[wght].ttf`, `KatagamiSans-Italic[wght].ttf` |
-| **Katagami Round** | Softer interfaces: bowls squared less, every corner rounded at 0.22 stems | 100 to 900 | 14,914 and 3,255 | `fonts/round/KatagamiRound[wght].ttf`, `KatagamiRound-Italic[wght].ttf` |
-| **Katagami Text** | Long reading: an x-height 0.71 of the caps, set 4 percent smaller and tighter | 100 to 900 | 14,914 and 3,255 | `fonts/text/KatagamiText[wght].ttf`, `KatagamiText-Italic[wght].ttf` |
-| **Katagami Serif** | Reading with serifs: Text with rectangular serifs, triangular heads and moderate contrast | 100 to 900 | 14,914 and 3,255 | `fonts/serif/KatagamiSerif[wght].ttf`, `KatagamiSerif-Italic[wght].ttf` |
-| **Katagami Mono** | Code and terminals: a 0.625 em cell, every confusable character drawn apart, opt-in code ligatures | 100 to 700 | 3,778 and 3,695 | `fonts/mono/KatagamiMono[wght].ttf`, `KatagamiMono-Italic[wght].ttf` |
+| **Katagami Sans** | Interfaces and display: squared bowls, level cuts and square punctuation | 100 to 900 | 15,211 and 3,725 | `fonts/sans/KatagamiSans[wght].ttf`, `KatagamiSans-Italic[wght].ttf` |
+| **Katagami Round** | Softer interfaces: bowls squared less, every corner rounded at 0.22 stems | 100 to 900 | 15,211 and 3,725 | `fonts/round/KatagamiRound[wght].ttf`, `KatagamiRound-Italic[wght].ttf` |
+| **Katagami Text** | Long reading: an x-height 0.71 of the caps, set 4 percent smaller and tighter | 100 to 900 | 15,212 and 3,725 | `fonts/text/KatagamiText[wght].ttf`, `KatagamiText-Italic[wght].ttf` |
+| **Katagami Serif** | Reading with serifs: Text with rectangular serifs, triangular heads and moderate contrast | 100 to 900 | 15,212 and 3,725 | `fonts/serif/KatagamiSerif[wght].ttf`, `KatagamiSerif-Italic[wght].ttf` |
+| **Katagami Mono** | Code and terminals: a 0.625 em cell, every confusable character drawn apart, opt-in code ligatures | 100 to 700 | 4,123 and 4,123 | `fonts/mono/KatagamiMono[wght].ttf`, `KatagamiMono-Italic[wght].ttf` |
 
 The Glyphs column gives the roman's count, then the Italic's. The romans carry the merged scripts; the Italics carry Latin, Greek and Cyrillic.
 
@@ -67,9 +67,9 @@ The five members share these decisions. [SPEC.md](SPEC.md) records each one with
 </picture>
 
 - **Drawn:** Latin, Greek and Cyrillic.
-- **Merged:** Arabic, Hebrew, Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala, Thai, Lao, Myanmar, Khmer, Georgian, Armenian, Ethiopic, Tifinagh, Ol Chiki, Coptic, Tibetan, Hanifi Rohingya, N'Ko, Thaana, Vai and Canadian Aboriginal syllabics, merged from Noto and scaled to Katagami's x-height. Tibetan comes from Noto Serif Tibetan, the only Noto Tibetan. Each proportional member maps 8,251 characters.
+- **Merged:** Arabic, Hebrew, Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala, Thai, Lao, Myanmar, Khmer, Georgian, Armenian, Ethiopic, Tifinagh, Ol Chiki, Coptic, Tibetan, Hanifi Rohingya, N'Ko, Thaana, Vai and Canadian Aboriginal syllabics, merged from Noto and scaled to Katagami's x-height. Tibetan comes from Noto Serif Tibetan, the only Noto Tibetan. Each proportional member maps 8,346 characters.
 - **Italics:** the Italics set Latin, Greek and Cyrillic. For italic text in another script, a stylesheet declares the roman's script files a second time with `font-style: italic`, so the roman's letters set it.
-- **Companions:** Katagami CJK SC (7,768 characters), TC (14,154), JP (7,359) and KR (12,422), built from Noto Sans SC, TC, JP and KR. The web stylesheet assigns them to Sans, Round, Text and Serif.
+- **Companions:** Katagami CJK SC (8,138 characters), TC (14,524), JP (7,729) and KR (12,792), built from Noto Sans SC, TC, JP and KR. The web stylesheet assigns them to Sans, Round, Text and Serif.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/readme/map-dark.png">
