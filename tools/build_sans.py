@@ -45,7 +45,7 @@ from kerf_build.outline import (  # noqa: E402
     XMap,
     apply_squaring, embolden_x, embolden_y, handles, keep_stroke, plan_corners, plan_squaring, round_corners, straighten_runs,
 )
-from kerf_build.missing import add_missing, complete_anchors, declare_scripts, dot_marks, patch_ccmp, turned_small_f, unseat_marks  # noqa: E402
+from kerf_build.missing import add_missing, complete_anchors, declare_scripts, dot_marks, soft_dotted_modifiers, patch_ccmp, turned_small_f, unseat_marks  # noqa: E402
 from kerf_build.profiles import PROFILES, Profile  # noqa: E402
 
 FEATURES = ROOT / "vendor" / "inter" / "src" / "features"
@@ -2090,6 +2090,7 @@ def transform(p: Profile, italic: bool = False) -> tuple[dict, dict]:
         promote_alternates(fonts, p.promote, FEATURES)
         relabel_features(fonts, p.promote)
     dot_marks(fonts)
+    soft_dotted_modifiers(fonts)
     # after the swaps, which carry each alternate's own anchors into the default
     complete_anchors(fonts)
     shape_curves(fonts, p)

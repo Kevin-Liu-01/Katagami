@@ -10,6 +10,7 @@ _part.lambdabar) is left out of that set."""
 
 from __future__ import annotations
 
+import copy
 import re
 import unicodedata
 from pathlib import Path
@@ -18,7 +19,7 @@ import ufoLib2
 from fontTools.pens.pointInsidePen import PointInsidePen
 from fontTools.pens.recordingPen import DecomposingRecordingPen
 from fontTools.pens.transformPen import TransformPen
-from ufoLib2.objects import Component
+from ufoLib2.objects import Anchor, Component
 
 from kerf_build.fontops import stem
 from kerf_build.outline import embolden_x, embolden_y
@@ -36,6 +37,8 @@ BELOW_MARKS = (
 ABOVE_MARKS = ("uni0311", "uni030D", "hungarumlautcomb", "threedotsabovecomb", "fourdotsabovecomb")
 # the joiners and direction marks Arabic and Persian text uses: invisible, with no advance
 CONTROLS = (0x200C, 0x200D, 0x200E, 0x200F)
+# ⁱ ʲ ᵢ ⱼ ᶤ: soft dotted, so an accent above drops their dot; superiors before the glyphs built from them
+SOFT_DOTTED_MODIFIERS = ("i.sups", "j.sups", "i.subs", "j.subs", "uni1DA4")
 
 
 def _new(font, unicode: int, width: float):
@@ -569,6 +572,42 @@ def dot_marks(fonts) -> None:
                     g.components.append(Component(pair[0].baseGlyph, (xx, xy, yx, yy, round(middle + (i - (n - 1) / 2) * step), round(pair[0].transformation[5]))))
 
 
+def soft_dotted_modifiers(fonts) -> None:
+    """name.ccmp for each of SOFT_DOTTED_MODIFIERS, the form ccmp sets under an
+    accent above. A superior loses the contour that sits highest, its dot; a
+    glyph built from a superior takes the superior's dotless form. The top
+    anchor comes down to the ink's top, where idotless has it. Inter's own
+    uni2071.ccmp is the dotless i.numr, which sits lower than ⁱ."""
+    default = fonts["Regular"]
+    for f in fonts.values():
+        categories = f.lib.setdefault("public.openTypeCategories", {})
+        order = f.lib.get("public.glyphOrder")
+        for name in SOFT_DOTTED_MODIFIERS:
+            if name not in f:
+                continue
+            src, new = f[name], f"{name}.ccmp"
+            if new in f:
+                del f[new]
+            g = f.newGlyph(new)
+            g.width = src.width
+            dot = None
+            if src.contours and not src.components:
+                ref = default[name].contours
+                dot = max(range(len(ref)), key=lambda i: ref[i].getBounds().yMin)
+            for i, c in enumerate(src.contours):
+                if i != dot:
+                    g.contours.append(copy.deepcopy(c))
+            for c in src.components:
+                base = f"{c.baseGlyph}.ccmp" if c.baseGlyph in SOFT_DOTTED_MODIFIERS else c.baseGlyph
+                g.components.append(Component(base, c.transformation))
+            top = g.getBounds(f).yMax
+            for a in src.anchors:
+                g.anchors.append(Anchor(x=a.x, y=top if a.name == "top" else a.y, name=a.name))
+            categories[new] = categories.get(name, "base")
+            if order is not None and new not in order:
+                order.append(new)
+
+
 def unseat_marks(font) -> None:
     """A base anchor where a mark already sits unmoved (ɛ's top in Round
     Italic, under U+1DC7) moves 1 unit right: a shaper's zero offset reads as
@@ -618,4 +657,6 @@ def patch_ccmp(features_dir: Path) -> None:
     text = path.read_text()
     text = re.sub(r"(@CCMP_ACC = \[.*?)(\n\];)", lambda m: m.group(1) + "\n  " + " ".join(ABOVE_MARKS) + m.group(2), text, count=1, flags=re.S)
     text = text.replace("lookup ccmp02 {\n", "lookup ccmp02 {\n  lookupflag UseMarkFilteringSet @CCMP_ACC;\n", 1)
+    rules = "".join(f"  sub {name}' @CCMP_ACC by {name}.ccmp;\n" for name in SOFT_DOTTED_MODIFIERS)
+    text = text.replace("} ccmp02;", rules + "} ccmp02;", 1)
     path.write_text(text)
