@@ -29,8 +29,8 @@ Katagami member with unicode-range, and its @font-face rules give it the same
 line with ascent-override, descent-override and line-gap-override.
 
 Each file also has chws and vchw from googlefonts' chws_tool, carets for its
-ligatures, glyph names (post format 2), clockwise outer contours, and no two
-contours that share a segment.
+ligatures, glyph names (post format 2), clockwise outer contours, contours
+repaired where two share a segment, and no glyph that nothing reaches.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ from fontTools.ttLib.scaleUpem import scale_upem
 from fontTools.varLib.hvar import add_HVAR
 
 sys.path.insert(0, str(Path(__file__).parent))
-from finish import unhinted  # noqa: E402
+from finish import prune_unreachable, unhinted  # noqa: E402
 from chws_tool import add_chws  # noqa: E402
 from kerf_build.cjk import (build_latin, glyph_names, lig_carets, ligatures, merge_latin,  # noqa: E402
                             reverse_ccw_outers, unicode_marks)
@@ -206,6 +206,8 @@ def build(region: str, cache: dict) -> Path:
     unhinted(font)
     scale_upem(font, FILE_UPM)
     shared, _, left = fix_shared_segments(font)
+    reversed_ += reverse_ccw_outers(font)  # a repair can leave a counter-clockwise contour outermost
+    pruned = prune_unreachable(font)  # Latin parts whose letters the subset left out
     meta = newTable("meta")
     meta.data = {"dlng": SCRIPT[region], "slng": f"{SCRIPT[region]},Latn"}
     font["meta"] = meta
@@ -218,7 +220,7 @@ def build(region: str, cache: dict) -> Path:
     font = TTFont(path)
     print(f"{path.relative_to(ROOT)}: {len(font.getGlyphOrder())} glyphs ({len(added)} Latin), "
           f"{len(font.getBestCmap())} characters, {path.stat().st_size / 1e6:.1f} MB; contours reversed in {reversed_}; "
-          f"shared segments repaired in {len(shared)}, left in {left}")
+          f"shared segments repaired in {len(shared)}, left in {left}; {pruned} unreachable glyphs dropped")
     return path
 
 
