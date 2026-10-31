@@ -675,6 +675,8 @@ def small_caps(fonts) -> None:
             for a in src.anchors:
                 g.appendAnchor({"name": a.name, "x": a.x * kx + ddx / 2 + track / 2, "y": a.y * kk + ddy / 2})
             g.width = round(src.width * kx + ddx + track)
+            if SERIFS_KEY in src.lib:  # drawn from the capital in order, so its serifs keep their indices
+                g.lib[SERIFS_KEY] = list(src.lib[SERIFS_KEY])
         for lc in compound:
             src = f[pairs[lc]]
             g = f.newGlyph(f"{lc}.smcp")
@@ -775,6 +777,7 @@ def small_caps(fonts) -> None:
             g.width = round(f[src].width + track)
             for a in f[src].anchors:
                 g.appendAnchor({"name": a.name, "x": a.x + round(track / 2), "y": a.y})
+    settle_facing_serifs(fonts, [f"{lc}.smcp" for lc in drawn + redrawn])
     made = drawn + redrawn + compound + built + list(parted) + list(lowered)
     lc_names = " ".join(made)
     sc_names = " ".join(f"{lc}.smcp" for lc in made)
@@ -1320,6 +1323,9 @@ SERIF_DEPTH_SCALE = (1.24, 1.0, 0.6)  # Thin, Regular, Black
 SERIF_REACH_POWER = (0.3, 0.0)  # toward Thin and toward Black, a serif's reach scales with the stem to this power
 TIP_CLEAR = 0.23  # stems (Regular) a serif tip keeps from the edge of the advance, before the profile's spacing
 SERIF_CLEAR = 0.25  # stems (Regular) of white a serif leaves to other ink it does not join
+SERIF_GAP = 0.5  # stems (Regular): the least white between two serifs that face each other, inside a letter or between two
+SERIF_HAIR = 0.1  # stems (Regular): white narrower than this between two facing serifs reads as a crack
+SERIFS_KEY = "com.kerf.serifs"  # a glyph's foot and top serif contours, by index
 SERIF_FIT = 0.75  # share of the serifs' reach past a letter's ink taken back by narrowing the letter, stems kept
 HEAD_BY_REACH = True  # a head serif's drop follows the reach (Regular stem times the reach scale), not the master's stem
 
@@ -1444,7 +1450,7 @@ def cut_serifs(fonts, plan: dict, reach: float, depth: float, head_drop: float, 
     def crossbar(font) -> float:
         ys = sorted({round(pt.y) for c in font["H"].contours for pt in c.points if 0 < round(pt.y) < round(font["H"].getBounds(font).yMax)})
         return ys[-1] - ys[0] if len(ys) >= 2 else stem(font)
-    gap = 0.5 * sw_ref  # the least white left between two serifs, inside a letter or between two
+    gap = SERIF_GAP * sw_ref
     ink_clear = SERIF_CLEAR * sw_ref
     parts = serif_parts(fonts["Regular"])
     for style, f in fonts.items():
@@ -1523,8 +1529,10 @@ def cut_serifs(fonts, plan: dict, reach: float, depth: float, head_drop: float, 
                 pts = g.contours[ci].points
                 lo, hi = sorted((pts[i].y, pts[j].y))
                 shapes.append(_arm_nodes(pts[i].x, lo, hi, side, way, ARM_WIDTH * sw, length))
+            first = len(g.contours)
             for nodes in shapes:
                 g.appendContour(_contour(nodes))
+            g.lib[SERIFS_KEY] = [first + i for i, sp in enumerate(spans) if not sp[6]]
             # the serifs overlap their strokes; the flag tells rasterizers to fill the union
             g.lib["public.truetype.overlap"] = True
             # a side whose serif reaches past the letter's ink widens until the
@@ -1543,6 +1551,47 @@ def cut_serifs(fonts, plan: dict, reach: float, depth: float, head_drop: float, 
                 widened[name] = XMap(0, dl, 1)
         reflow_composites(f, widened, before)
         flag_overlaps(f)
+
+
+def settle_facing_serifs(fonts, names: list[str]) -> None:
+    """Two serifs that face each other on one line and stand less than SERIF_HAIR
+    apart in a master (a small capital, scaled and emboldened after its capital's
+    serifs were cut) take Regular's arrangement there: joined, they overlap by
+    SERIF_HAIR; apart, each facing end is cut back toward SERIF_GAP between them,
+    no further than its bracket."""
+    ref = fonts["Regular"]
+    sw_ref = stem(ref)
+    hair, gap = SERIF_HAIR * sw_ref, SERIF_GAP * sw_ref
+    def box(c):
+        xs, ys = [p.x for p in c.points], [p.y for p in c.points]
+        return min(xs), max(xs), min(ys), max(ys)
+    for name in names:
+        if name not in ref:
+            continue
+        serifs = ref[name].lib.get(SERIFS_KEY, [])
+        if len(serifs) < 2 or max(serifs) >= len(ref[name].contours):
+            continue
+        rb = {i: box(ref[name].contours[i]) for i in serifs}
+        # i faces j from the left: one line (feet or tops), with i's ink left of j's
+        pairs = [(i, j) for i in serifs for j in serifs
+                 if i != j and rb[i][0] < rb[j][0] and (abs(rb[i][2] - rb[j][2]) <= 2 or abs(rb[i][3] - rb[j][3]) <= 2)
+                 and not any(rb[i][1] < rb[m][0] and rb[m][1] < rb[j][0] for m in serifs if m not in (i, j))]
+        for i, j in pairs:
+            joined = rb[j][0] - rb[i][1] <= 0
+            for f in fonts.values():
+                g = f[name]
+                (l0, l1, _, _), (r0, r1, _, _) = box(g.contours[i]), box(g.contours[j])
+                white = r0 - l1
+                if not 0 < white < hair:
+                    continue
+                want = -(white + hair) / 2 if joined else (gap - white) / 2
+                for c, edge, way in ((g.contours[i], l1, -1), (g.contours[j], r0, 1)):
+                    rest = [p.x for p in c.points if abs(p.x - edge) >= 0.5]
+                    room = (edge - max(rest) if way < 0 else min(rest) - edge) - 1
+                    cut = want if joined else min(want, max(0.0, room))
+                    for p in c.points:
+                        if abs(p.x - edge) < 0.5:
+                            p.x += way * cut
 
 
 def flag_overlaps(font) -> None:
