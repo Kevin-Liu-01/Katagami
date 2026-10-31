@@ -129,15 +129,54 @@ def _moved(pts: list, half: float, truetype: bool) -> list:
     return out
 
 
+CAP = 0.4  # a shrinking contour's point moves at most this share of the contour's own ink or white ahead of it
+
+
+def _room(pts: list, k: int, dx: float, dy: float) -> float:
+    """How far point k can travel along the unit vector (dx, dy) before it meets
+    an edge of its own contour that does not touch it."""
+    px, py = pts[k]
+    n = len(pts)
+    best = math.inf
+    for j in range(n):
+        if j == k or (j + 1) % n == k:
+            continue
+        (ax, ay), (bx, by) = pts[j], pts[(j + 1) % n]
+        ex, ey = bx - ax, by - ay
+        den = dx * ey - dy * ex
+        if abs(den) < 1e-12:
+            continue
+        t = ((ax - px) * ey - (ay - py) * ex) / den
+        u = ((ax - px) * dy - (ay - py) * dx) / den
+        if t > 1e-6 and 0 <= u <= 1:
+            best = min(best, t)
+    return best
+
+
+def _capped(pts: list, moved: list) -> list:
+    """Each point's move cut to CAP of the room ahead of it, so a stroke or a
+    counter narrower than the move keeps a fifth of its width and the rest of
+    its contour still moves the whole way."""
+    out = []
+    for k, ((x, y), (mx, my)) in enumerate(zip(pts, moved)):
+        dx, dy = mx - x, my - y
+        length = math.hypot(dx, dy)
+        room = CAP * _room(pts, k, dx / length, dy / length) if length > 1e-9 else math.inf
+        out.append((mx, my) if length <= room else (x + dx * room / length, y + dy * room / length))
+    return out
+
+
 def embolden(font: TTFont, strength: float) -> list[str]:
     """Thicken (or, below zero, thin) every simple glyph by `strength` units on
     each axis, as FreeType's FT_Outline_EmboldenXY does: each point moves along
     the bisector of its two edges, so the point structure stays and the three
     masters still interpolate. Ink and advances grow by `strength`, and the
-    outlines move right by half of it, so sidebearings stay. A contour that the
-    move shrinks (a counter when thickening, an outer contour when thinning)
-    moves only as far as it stays the same way round with no lobe inside out,
-    so small counters stay open at Black. Returns the glyphs so limited."""
+    outlines move right by half of it, so sidebearings stay. On a contour that
+    the move shrinks (a counter when thickening, an outer contour when thinning)
+    each point moves at most CAP of the room ahead of it, and the contour moves
+    only as far as it stays the same way round with no lobe inside out, so a
+    tapered stroke thins at Thin and small counters stay open at Black. Returns
+    the glyphs whose contours the second rule limits."""
     if not strength:
         return []
     glyf, hmtx = font["glyf"], font["hmtx"]
@@ -160,15 +199,18 @@ def embolden(font: TTFont, strength: float) -> list[str]:
         for pts in contours:
             moved = _moved(pts, half, truetype)
             counter = (polygon_area(pts) < 0) != truetype
-            if counter == (strength > 0) and not sound(pts, moved):
+            shrinks = counter == (strength > 0)
+            if shrinks:
+                moved = _capped(pts, moved)
+            if shrinks and not sound(pts, moved):
                 lo, hi = 0.0, 1.0
                 for _ in range(8):
                     mid = (lo + hi) / 2
-                    if sound(pts, _moved(pts, half * mid, truetype)):
+                    if sound(pts, _capped(pts, _moved(pts, half * mid, truetype))):
                         lo = mid
                     else:
                         hi = mid
-                moved = _moved(pts, half * lo, truetype)
+                moved = _capped(pts, _moved(pts, half * lo, truetype))
                 limited.append(name)
             new += [(x + half, y) for x, y in moved]
         g.coordinates = type(g.coordinates)([(round(x), round(y)) for x, y in new])

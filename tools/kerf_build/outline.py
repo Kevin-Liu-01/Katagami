@@ -299,10 +299,23 @@ def _path(pts: list) -> pathops.Path:
 
 
 def inside_out(pts: list) -> float:
-    """How much more a contour fills than its signed area: the area of its lobes that run the other way round, twice."""
+    """The area of a contour's lobes that run the other way round from it. A box
+    wound the contour's way is added: where a lobe winds against the contour the
+    two cancel and leave a hole, and a part the contour runs over twice stays filled."""
+    a = polygon_area(pts)
+    if not a:
+        return 0.0
+    xs, ys = [x for x, _ in pts], [y for _, y in pts]
+    x0, y0, x1, y1 = min(xs) - 1, min(ys) - 1, max(xs) + 1, max(ys) + 1
+    box = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
     path = _path(pts)
+    pen = path.getPen()
+    pen.moveTo(box[0])
+    for pt in (box[1:] if a > 0 else box[:0:-1]):
+        pen.lineTo(pt)
+    pen.closePath()
     path.simplify()
-    return path.area - abs(polygon_area(pts))
+    return (x1 - x0) * (y1 - y0) - path.area
 
 
 def sound(old: list, new: list, floor: float = 0.0) -> bool:
