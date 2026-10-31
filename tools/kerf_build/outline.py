@@ -288,26 +288,39 @@ def signed_area(pts: list) -> float:
     return sum(pts[k - 1][0] * pts[k][1] - pts[k][0] * pts[k - 1][1] for k in range(len(pts))) / 2
 
 
-def inside_out(pts: list) -> float:
-    """How much more a contour fills than its signed area: the area of its lobes that run the other way round, twice."""
+def _path(pts: list) -> pathops.Path:
     path = pathops.Path()
     pen = path.getPen()
     pen.moveTo(pts[0])
     for pt in pts[1:]:
         pen.lineTo(pt)
     pen.closePath()
+    return path
+
+
+def inside_out(pts: list) -> float:
+    """How much more a contour fills than its signed area: the area of its lobes that run the other way round, twice."""
+    path = _path(pts)
     path.simplify()
     return path.area - abs(signed_area(pts))
 
 
 def sound(old: list, new: list) -> bool:
-    """Whether a shrunk contour keeps its direction, a fifth of its area and no more of it inside out than before."""
+    """Whether a shrunk contour stays inside itself with its direction, a fifth of
+    its area and no more of it inside out than before. Staying inside catches a
+    small counter pushed through its own centre, which comes out turned half
+    round with its direction unchanged."""
     a0, a1 = signed_area(old), signed_area(new)
     if not a0:
         return True
     if a0 * a1 <= 0 or abs(a1) < 0.2 * abs(a0):
         return False
-    return inside_out(new) <= inside_out(old) + 0.01 * abs(a1) + 4
+    if inside_out(new) > inside_out(old) + 0.01 * abs(a1) + 4:
+        return False
+    before, after = _path(old), _path(new)
+    before.simplify()
+    after.simplify()
+    return pathops.op(after, before, pathops.PathOp.DIFFERENCE).area <= 0.005 * abs(a0) + 4
 
 
 def _shifted(orig: list, half: float, axis: int) -> list:
