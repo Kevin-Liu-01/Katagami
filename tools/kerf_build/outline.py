@@ -305,15 +305,15 @@ def inside_out(pts: list) -> float:
     return path.area - abs(polygon_area(pts))
 
 
-def sound(old: list, new: list) -> bool:
+def sound(old: list, new: list, floor: float = 0.0) -> bool:
     """Whether a shrunk contour stays inside itself with its direction, a fifth of
-    its area and no more of it inside out than before. Staying inside catches a
-    small counter pushed through its own centre, which comes out turned half
-    round with its direction unchanged."""
+    its area (and at least `floor`) and no more of it inside out than before.
+    Staying inside catches a small counter pushed through its own centre, which
+    comes out turned half round with its direction unchanged."""
     a0, a1 = polygon_area(old), polygon_area(new)
     if not a0:
         return True
-    if a0 * a1 <= 0 or abs(a1) < 0.2 * abs(a0):
+    if a0 * a1 <= 0 or abs(a1) < max(0.2 * abs(a0), floor):
         return False
     if inside_out(new) > inside_out(old) + 0.01 * abs(a1) + 4:
         return False
@@ -367,27 +367,28 @@ def _shifted(orig: list, half: float, axis: int) -> list:
     return new
 
 
-def _embolden(glyph: Glyph, strength: float, axis: int, keep_counters: bool = False) -> None:
+def _embolden(glyph: Glyph, strength: float, axis: int, keep_counters: bool = False, floors: list = ()) -> None:
     """FreeType-style emboldening along one axis (0 = x, 1 = y): every edge
     moves outward by half the strength, so stems (x) or horizontal strokes (y)
     gain `strength` in thickness and the outline grows by it on that axis. With
     `keep_counters`, a counter that thickening would close or turn inside out
-    shrinks only as far as it stays `sound`."""
+    shrinks only as far as it stays `sound`, with contour i's area at least `floors[i]`."""
     half = strength / 2
-    for contour in glyph.contours:
+    for i, contour in enumerate(glyph.contours):
         pts = contour.points
         if len(pts) < 3:
             continue
+        floor = floors[i] if floors else 0.0
         # UFO outlines are PostScript-oriented (outer contours counter-clockwise).
         orig = [(p.x, p.y) for p in pts]
         new = _shifted(orig, half, axis)
         if keep_counters and strength > 0 and polygon_area(orig) < 0:
             placed = lambda vals: [(v, y) if axis == 0 else (x, v) for (x, y), v in zip(orig, vals)]  # noqa: E731
-            if not sound(orig, placed(new)):
+            if not sound(orig, placed(new), floor):
                 lo, hi = 0.0, 1.0
                 for _ in range(8):
                     mid = (lo + hi) / 2
-                    if sound(orig, placed(_shifted(orig, half * mid, axis))):
+                    if sound(orig, placed(_shifted(orig, half * mid, axis)), floor):
                         lo = mid
                     else:
                         hi = mid
@@ -399,8 +400,8 @@ def _embolden(glyph: Glyph, strength: float, axis: int, keep_counters: bool = Fa
                 p.y = v
 
 
-def embolden_x(glyph: Glyph, strength: float, keep_counters: bool = False) -> None:
-    _embolden(glyph, strength, 0, keep_counters)
+def embolden_x(glyph: Glyph, strength: float, keep_counters: bool = False, floors: list = ()) -> None:
+    _embolden(glyph, strength, 0, keep_counters, floors)
 
 
 def embolden_y(glyph: Glyph, strength: float) -> None:

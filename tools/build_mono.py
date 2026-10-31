@@ -52,7 +52,7 @@ from kerf_build.fontops import (  # noqa: E402
     FILTERS_KEY, ITALIC_MATCH, ROOT, assign_categories, combining_double_acute, composites_to_flatten, decompose, design_distances, dot_size,
     dotted_circle_anchors, draw_dotted_circle, italic_style, promote_alternates, reflow_composites, romanize, set_names, shear, slant_tangent, snapshot,
 )
-from kerf_build.outline import XMap, embolden_x, straighten_runs  # noqa: E402
+from kerf_build.outline import XMap, embolden_x, polygon_area, straighten_runs  # noqa: E402
 from build_sans import relabel_features  # noqa: E402
 from kerf_build.missing import complete_anchors, patch_ccmp, unseat_marks  # noqa: E402
 from fontTools.pens.recordingPen import DecomposingRecordingPen  # noqa: E402
@@ -333,15 +333,16 @@ def compensation(scale: float) -> float:
     return max(COMP_FLOOR, COMP_FLOOR + (1 - COMP_FLOOR) * (scale - 0.55) / 0.30)
 
 
-def condense(g: Glyph, font, scale: float, stem: float) -> None:
+def condense(g: Glyph, font, scale: float, stem: float, floors: list = ()) -> None:
     """Scale the outline about its ink centre, holding (part of) the stem weight
-    without closing a counter (the zeros of ‰ and ‱ at Bold)."""
+    without closing a counter (the zeros of ‰ and ‱ at Bold) or shrinking
+    contour i below `floors[i]`."""
     b = g.getBounds(font)
     cx = (b.xMin + b.xMax) / 2
     for c in g.contours:
         for p in c.points:
             p.x = cx + (p.x - cx) * scale
-    embolden_x(g, stem * (1 - scale) * compensation(scale), keep_counters=True)
+    embolden_x(g, stem * (1 - scale) * compensation(scale), keep_counters=True, floors=floors)
 
 
 def fit_to_cell(font, g: Glyph, scale: float, stem: float, origin: float | None = None) -> XMap:
@@ -349,8 +350,10 @@ def fit_to_cell(font, g: Glyph, scale: float, stem: float, origin: float | None 
     the ink centre was before any earlier change (arms), for re-seating marks."""
     b = g.getBounds(font)
     cx = (b.xMin + b.xMax) / 2
+    # each pass keeps a counter a fifth of its area before fitting, scaled, so passes cannot compound
+    fifths = [abs(polygon_area([(p.x, p.y) for p in c.points])) / 5 for c in g.contours]
     if scale != 1.0:
-        condense(g, font, scale, stem)
+        condense(g, font, scale, stem, [a * scale for a in fifths])
     # a heavier master can come out wider than Regular planned; hold it to the cell
     limit = FILL_MAX["wide" if base_letter(g) in WIDE else "other"] * CELL
     for _ in range(4):  # held stem weight adds ink back, so measure again
@@ -359,8 +362,8 @@ def fit_to_cell(font, g: Glyph, scale: float, stem: float, origin: float | None 
         if ink <= limit + 1:
             break
         extra = limit / ink
-        condense(g, font, extra, stem)
         scale *= extra
+        condense(g, font, extra, stem, [a * scale for a in fifths])
     nb = g.getBounds(font)
     dx = CELL / 2 - (nb.xMin + nb.xMax) / 2
     for c in g.contours:
