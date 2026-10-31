@@ -47,6 +47,7 @@ import sys
 from pathlib import Path
 
 from fontTools.otlLib.builder import buildStatTable
+from fontTools.misc.roundTools import otRound
 from fontTools.ttLib import TTFont, newTable
 from fontTools.ttLib.tables import ttProgram
 from fontTools.ttLib.tables._g_l_y_f import (
@@ -310,7 +311,9 @@ def draw_in_transformed(font: TTFont) -> list[str]:
     through the same transform, points the font infers (IUP) left to be
     inferred, plus the composite's own offset deltas. Inter's transforms are
     flips and half turns, so every point and delta stays an integer and the
-    outline is the same at every weight. Returns the glyphs drawn in."""
+    outline is the same at every weight. A scaled component (a circled
+    letter's 0.92) is rounded to whole units at each master, so a point moves
+    by half a unit at most. Returns the glyphs drawn in."""
     glyf = font["glyf"]
     names = [n for n in font.getGlyphOrder() if glyf[n].isComposite()
              and any(getattr(c, "transform", None) is not None for c in glyf[n].components)]
@@ -327,8 +330,6 @@ def draw_in_transformed(font: TTFont) -> list[str]:
             if cg.isComposite():
                 raise ValueError(f"{name}: nested component {compo.glyphName}; fontmake should have flattened it")
             t = getattr(compo, "transform", [[1, 0], [0, 1]])
-            if any(v != int(v) for row in t for v in row):
-                raise ValueError(f"{name}: a scaled component ({t}); its points would not stay integers")
             one = Glyph()
             one.numberOfContours = -1
             one.components = [compo]
@@ -342,14 +343,14 @@ def draw_in_transformed(font: TTFont) -> list[str]:
                 start = end + 1
             coords += [c[k] for k in perm]
             flags += bytes(f[k] for k in perm)
-            parts.append((i, compo, t, perm, list(e)))
+            parts.append((i, compo, t, perm, list(e), [c[k] for k in perm]))
         variations = {}
         if gvar is not None:
             own = {key(v.axes): v for v in gvar.variations.get(name, [])}
             comps = [{key(v.axes): v for v in gvar.variations.get(compo.glyphName, [])} for _, compo, *_ in parts]
             for k in sorted(set(own) | set().union(*comps)):
                 deltas = []
-                for (i, compo, t, perm, e), table in zip(parts, comps):
+                for (i, compo, t, perm, e, base), table in zip(parts, comps):
                     n = len(perm)
                     d = table[k].coordinates[:n] if k in table else [None] * n
                     d = [None if v is None else _apply(t, *v) for v in d]
@@ -365,14 +366,16 @@ def draw_in_transformed(font: TTFont) -> list[str]:
                                     d[j] = (0, 0)  # nothing to infer from: the offset moves every point
                             start = end + 1
                         d = [None if v is None else (v[0] + off[0], v[1] + off[1]) for v in d]
-                    deltas += [d[j] for j in perm]
+                    deltas += [None if d[j] is None else (otRound(base[m][0] + d[j][0]) - otRound(base[m][0]),
+                                                          otRound(base[m][1] + d[j][1]) - otRound(base[m][1]))
+                               for m, j in enumerate(perm)]
                 phantoms = own[k].coordinates[-4:] if k in own else [(0, 0)] * 4
                 deltas += [(0, 0) if v is None else v for v in phantoms]
                 if any(v is not None and v != (0, 0) for v in deltas):
                     variations[k] = TupleVariation(dict(k), [None if v is None else (int(v[0]), int(v[1])) for v in deltas])
         new = Glyph()
         new.numberOfContours = len(ends)
-        new.coordinates = GlyphCoordinates([(int(x), int(y)) for x, y in coords])
+        new.coordinates = GlyphCoordinates([(otRound(x), otRound(y)) for x, y in coords])
         new.endPtsOfContours = ends
         overlap = bool(g.components[0].flags & OVERLAP_COMPOUND) or any(f & flagOverlapSimple for f in flags)
         new.flags = bytearray(f & flagOnCurve for f in flags)
