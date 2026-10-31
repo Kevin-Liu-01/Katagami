@@ -1326,6 +1326,7 @@ SERIF_CLEAR = 0.25  # stems (Regular) of white a serif leaves to other ink it do
 SERIF_GAP = 0.5  # stems (Regular): the least white between two serifs that face each other, inside a letter or between two
 SERIF_HAIR = 0.1  # stems (Regular): white narrower than this between two facing serifs reads as a crack
 SERIFS_KEY = "com.kerf.serifs"  # a glyph's foot and top serif contours, by index
+SERIF_STEM_KEY = "com.kerf.serifStem"  # Regular's stem before its serifs, which stem() would measure with them
 SERIF_FIT = 0.75  # share of the serifs' reach past a letter's ink taken back by narrowing the letter, stems kept
 HEAD_BY_REACH = True  # a head serif's drop follows the reach (Regular stem times the reach scale), not the master's stem
 
@@ -1450,6 +1451,7 @@ def cut_serifs(fonts, plan: dict, reach: float, depth: float, head_drop: float, 
     def crossbar(font) -> float:
         ys = sorted({round(pt.y) for c in font["H"].contours for pt in c.points if 0 < round(pt.y) < round(font["H"].getBounds(font).yMax)})
         return ys[-1] - ys[0] if len(ys) >= 2 else stem(font)
+    fonts["Regular"].lib[SERIF_STEM_KEY] = sw_ref
     gap = SERIF_GAP * sw_ref
     ink_clear = SERIF_CLEAR * sw_ref
     parts = serif_parts(fonts["Regular"])
@@ -1560,7 +1562,9 @@ def settle_facing_serifs(fonts, names: list[str]) -> None:
     SERIF_HAIR; apart, each facing end is cut back toward SERIF_GAP between them,
     no further than its bracket."""
     ref = fonts["Regular"]
-    sw_ref = stem(ref)
+    if SERIF_STEM_KEY not in ref.lib:
+        return
+    sw_ref = ref.lib[SERIF_STEM_KEY]
     hair, gap = SERIF_HAIR * sw_ref, SERIF_GAP * sw_ref
     def box(c):
         xs, ys = [p.x for p in c.points], [p.y for p in c.points]
