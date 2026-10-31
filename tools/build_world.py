@@ -41,7 +41,7 @@ from fontTools.varLib import build as build_variable
 from fontTools.varLib.instancer import instantiateVariableFont
 
 sys.path.insert(0, str(Path(__file__).parent))
-from kerf_build.outline import signed_area, sound  # noqa: E402
+from kerf_build.outline import polygon_area, sound  # noqa: E402
 from kerf_build.profiles import PROFILES  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -154,12 +154,12 @@ def embolden(font: TTFont, strength: float) -> list[str]:
         for end in ends:
             contours.append(coords[start:end + 1])
             start = end + 1
-        total = sum(signed_area(pts) for pts in contours)
+        total = sum(polygon_area(pts) for pts in contours)
         truetype = total < 0  # outer contours clockwise
         new = []
         for pts in contours:
             moved = _moved(pts, half, truetype)
-            counter = (signed_area(pts) < 0) != truetype
+            counter = (polygon_area(pts) < 0) != truetype
             if counter == (strength > 0) and not sound(pts, moved):
                 lo, hi = 0.0, 1.0
                 for _ in range(8):

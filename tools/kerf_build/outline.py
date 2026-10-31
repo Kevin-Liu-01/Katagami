@@ -284,7 +284,7 @@ def keep_stroke(glyph: Glyph, plan, before, floor: float) -> int:
 # outward by strength/2 on each side; negative strength thins.
 
 
-def signed_area(pts: list) -> float:
+def polygon_area(pts: list) -> float:
     return sum(pts[k - 1][0] * pts[k][1] - pts[k][0] * pts[k - 1][1] for k in range(len(pts))) / 2
 
 
@@ -302,7 +302,7 @@ def inside_out(pts: list) -> float:
     """How much more a contour fills than its signed area: the area of its lobes that run the other way round, twice."""
     path = _path(pts)
     path.simplify()
-    return path.area - abs(signed_area(pts))
+    return path.area - abs(polygon_area(pts))
 
 
 def sound(old: list, new: list) -> bool:
@@ -310,7 +310,7 @@ def sound(old: list, new: list) -> bool:
     its area and no more of it inside out than before. Staying inside catches a
     small counter pushed through its own centre, which comes out turned half
     round with its direction unchanged."""
-    a0, a1 = signed_area(old), signed_area(new)
+    a0, a1 = polygon_area(old), polygon_area(new)
     if not a0:
         return True
     if a0 * a1 <= 0 or abs(a1) < 0.2 * abs(a0):
@@ -381,7 +381,7 @@ def _embolden(glyph: Glyph, strength: float, axis: int, keep_counters: bool = Fa
         # UFO outlines are PostScript-oriented (outer contours counter-clockwise).
         orig = [(p.x, p.y) for p in pts]
         new = _shifted(orig, half, axis)
-        if keep_counters and strength > 0 and signed_area(orig) < 0:
+        if keep_counters and strength > 0 and polygon_area(orig) < 0:
             placed = lambda vals: [(v, y) if axis == 0 else (x, v) for (x, y), v in zip(orig, vals)]  # noqa: E731
             if not sound(orig, placed(new)):
                 lo, hi = 0.0, 1.0
