@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[2]
 INTER_UFO = ROOT / "build" / "ufo"
 INTER_ITALIC_UFO = ROOT / "build" / "ufo-italic"
 MASTERS = {"Thin": 100, "Regular": 400, "Black": 900}
-VERSION = (0, 200)  # major, minor: "Version 0.200"
+VERSION = (1, 0)  # major, minor: "Version 1.000"
 VENDOR = "KATA"  # OS/2 achVendID and the vendor in each unique ID (name 3)
 # The style name of each master in an Italic. The masters keep the roman keys
 # (Thin, Regular, Black) inside the build, so every transform reads them alike.

@@ -63,7 +63,7 @@ ITALICS = {key: path.with_name(path.name.replace("[wght]", "-Italic[wght]")) for
 WOFF2 = {"sans": "KatagamiSans.woff2", "round": "KatagamiRound.woff2", "text": "KatagamiText.woff2",
          "serif": "KatagamiSerif.woff2", "mono": "KatagamiMono.woff2"}
 WOFF2_ITALIC = {key: name.replace(".woff2", "-Italic.woff2") for key, name in WOFF2.items()}
-VERSION = f"{_VERSION[0]}.{_VERSION[1]:03d}".rstrip("0").rstrip(".")  # "0.2"
+VERSION = f"{_VERSION[0]}.{f'{_VERSION[1]:03d}'.rstrip('0') or '0'}"  # "1.0": 1.000 and 0.200 lose their trailing zeros but keep one digit
 ZIP = f"Katagami-{VERSION}.zip"
 SCRIPT_COUNT = 3 + len(SCRIPTS)  # Latin, Greek and Cyrillic drawn, the rest merged
 OUTLINE_CHARS = {"K": "K", "a": "a", "t": "t", "g": "g", "m": "m", "i": "i"}
