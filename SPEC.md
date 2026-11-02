@@ -176,7 +176,7 @@ U+2500 to U+259F are drawn by `tools/kerf_build/boxdraw.py`, not taken from Inte
 
 `tools/kerf_build/terminal.py` draws all 256 Braille patterns (U+2800 to U+28FF) as square dots the size of the period on a 2 by 4 grid spread evenly over the full line height, and the status symbols coding agents print in the terminal (⏺ ⎿ ✔ ✘ ✕ ◉ ▸ ⏵ ⏸ ⏹ ✢ ✳ ✶ ✻ ✽), each sized and weighted from its neighbours in every master.
 
-## Coverage in v0.2
+## Coverage in v1.0
 
 | | Katagami Sans, Round, Text, Serif | Their Italics | Katagami Mono and Mono Italic |
 |---|---|---|---|
@@ -286,7 +286,7 @@ The circle has o's anchors, moved across with the ring, so Latin, Greek and Cyri
 | `base_has_width`: U+0488 and U+0489 were zero-width bases | FAIL | PASS: zero-width combining and enclosing marks are GDEF marks |
 | `family/win_ascent_and_descent` (Mono) | FAIL: box drawing reached past usWinAscent | PASS |
 | Italic linking: `opentype/STAT/ital_axis`, `googlefonts/family/italics_have_roman_counterparts`, `family/vertical_metrics`, `opentype/italic_angle`, `opentype/caret_slope`, `opentype/fsselection`, `opentype/mac_style`, `googlefonts/font_names` | no Italics | PASS for all five members |
-| `googlefonts/name/version_format` | FAIL | FAIL: Google Fonts wants 1.000 or more, and Katagami is at 0.200 |
+| `googlefonts/name/version_format` | FAIL | FAIL at 0.200. PASS at 1.000, the lowest version Google Fonts accepts |
 | `googlefonts/glyph_coverage` | FAIL | PASS: the combining double acute (U+030B), the one character of Google Fonts' Latin core Inter has no glyph for, is Inter's own double acute set as a mark (`fontops.combining_double_acute`) |
 | `case_mapping`, `googlefonts/glyphsets/shape_languages` | FAIL | PASS and WARN: the 60 characters Inter does not have are built (see Characters Inter does not have), accents attach to Cyrillic and Greek letters, and 601 letters have small capitals. The WARN lists letters with no small capital (ǰ, ɐ, ʕ, ʘ and ẖ have no single capital, and ten are skipped) and the joiner controls U+200C, U+200D and U+200F that Arabic asks for |
 | `soft_dotted` | WARN | WARN: i, j and the superior and inferior ⁱ ʲ ᵢ ⱼ ᶤ lose their dot under every accent above. The check's examples put U+20DD or U+20DE, enclosing marks of combining class 0, between the letter and the accent, and under Unicode's rule a class 0 mark keeps the dot |
@@ -306,6 +306,8 @@ Fontbakery was run on the four CJK companions for the first time. Each has 5 FAI
 The second fix round leaves every pair with 2 FAIL, the version format in both files, and no ERROR, because the `superfamily/list` ERROR is gone. Sans, Text and Serif have 12 WARN per pair, Round 14 and Mono 10. Both files of every pair report the vendor ID (KATA, until Microsoft lists it), `soft_dotted`, `gdef_mark_chars` and `unreachable_subsetting`. The `soft_dotted` examples left put U+20DD or U+20DE between the letter and the accent, and those enclosing marks of combining class 0 keep the dot under Unicode's rule. `gdef_mark_chars` lists U+20DD and U+20DE, which Inter sets with an advance. `unreachable_subsetting` lists the characters outside Google Fonts' subsets. The proportional romans add `file_size` (6.8 to 7.1 MiB with the merged scripts) and Noto's own mark classes for the merged Indic scripts (`gdef_non_mark_chars`, `gdef_spacing_marks`), which `finish.py` keeps because changing them changes how HarfBuzz shapes those scripts. They also add `interpolation_issues` for kinks and contour order in five of Noto's glyphs (Tamil, Malayalam, Bengali and Ethiopic) and Ol Chiki U+1C73, which Noto draws that way. Round's Italic adds `file_size` at 1,053,640 bytes, just over the 1 MiB suggestion once the new characters are in, and kinks at a few of its rounded corners. Mono adds `opentype/monospace`: its zero-width marks keep their zero advance, so `hhea.numberOfHMetrics` cannot be the 3 the check asks for.
 
 Each CJK file now has 1 FAIL, the version format, and 7 WARN. A Google Fonts article per file (`docs/google-fonts/katagamicjk*/article`) clears the article check. The build repairs contours that share a segment once the file is at 1,000 units, turns outer contours clockwise again afterwards, and drops the one Latin part no letter reaches. The WARNs left are the file size, `unreachable_subsetting`, the vendor ID and Adobe's reserved font name. `math_signs_width` counts the full-width postal mark 〒 as a math sign. `typoascender_exceeds_Agrave` follows from Google's CJK typo metrics, which put the ascender at 0.88 em. `overlapping_path_segments` lists the braces, whose tab and arms have collinear left edges that meet when rounded to 1,000 units, and a few of Noto's hanzi and Hangul that the repair cannot separate.
+
+Version 1.000 passes `googlefonts/name/version_format` in Katagami Sans and Katagami CJK SC, and `opentype/font_version` in Katagami Sans. From 0.200 only head.fontRevision and the version in name 3 and name 5 changed, so the other results above stand.
 
 ## Not done yet
 
