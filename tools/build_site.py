@@ -40,9 +40,11 @@ from pathlib import Path
 
 import sys
 
+import pathops
 import ufoLib2
 from fontTools import subset
 from fontTools.misc.bezierTools import calcBounds, calcCubicBounds, calcCubicParameters, cubicPointAtT, solveCubic
+from fontTools.pens.recordingPen import RecordingPen
 from fontTools.ttLib import TTFont
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -380,8 +382,39 @@ def quarter(contour: list) -> dict:
     return {"f": round(f, 4), "n": round(superellipse_n(unit), 3), "arc": [[round(x, 4), round(y, 4)] for x, y in unit[1:3]]}
 
 
+def merged(contours: list) -> list:
+    """Flattened contours with their overlaps removed, so a drawing shows the outline a reader sees
+    and none of the parts a glyph is built from (an n's arch over its stem, a separate serif)."""
+    path = pathops.Path()
+    pen = path.getPen()
+    for c in contours:
+        segs = segments(c)
+        pen.moveTo(segs[0][0])
+        for s in segs:
+            pen.lineTo(s[1]) if len(s) == 2 else pen.curveTo(*s[1:])
+        pen.closePath()
+    path.simplify(fix_winding=True, keep_starting_points=True)
+    rec, out = RecordingPen(), []
+    path.draw(rec)
+    for op, pts in rec.value:
+        r = [[round(x, 1), round(y, 1)] for x, y in pts]
+        if op == "moveTo":
+            out.append([r[0] + ["l"]])
+        elif op == "lineTo":
+            out[-1].append(r[0] + ["l"])
+        elif op == "curveTo":
+            out[-1] += [r[0] + ["o"], r[1] + ["o"], r[2] + ["c"]]
+        else:
+            assert op == "closePath", f"the Curves plate draws lines and cubic curves only, not {op}"
+            # the last segment closes on the first point, which the list already holds
+            if len(out[-1]) > 1 and out[-1][-1][:2] == out[-1][0][:2]:
+                out[-1].pop()
+    return out
+
+
 def curve_facts(font) -> dict:
-    """The o and n of one source at Regular, drawn and measured in font units."""
+    """The o and n of one source at Regular, drawn with their overlaps removed and measured
+    on the source's own contours, in font units."""
     o, n = flatten(font, "o"), flatten(font, "n")
     size = lambda c: (lambda b: (b[2] - b[0]) * (b[3] - b[1]))(box(c))  # noqa: E731
     outer, counter = sorted(o, key=size, reverse=True)[:2]
@@ -391,7 +424,7 @@ def curve_facts(font) -> dict:
     edge = crossings(max(n, key=size), xh / 3)
     # the thinner of o's top and bottom strokes, and the thicker of its sides
     thin, thick = min(oy1 - cy1, cy0 - oy0), max(cx0 - ox0, ox1 - cx1)
-    return {"o": {"adv": font["o"].width, "contours": o}, "n": {"adv": font["n"].width, "contours": n},
+    return {"o": {"adv": font["o"].width, "contours": merged(o)}, "n": {"adv": font["n"].width, "contours": merged(n)},
             "outer": quarter(outer), "counter": quarter(counter), "wh": round((ox1 - ox0) / (oy1 - oy0), 4),
             "stem": round(edge[1] - edge[0], 1), "thin": round(thin, 1), "thick": round(thick, 1), "contrast": round(thin / thick, 4),
             "over": [round(oy1 - xh, 1), round(-oy0, 1)], "xHeight": xh, "capHeight": font.info.capHeight}
