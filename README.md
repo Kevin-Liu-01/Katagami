@@ -194,4 +194,4 @@ The name comes from katagami (型紙, "pattern paper"), the Japanese paper stenc
 
 ## License
 
-Katagami is licensed under the [SIL Open Font License 1.1](OFL.txt). It is a modified version of Inter and keeps Inter's and Noto's copyright notices.
+Katagami is licensed under the [SIL Open Font License 1.1](OFL.txt). It is a modified version of Inter and keeps Inter's and Noto's copyright notices. The build code in `tools/` is licensed under the [MIT License](tools/LICENSE).
