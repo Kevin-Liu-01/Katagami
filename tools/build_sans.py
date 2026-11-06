@@ -648,9 +648,11 @@ def small_caps(fonts) -> None:
     opened = {cmap[u]: v for u, v in SMALL_CAP_OPEN.items() if u in cmap}
     for style, f in fonts.items():
         upm, xh, cap = f.info.unitsPerEm, f.info.xHeight, f.info.capHeight
-        lc_stem = stem(f)
+        # Katagami Serif's stems as they stood before its serifs: the bounds of ı and I take in the
+        # serifs, which would embolden its small capitals by three times as much
         b = f["I"].getBounds(f)
-        uc_stem = b.xMax - b.xMin
+        lc_stem = f.lib.get(SERIF_STEM_KEY, stem(f))
+        uc_stem = f.lib.get(SERIF_CAP_STEM_KEY, b.xMax - b.xMin)
         dx = lc_stem - uc_stem * xh / cap
         dy = 0.4 * dx  # less on horizontals, or Black's bars close the counters of E and S
         k = (xh - dy) / cap
@@ -677,6 +679,7 @@ def small_caps(fonts) -> None:
             g.width = round(src.width * kx + ddx + track)
             if SERIFS_KEY in src.lib:  # drawn from the capital in order, so its serifs keep their indices
                 g.lib[SERIFS_KEY] = list(src.lib[SERIFS_KEY])
+                seat_brackets(f, g)
         for lc in compound:
             src = f[pairs[lc]]
             g = f.newGlyph(f"{lc}.smcp")
@@ -1326,7 +1329,8 @@ SERIF_CLEAR = 0.25  # stems (Regular) of white a serif leaves to other ink it do
 SERIF_GAP = 0.5  # stems (Regular): the least white between two serifs that face each other, inside a letter or between two
 SERIF_HAIR = 0.1  # stems (Regular): white narrower than this between two facing serifs reads as a crack
 SERIFS_KEY = "com.kerf.serifs"  # a glyph's foot and top serif contours, by index
-SERIF_STEM_KEY = "com.kerf.serifStem"  # Regular's stem before its serifs, which stem() would measure with them
+SERIF_STEM_KEY = "com.kerf.serifStem"  # a master's stem before its serifs, which stem() would measure with them
+SERIF_CAP_STEM_KEY = "com.kerf.serifCapStem"  # a master's I before its serifs, which its bounds would take in
 SERIF_FIT = 0.75  # share of the serifs' reach past a letter's ink taken back by narrowing the letter, stems kept
 HEAD_BY_REACH = True  # a head serif's drop follows the reach (Regular stem times the reach scale), not the master's stem
 
@@ -1451,12 +1455,13 @@ def cut_serifs(fonts, plan: dict, reach: float, depth: float, head_drop: float, 
     def crossbar(font) -> float:
         ys = sorted({round(pt.y) for c in font["H"].contours for pt in c.points if 0 < round(pt.y) < round(font["H"].getBounds(font).yMax)})
         return ys[-1] - ys[0] if len(ys) >= 2 else stem(font)
-    fonts["Regular"].lib[SERIF_STEM_KEY] = sw_ref
     gap = SERIF_GAP * sw_ref
     ink_clear = SERIF_CLEAR * sw_ref
     parts = serif_parts(fonts["Regular"])
     for style, f in fonts.items():
         sw = stem(f)
+        cap_ink = f["I"].getBounds(f)
+        f.lib[SERIF_STEM_KEY], f.lib[SERIF_CAP_STEM_KEY] = sw, cap_ink.xMax - cap_ink.xMin  # the small capitals' stems
         k = (sw / sw_ref) ** SERIF_REACH_POWER[sw > sw_ref]
         t = depth * crossbar(f) * dict(zip(("Thin", "Regular", "Black"), SERIF_DEPTH_SCALE)).get(style, 1.0)
         before = snapshot(f)
@@ -1555,12 +1560,34 @@ def cut_serifs(fonts, plan: dict, reach: float, depth: float, head_drop: float, 
         flag_overlaps(f)
 
 
+def seat_brackets(font, g) -> None:
+    """Each serif's two ends on its stroke, where its brackets leave the stroke's sides, back on
+    those sides. Emboldening moves such an end along the bisector of its bracket and the line
+    across the stroke, and a diagonal's side along the side's own normal, so on a diagonal (M, N,
+    K, W, A) the end lands in the white and the line across the stroke runs out into it as a barb."""
+    serifs = g.lib.get(SERIFS_KEY, [])
+    body = font.newGlyph("_smcp_body")
+    for i, c in enumerate(g.contours):
+        if i not in serifs:
+            c.drawPoints(body.getPointPen())
+    for i in serifs:
+        ends = (g.contours[i].points[0], g.contours[i].points[-1])
+        mid = (ends[0].x + ends[1].x) / 2
+        for p in ends:
+            # the stroke is the ink the line across it crosses
+            run = min(_ink_runs(font, body, p.y), default=None,
+                      key=lambda r: 0 if r[0] <= mid <= r[1] else min(abs(mid - r[0]), abs(mid - r[1])))
+            if run:
+                p.x = min(max(p.x, run[0]), run[1])
+    del font["_smcp_body"]
+
+
 def settle_facing_serifs(fonts, names: list[str]) -> None:
     """Two serifs that face each other on one line and stand less than SERIF_HAIR
     apart in a master (a small capital, scaled and emboldened after its capital's
-    serifs were cut) take Regular's arrangement there: joined, they overlap by
-    SERIF_HAIR; apart, each facing end is cut back toward SERIF_GAP between them,
-    no further than its bracket."""
+    serifs were cut), or overlap there while Regular keeps them apart, take
+    Regular's arrangement there: joined, they overlap by SERIF_HAIR; apart, each
+    facing end is cut back toward SERIF_GAP between them, no further than its bracket."""
     ref = fonts["Regular"]
     if SERIF_STEM_KEY not in ref.lib:
         return
@@ -1586,7 +1613,8 @@ def settle_facing_serifs(fonts, names: list[str]) -> None:
                 g = f[name]
                 (l0, l1, _, _), (r0, r1, _, _) = box(g.contours[i]), box(g.contours[j])
                 white = r0 - l1
-                if not 0 < white < hair:
+                # apart at Regular and overlapping here, they would crack open at a weight in between
+                if white >= hair or (joined and white <= 0):
                     continue
                 want = -(white + hair) / 2 if joined else (gap - white) / 2
                 for c, edge, way in ((g.contours[i], l1, -1), (g.contours[j], r0, 1)):
