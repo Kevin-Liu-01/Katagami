@@ -494,8 +494,11 @@ def keep_own_variations(source: TTFont, font: TTFont) -> list[str]:
     variations only where its default outline and advance are the source's.
     Returns the glyphs whose variations changed."""
     def axes(f):
+        # avar holds F2Dot14s: a font varLib built in memory has not rounded its map yet
+        f2 = lambda v: round(v * 16384)  # noqa: E731
+        segments = f["avar"].segments if "avar" in f else None
         return [(a.axisTag, a.minValue, a.defaultValue, a.maxValue) for a in f["fvar"].axes], \
-            f["avar"].segments if "avar" in f else None
+            segments and {tag: {f2(k): f2(v) for k, v in m.items()} for tag, m in segments.items()}
     if axes(source) != axes(font):
         raise ValueError("the source's axes are not the merged font's")
     sglyf, glyf = source["glyf"], font["glyf"]
