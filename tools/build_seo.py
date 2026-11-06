@@ -281,7 +281,7 @@ def member_pages(F: dict, C: dict, M: dict) -> None:
             ("h2", "Questions"),
             ("faq", [(f"Is {f['family']} free for commercial use?", f"{f['family']} is free for commercial use. It is released under the SIL Open Font License 1.1, which allows you to use and change it in commercial and non-commercial products. Keep the license with the files when you share them."),
                      (f"Which weights does {f['family']} have?", f"{f['family']} has every weight from {w0} to {w1} on one variable axis. Its named styles run from {f['instances'][0]} to {f['instances'][-1]}."),
-                     (f"Does {f['family']} have italics?", f"{f['family']} has an Italic, a variable font beside the roman with the same weights, built by the same transforms from Inter's Italic. The Italic sets Latin, Greek and Cyrillic, and italic text in other scripts sets the upright letters.")]),
+                     (f"Does {f['family']} have italics?", f"{f['family']} has an Italic, a variable font beside the roman with the same weights, built by the same transforms from Inter's Italic. The Italic sets every character the roman sets, slanted 9.4 degrees.")]),
         ]
         if compare:
             blocks += [("h2", "Comparisons"), ("cards", [(c["title"].split(":")[0], c["card"], c["path"]) for c in compare])]

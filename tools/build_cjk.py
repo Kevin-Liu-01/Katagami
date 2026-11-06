@@ -1,7 +1,7 @@
 """Build Katagami CJK SC, TC, JP and KR: Chinese, Japanese and Korean companions to
 the Katagami members, from Google's Noto Sans SC, TC, JP and KR (SIL OFL 1.1).
 
-    python tools/build_cjk.py [SC TC JP KR]
+    python tools/build_cjk.py [SC TC JP KR] [--roman|--italic]
 
 These stay separate from the members, as Pretendard JP does, so a page fetches a
 CJK file only when it shows CJK text. Each is Noto's variable font subset to a
@@ -28,6 +28,10 @@ USE_TYPO_METRICS off). The website sets a CJK file in the same CSS family as a
 Katagami member with unicode-range, and its @font-face rules give it the same
 line with ascent-override, descent-override and line-gap-override.
 
+Each companion has a roman and an Italic. The Italic is Noto's letters slanted
+by Katagami Sans Italic's angle about its half x-height (`kerf_build.slant`),
+as the members' Italics slant their letters, with Sans Italic's Latin.
+
 Each file also has chws and vchw from googlefonts' chws_tool, carets for its
 ligatures, glyph names (post format 2), clockwise outer contours, contours
 repaired where two share a segment, and no glyph that nothing reaches.
@@ -36,6 +40,7 @@ repaired where two share a segment, and no glyph that nothing reaches.
 from __future__ import annotations
 
 import io
+import math
 import sys
 from pathlib import Path
 
@@ -45,16 +50,18 @@ from fontTools.ttLib.scaleUpem import scale_upem
 from fontTools.varLib.hvar import add_HVAR
 
 sys.path.insert(0, str(Path(__file__).parent))
-from finish import prune_unreachable, unhinted  # noqa: E402
+from finish import prune_unreachable, stat, unhinted  # noqa: E402
 from chws_tool import add_chws  # noqa: E402
 from kerf_build.cjk import (build_latin, glyph_names, lig_carets, ligatures, merge_latin,  # noqa: E402
                             reverse_ccw_outers, unicode_marks)
 from kerf_build.contours import fix_shared_segments  # noqa: E402
-from kerf_build.fontops import VENDOR, VERSION  # noqa: E402
+from kerf_build.fontops import VENDOR, VERSION, italic_style  # noqa: E402
+from kerf_build.slant import slant  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 NOTO = ROOT / "vendor" / "noto"
 SANS = ROOT / "fonts" / "sans" / "KatagamiSans[wght].ttf"
+SANS_ITALIC = ROOT / "fonts" / "sans" / "KatagamiSans-Italic[wght].ttf"
 OUT = ROOT / "fonts" / "cjk"
 UPM = 2048  # the em the Latin is merged at, Katagami's
 FILE_UPM = 1000  # the em the files are saved at, Noto's: at 2048 Katagami CJK TC passes Google Fonts' 9 MiB limit
@@ -110,31 +117,39 @@ def charset(region: str) -> set[int]:
     return hangul | shared
 
 
-def rename(font: TTFont, family: str) -> None:
-    """Names the default instance, Thin in Noto's variable fonts, as Google Fonts names it."""
+def rename(font: TTFont, family: str, italic: bool) -> None:
+    """Names the default instance, Thin in Noto's variable fonts, as Google Fonts
+    names it, and in an Italic every named instance as an Italic (Thin Italic)."""
     ps = family.replace(" ", "")
     name = font["name"]
     version = f"{VERSION[0]}.{VERSION[1]:03d}"
     font["head"].fontRevision = float(version)
+    if italic:
+        for inst in font["fvar"].instances:
+            inst.subfamilyNameID = name.addName(italic_style(name.getDebugName(inst.subfamilyNameID)),
+                                                platforms=((3, 1, 0x409),), minNameID=256)
     default = {a.axisTag: a.defaultValue for a in font["fvar"].axes}
     style = next(name.getDebugName(i.subfamilyNameID) for i in font["fvar"].instances if i.coordinates == default)
+    weight = style.removesuffix("Italic").strip() or "Regular"
     for rec in list(name.names):
-        if rec.nameID in (1, 4):
-            rec.string = family if rec.nameID == 1 and style == "Regular" else f"{family} {style}"
+        if rec.nameID == 1:
+            rec.string = family if weight == "Regular" else f"{family} {weight}"
+        elif rec.nameID == 4:
+            rec.string = f"{family} {style}"
         elif rec.nameID == 2:
-            rec.string = "Regular"
+            rec.string = "Italic" if italic else "Regular"
         elif rec.nameID == 16:
             rec.string = family
         elif rec.nameID == 17:
             rec.string = style
         elif rec.nameID == 6:
-            rec.string = f"{ps}-{style}"
+            rec.string = f"{ps}-{style.replace(' ', '')}"
         elif rec.nameID == 3:
-            rec.string = f"{version};{VENDOR};{ps}-{style}"
+            rec.string = f"{version};{VENDOR};{ps}-{style.replace(' ', '')}"
         elif rec.nameID == 5:
             rec.string = f"Version {version}"
         elif rec.nameID == 25:
-            rec.string = ps
+            rec.string = ps + ("Italic" if italic else "")
         elif rec.nameID == 13:
             rec.string = ("This Font Software is licensed under the SIL Open Font License, Version 1.1. "
                           "This license is available with a FAQ at: https://openfontlicense.org")
@@ -145,6 +160,17 @@ def rename(font: TTFont, family: str) -> None:
             noto = rec.toUnicode().replace("(c)", "Copyright")
             rec.string = ("Copyright 2026 The Katagami Project Authors (https://github.com/Kevin-Liu-01/Katagami). "
                           f"Derived from Noto Sans CJK, {noto}")
+
+
+def style_bits(font: TTFont, sans: TTFont, italic: bool) -> None:
+    """REGULAR or ITALIC in fsSelection and macStyle, and in an Italic the Latin's
+    italic angle and caret slope. A roman keeps Noto's upright caret."""
+    os2, head = font["OS/2"], font["head"]
+    os2.fsSelection = os2.fsSelection & ~(1 << 0 | 1 << 5 | 1 << 6) | (1 << 0 if italic else 1 << 6)
+    head.macStyle = (head.macStyle & ~0b11) | (0b10 if italic else 0)
+    if italic:
+        font["post"].italicAngle = sans["post"].italicAngle
+        font["hhea"].caretSlopeRise, font["hhea"].caretSlopeRun = sans["hhea"].caretSlopeRise, sans["hhea"].caretSlopeRun
 
 
 def set_metrics(font: TTFont, sans: TTFont) -> None:
@@ -166,18 +192,18 @@ def set_metrics(font: TTFont, sans: TTFont) -> None:
     os2.recalcAvgCharWidth(font)
 
 
-def latin_font(cjk: TTFont, cache: dict) -> TTFont:
-    """Katagami Sans's Latin on the CJK file's axis, a fresh copy for each merge.
-    It is built once per avar; Noto's four files share one."""
-    key = repr(cjk["avar"].segments)
+def latin_font(sans_path: Path, cjk: TTFont, cache: dict) -> TTFont:
+    """Katagami Sans's (or Sans Italic's) Latin on the CJK file's axis, a fresh copy
+    for each merge. It is built once per avar; Noto's four files share one."""
+    key = (sans_path, repr(cjk["avar"].segments))
     if key not in cache:
         buf = io.BytesIO()
-        build_latin(SANS, cjk).save(buf)
+        build_latin(sans_path, cjk).save(buf)
         cache[key] = buf.getvalue()
     return TTFont(io.BytesIO(cache[key]))
 
 
-def build(region: str, cache: dict) -> Path:
+def build(region: str, cache: dict, italic: bool = False) -> Path:
     noto = NOTO / f"NotoSans{region}[wght].ttf"
     chars = charset(region)
     font = TTFont(noto)
@@ -195,13 +221,18 @@ def build(region: str, cache: dict) -> Path:
     sub.subset(font)
     scale_upem(font, UPM)
     reversed_ = reverse_ccw_outers(font)
+    sans_path = SANS_ITALIC if italic else SANS
+    sans = TTFont(sans_path, lazy=True)
+    if italic:
+        slant(font, math.tan(math.radians(-sans["post"].italicAngle)), sans["OS/2"].sxHeight / 2)
     marks = unicode_marks(font)
-    added = merge_latin(font, latin_font(font, cache), CJK_TYPO["ascender"], marks)
+    added = merge_latin(font, latin_font(sans_path, font, cache), CJK_TYPO["ascender"], marks)
     add_HVAR(font)  # from every glyph's phantom-point deltas, so it covers the Latin
     lig_carets(font, ligatures(font))
-    sans = TTFont(SANS, lazy=True)
     set_metrics(font, sans)
-    rename(font, f"Katagami CJK {region}")
+    rename(font, f"Katagami CJK {region}", italic)
+    style_bits(font, sans, italic)
+    stat(font, italic)
     font["OS/2"].achVendID = VENDOR
     unhinted(font)
     scale_upem(font, FILE_UPM)
@@ -214,7 +245,7 @@ def build(region: str, cache: dict) -> Path:
     post = font["post"]  # glyph names, so text in a PDF made from the font stays searchable
     post.formatType, post.extraNames, post.mapping = 2.0, [], {}
     OUT.mkdir(parents=True, exist_ok=True)
-    path = OUT / f"KatagamiCJK{region}[wght].ttf"
+    path = OUT / f"KatagamiCJK{region}{'-Italic' if italic else ''}[wght].ttf"
     font.save(path)
     add_chws(path, path)  # adds the chws and vchw lookups to the file in place
     font = TTFont(path)
@@ -226,5 +257,8 @@ def build(region: str, cache: dict) -> Path:
 
 if __name__ == "__main__":
     cache = {}
-    for region in sys.argv[1:] or ("SC", "TC", "JP", "KR"):
-        build(region, cache)
+    only = next((a[2:] for a in sys.argv[1:] if a in ("--roman", "--italic")), None)
+    for region in [a for a in sys.argv[1:] if not a.startswith("--")] or ("SC", "TC", "JP", "KR"):
+        for italic in (False, True):
+            if only in (None, "italic" if italic else "roman"):
+                build(region, cache, italic)

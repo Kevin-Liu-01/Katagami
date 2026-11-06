@@ -53,7 +53,7 @@ fi
 # wants KEY PART: true when this run builds KEY's roman or italic
 wants() { [[ "$which" == all || "$which" == "$1" || "$which" == "$1-$2" ]]; }
 
-# proportional KEY STEM: Inter's masters into the member, fontmake, then the script merge (roman)
+# proportional KEY STEM: Inter's masters into the member, fontmake, then the script merge
 proportional() {
   local key=$1 stem=$2
   mkdir -p "fonts/$key"
@@ -66,7 +66,8 @@ proportional() {
   if wants "$key" italic; then
     $PY tools/build_sans.py "$key" --italic
     .venv/bin/fontmake -m "build/$key-italic/$stem-Italic.designspace" -o variable \
-      --output-path "fonts/$key/$stem-Italic[wght].ttf" --flatten-components
+      --output-path "build/$key-italic/$stem-Italic-core[wght].ttf" --flatten-components
+    $PY tools/build_world.py "$key" --italic
   fi
   if wants "$key" roman || wants "$key" italic; then
     $PY tools/finish.py "$key"

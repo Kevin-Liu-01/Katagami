@@ -252,7 +252,7 @@ def _merge_layout(table, other) -> None:
     own, added = table.FeatureList.FeatureRecord, other.FeatureList.FeatureRecord
     records: dict[tuple, int] = {}
     systems = {}
-    for key in keys:
+    for key in sorted(keys, key=lambda k: (k[0], k[1] or "")):  # a set's order changes from run to run
         tags: dict[str, list] = {}
         for i in getattr(_pick(mine, *key), "FeatureIndex", []):
             if own[i].FeatureTag in tags:

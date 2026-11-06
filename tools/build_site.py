@@ -6,15 +6,14 @@ The site lives in its own repo, Katagami-Website, checked out next to this one
     fonts/KatagamiSans.woff2 ...        each member's Latin, Greek and Cyrillic core
     fonts/KatagamiSans-Italic.woff2 ... each member's Italic (Latin, Greek and Cyrillic)
     fonts/KatagamiSans-thai.woff2 ...   one file per merged script, per member
-    fonts/KatagamiCJK{SC,JP,KR}.woff2   the CJK companions
+    fonts/KatagamiSans-Italic-thai.woff2 ...  the same from the Italic
+    fonts/KatagamiCJK{SC,TC,JP,KR}.woff2 and -Italic.woff2   the CJK companions
     fonts/first.js, first-rows.js, first-round.js, first-text.js, first-serif.js,
     first-features.js, kanji.js
                                     subsets of a member a page adds for its first paint
     fonts/katagami.css                  @font-face rules: each member is one family whose
                                     faces split by unicode-range, so a page downloads
-                                    only the scripts it shows; the merged scripts and
-                                    CJK are declared for italic too, so italic text in
-                                    them sets the upright letters
+                                    only the scripts it shows, in the roman or the Italic
     data.js     window.KERF: metrics, features, the hero's outlines and the Curves plate
     glyphs.js   each member's character table and the Unicode names, merged into window.KERF
     index.html  page.html wrapped in a document, asset URLs stamped with hashes
@@ -484,13 +483,8 @@ def stamp(rel: str) -> str:
 
 
 def web_fonts() -> list[list]:
-    """Write every member's slices, its Italic and the CJK companions; return the
-    faces as [family, file, weights, unicode-range, style] with stamped file names.
-
-    The Italics carry Latin, Greek and Cyrillic. Each merged script's slice and
-    each CJK companion is declared a second time with font-style: italic, so
-    italic text in those scripts sets the upright letters instead of falling to
-    another family or being slanted by the browser."""
+    """Write every member's slices, roman and Italic, and the CJK companions'; return
+    the faces as [family, file, weights, unicode-range, style] with stamped file names."""
     faces = []
     scripted = set(SCRIPT_OF)
     stamped = lambda name: stamp(f"fonts/{name}").removeprefix("fonts/")  # noqa: E731
@@ -514,7 +508,9 @@ def web_fonts() -> list[list]:
             ur = unicode_range(have, avoid=cmap - have)
             faces.append([FAMILY[key], stamped(name), WEIGHTS[key], ur, "normal"])
             if italic.exists():
-                faces.append([FAMILY[key], stamped(name), WEIGHTS[key], ur, "italic"])
+                iname = f"{stem}-Italic-{script.lower()}.woff2"
+                woff2_slice(italic, have, PUBLIC / "fonts" / iname)
+                faces.append([FAMILY[key], stamped(iname), WEIGHTS[key], ur, "italic"])
     latin = latin_chars()
     for name, ranges in CJK.items():
         src = ROOT / "fonts" / "cjk" / f"{name}[wght].ttf"
@@ -526,10 +522,12 @@ def web_fonts() -> list[list]:
         if name == "KatagamiCJKTC":
             have -= set(TTFont(src.with_name("KatagamiCJKSC[wght].ttf")).getBestCmap())
         woff2_slice(src, have, out)
+        italic = src.with_name(f"{name}-Italic[wght].ttf")
+        woff2_slice(italic, have, PUBLIC / "fonts" / f"{name}-Italic.woff2")
         css = ",".join(f"U+{a:X}-{b:X}" for a, b in ranges)
         for key in ("sans", "round", "text", "serif"):
-            for style in ("normal", "italic"):
-                faces.append([FAMILY[key], stamped(f"{name}.woff2"), "100 900", css, style])
+            faces.append([FAMILY[key], stamped(f"{name}.woff2"), "100 900", css, "normal"])
+            faces.append([FAMILY[key], stamped(f"{name}-Italic.woff2"), "100 900", css, "italic"])
     return faces
 
 
@@ -832,7 +830,7 @@ PAGE_META = {
                  "These answers cover commercial use under the SIL Open Font License, which member to use, web fonts, OpenType features, languages and how the fonts are made.",
                  "faq", "FAQPage"),
     "download.html": ("Download Katagami: free variable fonts under the OFL",
-                      f"Katagami {VERSION} has five variable TrueType fonts, each with an Italic, and four CJK companions. The page has install steps for macOS, Windows and Linux and a stylesheet for the web.",
+                      f"Katagami {VERSION} has five variable TrueType fonts and four CJK companions, each with an Italic. The page has install steps for macOS, Windows and Linux and a stylesheet for the web.",
                       "download", "WebPage"),
 }
 MEMBER_PATHS = {"sans": "/katagami-sans", "round": "/katagami-round", "text": "/katagami-text", "serif": "/katagami-serif", "mono": "/katagami-mono"}
@@ -1010,11 +1008,11 @@ def write_pages() -> None:
     write_site_facts(facts, stamps)
 
 
-CJK_FILES = [ROOT / "fonts" / "cjk" / f"{name}[wght].ttf" for name in CJK]
+CJK_FILES = [ROOT / "fonts" / "cjk" / f"{name}{style}[wght].ttf" for name in CJK for style in ("", "-Italic")]
 
 
 def write_downloads() -> None:
-    """The zip of the five members, roman and Italic, the four CJK companions and
+    """The zip of the five members and the four CJK companions, roman and Italic, and
     the license, and files.json, which the download page lists: every font file
     with its size and a link. An older version's zip is removed."""
     out = PUBLIC / "download"
@@ -1042,8 +1040,8 @@ def write_downloads() -> None:
                                       "bytes": path.stat().st_size, "url": raw(path)}
     files = [entry(key, FONTS[key], "Roman") for key in keys]
     italics = [entry(key, ITALICS[key], "Italic") for key in keys if ITALICS[key].exists()]
-    cjk = [{"family": f"Katagami CJK {path.stem[11:13]}", "file": path.name, "bytes": path.stat().st_size, "url": raw(path)}
-           for path in cjk_files]
+    cjk = [{"family": f"Katagami CJK {path.stem[11:13]}", "style": "Italic" if "-Italic" in path.name else "Roman",
+            "file": path.name, "bytes": path.stat().st_size, "url": raw(path)} for path in cjk_files]
     with zipfile.ZipFile(zpath) as z:
         listing = [i.filename for i in z.infolist()]
     (out / "files.json").write_text(json.dumps({"version": VERSION, "zip": {"file": zpath.name, "bytes": zpath.stat().st_size, "files": listing},

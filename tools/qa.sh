@@ -5,7 +5,7 @@
 # name Google Fonts uses (fonts/sans and fonts/text lose their last word in fontbakery's
 # sibling-family lookup), with the member's article from docs/google-fonts beside them.
 # The report is build/qa/<member>.md and the console log build/qa/<member>.log.
-# A CJK file is checked alone as katagamicjk<region>. FONTS=dir checks dir/<member>/*.ttf
+# A CJK companion's roman and Italic are checked together as katagamicjk<region>. FONTS=dir checks dir/<member>/*.ttf
 # instead of fonts/<member>/*.ttf (copies kept elsewhere).
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -21,7 +21,7 @@ for key in "${members[@]}"; do
   rm -rf "$stage"
   mkdir -p "$stage"
   case "$key" in
-    cjk??) cp "${FONTS:-fonts}/cjk/KatagamiCJK$(tr a-z A-Z <<< "${key#cjk}")[wght].ttf" "$stage/" ;;
+    cjk??) cp "${FONTS:-fonts}/cjk/KatagamiCJK$(tr a-z A-Z <<< "${key#cjk}")"{,-Italic}"[wght].ttf" "$stage/" ;;
     *) cp "${FONTS:-fonts}/$key"/*.ttf "$stage/" ;;
   esac
   article="docs/google-fonts/katagami$key/article"

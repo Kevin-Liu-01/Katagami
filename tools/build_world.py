@@ -1,7 +1,7 @@
 """Merge other scripts into a Katagami member, the way Pretendard joins Inter
 and Source Han Sans.
 
-    python tools/build_world.py sans|round|text [--only Devanagari,Thai]
+    python tools/build_world.py sans|round|text|serif [--italic] [--only Devanagari,Thai]
 
 Katagami draws Latin, Greek and Cyrillic. For 19 more scripts this takes the
 outlines and OpenType layout of Google's Noto Sans fonts (SIL OFL 1.1,
@@ -15,7 +15,12 @@ vendor/noto, fetched by tools/build.sh), so one Katagami file sets them all:
   3. Each Katagami master (instanced from fontmake's variable font) is merged
      with the scripts at the same weight.
   4. The three merged masters are built back into one variable font with
-     Katagami's weight axis and named instances.
+     Katagami's weight axis and named instances, and the member's own glyphs
+     take back fontmake's variations (`keep_own_variations`).
+
+With --italic the scripts are merged into the member's Italic the same way,
+each slanted at its master by the Italic's angle about half the Italic's
+x-height, as the Italic's own letters are (`kerf_build.slant`).
 
 Katagami's own line spacing is kept; the Windows clipping box grows to the
 tallest script. Katagami's dotted circle (U+25CC) becomes a base in every
@@ -41,8 +46,10 @@ from fontTools.varLib import build as build_variable
 from fontTools.varLib.instancer import instantiateVariableFont
 
 sys.path.insert(0, str(Path(__file__).parent))
+from kerf_build.fontops import italic_style  # noqa: E402
 from kerf_build.outline import polygon_area, sound  # noqa: E402
 from kerf_build.profiles import PROFILES  # noqa: E402
+from kerf_build.slant import slant  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 NOTO = ROOT / "vendor" / "noto"
@@ -250,8 +257,9 @@ def _subset(script: str, unicodes: list[int]) -> TTFont:
     return font
 
 
-def _statics(font: TTFont, factor: float, work: Path, stem: str) -> dict[str, TTFont]:
-    """A subset Noto font at Katagami's three master weights, at Katagami's units and size."""
+def _statics(font: TTFont, factor: float, work: Path, stem: str, slant_by: tuple | None = None) -> dict[str, TTFont]:
+    """A subset Noto font at Katagami's three master weights, at Katagami's units
+    and size, and slanted by `slant_by` (tangent, origin) for an Italic."""
     axes = {a.axisTag: (a.minValue, a.maxValue) for a in font["fvar"].axes} if "fvar" in font else {}
     lo, hi = axes.get("wght", (400, 400))
     out = {}
@@ -268,22 +276,25 @@ def _statics(font: TTFont, factor: float, work: Path, stem: str) -> dict[str, TT
             print(f"  {stem} {style}: {len(limited)} glyphs keep a counter open by emboldening it less")
         scale_upem(static, round(2048 * factor))  # Noto's units times 2048 / its em, times factor
         static["head"].unitsPerEm = 2048
+        if slant_by:
+            slant(static, *slant_by)
         out[style] = static
     return out
 
 
-def script_masters(script: str, factor: float, have: set[int], work: Path) -> tuple[dict[str, Path], dict[str, tuple | None]]:
+def script_masters(script: str, factor: float, have: set[int], work: Path,
+                   slant_by: tuple | None = None) -> tuple[dict[str, Path], dict[str, tuple | None]]:
     """Noto's script at Katagami's three master weights, at Katagami's units and
     size, and for each master where its marks sit on Noto's dotted circle
     (`dotted_circle_anchors`), or None where Noto has no dotted circle."""
     cmap = TTFont(noto_file(script)).getBestCmap()
     unicodes = [u for lo, hi in SCRIPTS[script] for u in range(lo, hi + 1) if u in cmap and u not in have]
-    statics = _statics(_subset(script, unicodes), factor, work, script)
+    statics = _statics(_subset(script, unicodes), factor, work, script, slant_by)
     out = {style: _save(static, work / f"{script}-{style}.ttf") for style, static in statics.items()}
     dotted = dict.fromkeys(MASTERS)
     if 0x25CC in cmap:
         # the same subset with Noto's dotted circle kept, read for its anchors only
-        with_dc = _statics(_subset(script, unicodes + [0x25CC]), factor, work, f"{script}-dc")
+        with_dc = _statics(_subset(script, unicodes + [0x25CC]), factor, work, f"{script}-dc", slant_by)
         dotted = {style: dotted_circle_anchors(with_dc[style], TTFont(out[style])) for style in MASTERS}
     return out, dotted
 
@@ -474,6 +485,34 @@ def merge_master(kerf: Path, parts: list[Path], out: Path, dotted: list | None =
     return out
 
 
+def keep_own_variations(source: TTFont, font: TTFont) -> list[str]:
+    """Give the merged font back the variations of the glyphs it took from
+    `source` (fontmake's core, or a released font with the same glyphs).
+    Instancing the core at its masters rounds every point, the ones whose
+    deltas the font infers too, so building the masters back would move a few
+    of them by up to half a unit between the masters. A glyph keeps its
+    variations only where its default outline and advance are the source's.
+    Returns the glyphs whose variations changed."""
+    def axes(f):
+        return [(a.axisTag, a.minValue, a.defaultValue, a.maxValue) for a in f["fvar"].axes], \
+            f["avar"].segments if "avar" in f else None
+    if axes(source) != axes(font):
+        raise ValueError("the source's axes are not the merged font's")
+    sglyf, glyf = source["glyf"], font["glyf"]
+    svar, var = source["gvar"].variations, font["gvar"].variations
+    changed = []
+    for name in source.getGlyphOrder():
+        if name not in glyf.glyphs or source["hmtx"][name] != font["hmtx"][name]:
+            continue
+        if list(sglyf[name].getCoordinates(sglyf)[0]) != list(glyf[name].getCoordinates(glyf)[0]):
+            continue
+        own = [(v.axes, v.coordinates) for v in svar.get(name, [])]
+        if own != [(v.axes, v.coordinates) for v in var.get(name, [])]:
+            var[name] = [copy.deepcopy(v) for v in svar.get(name, [])]
+            changed.append(name)
+    return changed
+
+
 NOTICE = " Merged scripts: Copyright 2022 The Noto Project Authors (https://github.com/notofonts)."
 
 
@@ -538,13 +577,17 @@ def restore_gpos_labels(path: Path, scripts: list[str]) -> None:
         font.save(path)
 
 
-def build(key: str, only: list[str] | None = None) -> Path:
+def build(key: str, only: list[str] | None = None, italic: bool = False) -> Path:
     p = PROFILES[key]
-    core = ROOT / "build" / key / f"{p.file_stem}-core[wght].ttf"
-    target = ROOT / "fonts" / key / f"{p.file_stem}[wght].ttf"
+    stem = f"{p.file_stem}-Italic" if italic else p.file_stem
+    core = ROOT / "build" / (f"{key}-italic" if italic else key) / f"{stem}-core[wght].ttf"
+    target = ROOT / "fonts" / key / f"{stem}[wght].ttf"
     vf = TTFont(core)
     factor = vf["OS/2"].sxHeight / vf["head"].unitsPerEm * 1000 / NOTO_XHEIGHT
     have = set(vf.getBestCmap())
+    # build_sans slants the Italic's masters about the Regular's half x-height (fontops.shear)
+    slant_by = (math.tan(math.radians(-vf["post"].italicAngle)), vf["OS/2"].sxHeight / 2) if italic else None
+    name = italic_style if italic else (lambda style: style)
     scripts = only or list(SCRIPTS)
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
@@ -553,7 +596,7 @@ def build(key: str, only: list[str] | None = None) -> Path:
         parts = {style: [] for style in MASTERS}
         dotted = {style: [] for style in MASTERS}
         for script in scripts:
-            paths, anchors = script_masters(script, factor, have, work)
+            paths, anchors = script_masters(script, factor, have, work, slant_by)
             for style, path in paths.items():
                 parts[style].append(path)
                 dotted[style].append(anchors[style])
@@ -568,16 +611,18 @@ def build(key: str, only: list[str] | None = None) -> Path:
         design = dict(p.weight_map)
         for style, w in MASTERS.items():
             s = SourceDescriptor()
-            s.path, s.styleName, s.familyName = str(merged[style]), style, p.family
+            s.path, s.styleName, s.familyName = str(merged[style]), name(style), p.family
             s.location = {"Weight": design[w]}
             ds.addSource(s)
         for i, style in enumerate(INSTANCES):
             inst = InstanceDescriptor()
-            inst.familyName, inst.styleName = p.family, style
+            inst.familyName, inst.styleName = p.family, name(style)
             inst.location = {"Weight": design[(i + 1) * 100]}
             ds.addInstance(inst)
         ds.write(work / "world.designspace")
         font, _, _ = build_variable(str(work / "world.designspace"))
+        kept = keep_own_variations(vf, font)
+        print(f"  {len(kept)} of the member's own glyphs keep fontmake's variations")
         font.save(target)
     stamp_copyright(target)
     restore_feature_labels(core, target)
@@ -592,4 +637,4 @@ if __name__ == "__main__":
     only = None
     if "--only" in sys.argv:
         only = sys.argv[sys.argv.index("--only") + 1].split(",")
-    build(sys.argv[1], only)
+    build(sys.argv[1], only, "--italic" in sys.argv)
