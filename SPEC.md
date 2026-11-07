@@ -309,6 +309,8 @@ Each CJK file now has 1 FAIL, the version format, and 7 WARN. A Google Fonts art
 
 Version 1.000 passes `googlefonts/name/version_format` in Katagami Sans and Katagami CJK SC, and `opentype/font_version` in Katagami Sans. From 0.200 only head.fontRevision and the version in name 3 and name 5 changed, so the other results above stand.
 
+Fontbakery was run on the 18 files of 1.1. None has a FAIL or an ERROR. Each roman, Mono's Italic and each CJK file reports the WARNs above, and each CJK Italic the same 7 as its roman. Each proportional Italic now carries the merged scripts, so it reports its roman's 8 WARNs and one more, `outline_direction`, for the Tibetan signs U+0FBE and U+0FBF. Their two crossing strokes run counter-clockwise in the roman too. There the check misses them, because both strokes have the same bounding box. The slant gives the strokes different boxes, so the check reads one as an outer contour. The fill is the same either way.
+
 ## Not done yet
 
 - Hand corrections beyond the Q and 2. Every other glyph is the output of a transform; none has been redrawn by eye.
