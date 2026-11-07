@@ -185,7 +185,7 @@ After a build, these commands write the website into a checkout of [Katagami-Web
 
 ## Status
 
-Katagami 1.1 is out. Each Italic now sets the 28 merged scripts, and each CJK companion has an Italic. Since 0.1 Katagami has gained an Italic for every member, a reworked Katagami Serif (serifs that hold at Thin, a lighter Black, crisper brackets, even spacing and beaks on its curved terminals), two hand corrections (a straight Q tail and a squarer 2), Greek and Cyrillic fitted to Katagami Mono's cell, nine more scripts, 93 characters Inter does not have, small capitals for 620 letters, accents that attach to Cyrillic and Greek letters, and corrected names, version numbers, STAT, gasp and prep tables, and Windows clipping metrics.
+Katagami 1.2 is out. Katagami Serif's small capitals are now as heavy as its lowercase: in 1.1 they were heavier at every weight, and at 800 and 900 the counters of M, N, U and K filled in. 1.1 gave each Italic the 28 merged scripts and each CJK companion an Italic. Since 0.1 Katagami has gained an Italic for every member, a reworked Katagami Serif (serifs that hold at Thin, a lighter Black, crisper brackets, even spacing and beaks on its curved terminals), two hand corrections (a straight Q tail and a squarer 2), Greek and Cyrillic fitted to Katagami Mono's cell, nine more scripts, 93 characters Inter does not have, small capitals for 620 letters, accents that attach to Cyrillic and Greek letters, and corrected names, version numbers, STAT, gasp and prep tables, and Windows clipping metrics.
 
 ## Credits
 
