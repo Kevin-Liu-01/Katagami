@@ -22,6 +22,8 @@ The site lives in its own repo, Katagami-Website, checked out next to this one
 Run after tools/build.sh, then commit and push Katagami-Website; Vercel deploys it.
 After editing only a page fragment, `tools/build_site.py --pages` rewraps the pages.
 After a change to the Curves plate's data, `tools/build_site.py --data` writes data.js and glyphs.js alone.
+The full build and --data stop before writing data.js when build/, where the hero and the Curves
+plate read their glyphs, no longer draws them as fonts/ ships them.
 """
 
 from __future__ import annotations
@@ -42,7 +44,9 @@ import sys
 import pathops
 import ufoLib2
 from fontTools import subset
-from fontTools.misc.bezierTools import calcBounds, calcCubicBounds, calcCubicParameters, cubicPointAtT, solveCubic
+from fontTools.misc.bezierTools import calcBounds, calcCubicBounds, calcCubicParameters, cubicPointAtT, quadraticPointAtT, solveCubic
+from fontTools.misc.roundTools import otRound
+from fontTools.pens.basePen import BasePen
 from fontTools.pens.recordingPen import RecordingPen
 from fontTools.ttLib import TTFont
 
@@ -76,6 +80,14 @@ SERIF_UFO = ROOT / "build/serif/KatagamiSerif-Regular.ufo"
 INTER_UFO = ROOT / "build/ufo/Inter-Regular.ufo"
 # the Curves plate draws and measures o and n in Inter and in each member, in this order
 CURVE_SOURCES = {"inter": INTER_UFO, "sans": KERF_UFO, "round": ROUND_UFO, "text": TEXT_UFO, "serif": SERIF_UFO, "mono": MONO_UFO}
+# Git ignores build/, so a release can change a glyph the site draws and leave build/ as it was.
+# Before data.js is written, stale_masters compares these glyphs in every master of each member in
+# build/ with the shipped font at the master's weight. DRIFT is how far an outline may lie from the
+# font's, in font units. Fontmake's curve conversion allows 0.001 em (2.05 units), TrueType rounds
+# each point to a whole unit, and in 1.2 each outline lies 0.1 to 2.2 units from the font's.
+CHECKED = [*OUTLINE_CHARS.values(), "o", "n"]
+MASTERS = {key: {"Thin": 100, "Regular": 400, **({"Bold": 700} if key == "mono" else {"Black": 900})} for key in FONTS}
+DRIFT = 2.5
 FAMILY = {"sans": "Katagami Sans", "round": "Katagami Round", "text": "Katagami Text", "serif": "Katagami Serif", "mono": "Katagami Mono"}
 WEIGHTS = {"sans": "100 900", "round": "100 900", "text": "100 900", "serif": "100 900", "mono": "100 700"}
 # Companion file -> the ranges it serves in every proportional family. Where two
@@ -440,6 +452,93 @@ def member_curves() -> dict:
         if key == "mono":
             out[key]["cell"] = font["zero"].width
     return out
+
+
+class Pieces(BasePen):
+    """An outline as straight pieces: its lines whole, its curves cut about every 4 units."""
+
+    def __init__(self):
+        super().__init__(None)
+        self.out = []
+
+    def _moveTo(self, p):
+        self.start = self.cur = p
+
+    def _lineTo(self, p):
+        if p != self.cur:
+            self.out.append((self.cur, p))
+        self.cur = p
+
+    def _curve(self, pts, at):
+        n = max(1, math.ceil(sum(map(math.dist, pts, pts[1:])) / 4))
+        run = [at(*pts, i / n) for i in range(n + 1)]
+        self.out += [(p, q) for p, q in zip(run, run[1:]) if p != q]
+        self.cur = pts[-1]
+
+    def _curveToOne(self, a, b, c):
+        self._curve((self.cur, a, b, c), cubicPointAtT)
+
+    def _qCurveToOne(self, a, b):
+        self._curve((self.cur, a, b), quadraticPointAtT)
+
+    def _closePath(self):
+        if self.cur != self.start:
+            self.out.append((self.cur, self.start))
+
+
+def pieces(glyph, glyph_set) -> list:
+    """A glyph's outline with its components drawn in and its overlaps removed, as straight pieces."""
+    path = pathops.Path()
+    glyph.draw(path.getPen(glyphSet=glyph_set))
+    path.simplify()
+    pen = Pieces()
+    path.draw(pen)
+    return pen.out
+
+
+def gap(m: tuple, piece: tuple) -> float:
+    """The distance from the point m to a straight piece."""
+    (x0, y0), (x1, y1) = piece
+    dx, dy = x1 - x0, y1 - y0
+    t = min(1, max(0, ((m[0] - x0) * dx + (m[1] - y0) * dy) / (dx * dx + dy * dy)))
+    return math.hypot(m[0] - x0 - t * dx, m[1] - y0 - t * dy)
+
+
+def drift(a: list, b: list) -> float:
+    """How far outline a strays from outline b, both as pieces. It is 0 when the ends and middle of
+    every piece of a lie within DRIFT of b; otherwise it is the distance of the furthest point that
+    strays, measured on at most 100 of those points."""
+    cell, cells = 16, {}
+    for piece in b:
+        (x0, y0), (x1, y1) = piece
+        for i in range(math.floor((min(x0, x1) - DRIFT) / cell), math.floor((max(x0, x1) + DRIFT) / cell) + 1):
+            for j in range(math.floor((min(y0, y1) - DRIFT) / cell), math.floor((max(y0, y1) + DRIFT) / cell) + 1):
+                cells.setdefault((i, j), []).append(piece)
+    # a piece within DRIFT of a point is filed under the point's own cell
+    points = [m for p, q in a for m in (p, ((p[0] + q[0]) / 2, (p[1] + q[1]) / 2))]
+    far = [m for m in points if all(gap(m, s) > DRIFT for s in cells.get((math.floor(m[0] / cell), math.floor(m[1] / cell)), ()))]
+    return max((min(gap(m, s) for s in b) for m in far[::len(far) // 100 + 1]), default=0)
+
+
+def stale_masters() -> list[tuple]:
+    """Each glyph in CHECKED that a master in build/ draws otherwise than the shipped font does at the
+    master's weight, as (member, what differs): an outline more than DRIFT from the font's, or another advance."""
+    stale = []
+    for key, path in FONTS.items():
+        font = TTFont(path)
+        stem = path.name.removesuffix("[wght].ttf")
+        for style, wght in MASTERS[key].items():
+            ufo = ufoLib2.Font.open(ROOT / "build" / key / f"{stem}-{style}.ufo")
+            shipped = font.getGlyphSet(location={"wght": wght})
+            for gname in CHECKED:
+                built, ships = pieces(ufo[gname], ufo), pieces(shipped[gname], shipped)
+                far = max(drift(built, ships), drift(ships, built))
+                adv = otRound(ufo[gname].width), otRound(shipped[gname].width)
+                if far:
+                    stale.append((key, f"{FAMILY[key]} {gname} at {wght}: the outline in build/ lies {far:.1f} units from the font's"))
+                if adv[0] != adv[1]:
+                    stale.append((key, f"{FAMILY[key]} {gname} at {wght}: the advance is {adv[0]} in build/ and {adv[1]} in the font"))
+    return stale
 
 
 def unicode_range(unicodes, avoid=frozenset()) -> str:
@@ -1128,6 +1227,13 @@ def split_data(data: dict) -> tuple[dict, dict]:
 
 
 def write_data() -> None:
+    stale = stale_masters()
+    if stale:
+        members = [key for key in FONTS if key in {k for k, _ in stale}]
+        sys.exit("build/ no longer draws what fonts/ ships, and the site reads these glyphs from build/:\n  "
+                 + "\n  ".join(line for _, line in stale) + "\nRebuild build/ ("
+                 + ", ".join(f"tools/build.sh {key}-roman" for key in members) + "), then run tools/build_site.py again.")
+    print(f"build/ draws {' '.join(CHECKED)} as fonts/ ships them, in every master of every member")
     core, tables = split_data(site_data())
     (PUBLIC / "data.js").write_text("window.KERF = " + json.dumps(core, separators=(",", ":")) + ";\n")
     (PUBLIC / "glyphs.js").write_text(TABLES_JS.replace("__TABLES__", json.dumps(tables, separators=(",", ":"))))
