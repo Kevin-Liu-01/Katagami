@@ -23,6 +23,7 @@ The site lives in its own repo, Katagami-Website, checked out next to this one
 Run after tools/build.sh, then commit and push Katagami-Website; Vercel deploys it.
 After editing only a page fragment, `tools/build_site.py --pages` rewraps the pages.
 After a change to the Curves plate's data, `tools/build_site.py --data` writes data.js and glyphs.js alone.
+After a change to the download table's links, `tools/build_site.py --downloads` writes the zip and files.json alone.
 The full build and --data stop before writing data.js when build/, where the hero and the Curves
 plate read their glyphs, no longer draws them as fonts/ ships them.
 """
@@ -785,6 +786,38 @@ def write_faces(faces: list[list]) -> None:
         apply.write_text(text)
 
 
+def git(*args: str) -> str:
+    """One git command in the fonts repository: its output, or "" when git fails."""
+    try:
+        return subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return ""
+
+
+def same_fonts(ref: str) -> bool:
+    """True when the fonts and the license at `ref` are the ones in this checkout."""
+    return subprocess.run(["git", "-C", str(ROOT), "diff", "--quiet", ref, "--", "fonts", "OFL.txt"], capture_output=True).returncode == 0
+
+
+def published_commit() -> str:
+    """The newest commit on origin/main that this checkout builds on, which GitHub can show; "" when git cannot say."""
+    return git("merge-base", "HEAD", "origin/main")
+
+
+def fonts_ref() -> str:
+    """The ref the download table links each font file at: the release tag, or the published commit, when it
+    holds this checkout's fonts, so a link never serves a file other than the one the table describes."""
+    tag = f"v{VERSION}"
+    if git("rev-parse", "-q", "--verify", f"refs/tags/{tag}^{{commit}}") and same_fonts(tag):
+        return tag
+    base = published_commit()
+    if base and same_fonts(base):
+        return base
+    print(f"files.json links to main, because neither {tag} nor a commit on origin/main holds this checkout's fonts. "
+          "Push the fonts, then run tools/build_site.py --downloads again.", file=sys.stderr)
+    return "main"
+
+
 def site_facts() -> dict:
     """Numbers the header and footer print, read from the built data and the repository."""
     facts = {"version": VERSION, "characters": 0, "glyphs": 0, "features": 0, "people": "", "commit": "", "date": time.strftime("%Y-%m-%d"), "zip": ""}
@@ -802,10 +835,10 @@ def site_facts() -> dict:
     map_json = PUBLIC / "map" / "map.json"
     if map_json.exists():
         facts["people"] = json.loads(map_json.read_text()).get("stats", {}).get("sans", {}).get("people", "")
-    try:
-        facts["commit"] = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
-    except (OSError, subprocess.CalledProcessError):
-        pass
+    base = published_commit()
+    facts["commit"] = git("rev-parse", "--short", base) if base else ""
+    if base and base != git("rev-parse", "HEAD"):
+        print(f"The footer links to {facts['commit']}, the newest commit on origin/main under this checkout. HEAD is not on origin/main.", file=sys.stderr)
     return facts
 
 
@@ -973,7 +1006,8 @@ def write_downloads() -> None:
                 info = zipfile.ZipInfo(arc, date_time=(2026, 1, 1, 0, 0, 0))
                 info.compress_type = zipfile.ZIP_DEFLATED
                 z.writestr(info, src.read_bytes())
-    raw = lambda path: f"{REPO}/raw/main/{path.relative_to(ROOT).as_posix().replace('[', '%5B').replace(']', '%5D')}"  # noqa: E731
+    ref = fonts_ref()
+    raw = lambda path: f"{REPO}/raw/{ref}/{path.relative_to(ROOT).as_posix().replace('[', '%5B').replace(']', '%5D')}"  # noqa: E731
     entry = lambda key, path, style: {"key": key, "family": FAMILY[key], "style": style, "file": path.name,  # noqa: E731
                                       "weights": WEIGHTS[key].replace(" ", " to "), "glyphs": len(TTFont(path).getGlyphOrder()),
                                       "bytes": path.stat().st_size, "url": raw(path)}
@@ -1101,4 +1135,5 @@ if __name__ == "__main__":
     # --pages rewraps the hand-written pages only, for a change to their markup;
     # --data writes data.js and glyphs.js alone and leaves the web fonts, downloads and pages as they are
     # --first writes the first-paint faces alone
-    write_pages() if "--pages" in sys.argv else write_data() if "--data" in sys.argv else first_fonts() if "--first" in sys.argv else main()
+    # --downloads writes the zip and files.json alone
+    write_pages() if "--pages" in sys.argv else write_data() if "--data" in sys.argv else first_fonts() if "--first" in sys.argv else write_downloads() if "--downloads" in sys.argv else main()
