@@ -16,7 +16,8 @@ The site lives in its own repo, Katagami-Website, checked out next to this one
                                     only the scripts it shows, in the roman or the Italic
     data.js     window.KERF: metrics, features, the hero's outlines and the Curves plate
     glyphs.js   each member's character table and the Unicode names, merged into window.KERF
-    index.html  page.html wrapped in a document, asset URLs stamped with hashes
+    content/pages/*.json  a record per hand-written page, asset URLs stamped with hashes
+    content/site.json  the numbers the header and footer print, and each asset's hash
     katagami-apply.js  its face table, between the generated-faces markers
 
 Run after tools/build.sh, then commit and push Katagami-Website; Vercel deploys it.
@@ -31,7 +32,6 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import os
 import re
 import subprocess
 import time
@@ -54,13 +54,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 from build_world import SCRIPTS  # noqa: E402
 from kerf_build.cjk import latin_chars  # noqa: E402
 from kerf_build.fontops import VERSION as _VERSION  # noqa: E402
+from kerf_build.sitepath import PUBLIC, SITE, require_site  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-SITE = Path(os.environ.get("KATAGAMI_SITE", ROOT.parent / "Katagami-Website"))
-# a site checkout that is a Next app serves its files from public/ and renders
-# its pages from the JSON records in content/
-NEXT = (SITE / "next.config.ts").exists()
-PUBLIC = SITE / "public" if NEXT else SITE
 FONTS = {"sans": ROOT / "fonts/sans/KatagamiSans[wght].ttf", "round": ROOT / "fonts/round/KatagamiRound[wght].ttf",
          "text": ROOT / "fonts/text/KatagamiText[wght].ttf", "serif": ROOT / "fonts/serif/KatagamiSerif[wght].ttf",
          "mono": ROOT / "fonts/mono/KatagamiMono[wght].ttf"}
@@ -110,14 +106,6 @@ PAGES = {"page.html": "index.html", "about-page.html": "about.html", "map-page.h
 # features a reader turns on or off; the rest shape scripts and work underneath
 OPTIONAL = re.compile(r"^(cv\d\d|ss\d\d|calt|case|cpsp|dlig|frac|numr|dnom|ordn|pnum|tnum|salt|sinf|smcp|c2sc|subs|sups|zero|liga)$")
 REPO = "https://github.com/Kevin-Liu-01/Katagami"
-MARK = ('<svg class="mark" viewBox="0 0 100 100" aria-hidden="true"><path d="M0 0 L31 0 L31 100 L0 100 Z"/>'
-        '<path d="M38 0 L100 0 L100 30 L38 50 Z"/><path d="M38 50 L100 70 L100 100 L38 100 Z"/></svg>')
-SPARKLES = ('<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15.98 1.804a1 1 0 0 0-1.96 0l-.24 1.192a1 1 0 0 1-.784.785l-1.192.238a1 1 0 0 0 0 1.962l1.192.238a1 1 0 0 1 .785.785l.238 1.192a1 1 0 0 0 1.962 0l.238-1.192a1 1 0 0 1 .785-.785l1.192-.238a1 1 0 0 0 0-1.962l-1.192-.238a1 1 0 0 1-.785-.785l-.238-1.192ZM6.949 5.684a1 1 0 0 0-1.898 0l-.683 2.051a1 1 0 0 1-.633.633l-2.051.683a1 1 0 0 0 0 1.898l2.051.684a1 1 0 0 1 .633.632l.683 2.051a1 1 0 0 0 1.898 0l.683-2.051a1 1 0 0 1 .633-.633l2.051-.683a1 1 0 0 0 0-1.898l-2.051-.683a1 1 0 0 1-.633-.633L6.95 5.684ZM13.949 13.684a1 1 0 0 0-1.898 0l-.184.551a1 1 0 0 1-.632.633l-.551.183a1 1 0 0 0 0 1.898l.551.183a1 1 0 0 1 .633.633l.183.551a1 1 0 0 0 1.898 0l.184-.551a1 1 0 0 1 .632-.633l.551-.183a1 1 0 0 0 0-1.898l-.551-.184a1 1 0 0 1-.633-.632l-.183-.551Z"/></svg>')
-SEARCH = ('<svg viewBox="0 0 20 20" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z"/></svg>')
-TRAY = ('<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z"/>'
-        '<path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z"/></svg>')
-GITHUB = ('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>')
-LINKS = [("/glyphs", "Glyphs"), ("/features", "Features"), ("/map", "Map"), ("/about", "About"), ("/faq", "FAQ")]
 
 
 SCRIPT_OF = {u: name for name, ranges in SCRIPTS.items() for lo, hi in ranges for u in range(lo, hi + 1)}
@@ -821,89 +809,6 @@ def site_facts() -> dict:
     return facts
 
 
-def nav_html(here: str, facts: dict) -> str:
-    """The header every page shares, with the current page marked."""
-    cur = lambda href: ' aria-current="page"' if href == here else ""  # noqa: E731
-    links = "".join(f'<a href="{h}"{cur(h)}>{t}</a>' for h, t in LINKS)
-    hints = {"/glyphs": f"{facts['characters']:,} characters", "/features": f"{facts['features']} features",
-             "/map": f"{facts['people']}% of people" if facts["people"] else "", "/about": "Why I made it", "/faq": "",
-             "/convert": "Any site in Katagami", "/download": f"v{VERSION} under the OFL"}
-    sheet = "".join(f'<a href="{h}"{cur(h)}>{t}<span>{hints.get(h, "")}</span></a>'
-                    for h, t in [*LINKS, ("/convert", "Font-ify"), ("/download", "Download")])
-    keys = ("sans", "round", "text", "serif", "mono")
-    picks = "".join(f'<button type="button" data-member="{k}" aria-pressed="{str(k == "sans").lower()}"><b style="font-family:\'{FAMILY[k]}\'">{FAMILY[k]}</b><span>{"100 to 700" if k == "mono" else "100 to 900"}</span></button>' for k in keys)
-    menu_members = "".join(f'<button type="button" data-member="{k}" aria-pressed="{str(k == "sans").lower()}">{FAMILY[k].split()[1]}</button>' for k in keys)
-    modes = '<button type="button" data-mode="human" aria-pressed="true">Human</button><button type="button" data-mode="machine" aria-pressed="false">Machine</button>'
-    return f"""<header class="top">
-  <div class="wrap">
-    <a class="brand" href="/">{MARK}<b>Katagami</b><span>v{VERSION}</span></a>
-    <nav aria-label="Pages">
-      <div class="links">{links}</div>
-      <button type="button" class="find" data-cmdk aria-label="Search pages, glyphs and actions" aria-keyshortcuts="Meta+K Control+K">{SEARCH}<span>Search</span><kbd>⌘K</kbd></button>
-      <details class="pick">
-        <summary aria-label="Set the whole site in a member"><b>Aa</b><span>Sans</span></summary>
-        <div class="pick-menu" role="group" aria-label="Member">{picks}</div>
-      </details>
-      <div class="seg mode" role="group" aria-label="View">{modes}</div>
-      <a class="pill fontify" href="/convert"{cur("/convert")}>{SPARKLES}<span>Font-ify</span></a>
-      <a class="pill dl" href="/download"{cur("/download")}>{TRAY}<span>Download</span></a>
-      <a class="gh" href="{REPO}" target="_blank" rel="noopener" aria-label="Katagami on GitHub">{GITHUB}</a>
-      <details class="menu">
-        <summary aria-label="Menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="shut" d="M4 7h16M4 12h16M4 17h16"/><path class="open" d="M6 6l12 12M18 6L6 18"/></svg></summary>
-        <div class="sheet-menu"><div class="menu-tools"><div class="seg mode" role="group" aria-label="View">{modes}</div><div class="seg menu-members" role="group" aria-label="Member">{menu_members}</div></div>{sheet}<a href="{REPO}" target="_blank" rel="noopener">GitHub<span>Source and issues</span></a></div>
-      </details>
-    </nav>
-  </div>
-</header>"""
-
-
-def footer_html(facts: dict) -> str:
-    """The footer every page shares: how to use the fonts, the page index, the
-    name as a live specimen, and the build, the author and the theme."""
-    weights = {"mono": "100 to 700"}
-    members = "".join(f'<a href="{MEMBER_PATHS[k]}" style="font-family:\'{FAMILY[k]}\'">{FAMILY[k]}<small>{weights.get(k, "100 to 900")}</small></a>'
-                      for k in ("sans", "round", "text", "serif", "mono"))
-    hints = {"/glyphs": f"{facts['characters']:,} characters", "/features": f"{facts['features']} features",
-             "/map": f"{facts['people']}% of people" if facts["people"] else "", "/convert": "Any site in Katagami"}
-    explore = "".join(f'<a href="{h}">{t}<small>{hints[h]}</small></a>' for h, t in
-                      (("/glyphs", "Glyphs"), ("/features", "Features"), ("/map", "Map"), ("/convert", "Font-ify")))
-    commit = f'<a href="{REPO}/commit/{facts["commit"]}">{facts["commit"]}</a>' if facts["commit"] else ""
-    css = f"{SITE_URL}/fonts/katagami.css"
-    seg = "".join(f'<button type="button" data-k="{i}" aria-pressed="{str(k == "sans").lower()}">{FAMILY[k].split()[1]}</button>'
-                  for i, k in enumerate(("sans", "round", "text", "serif", "mono")))
-    return f"""<footer class="site">
-  <div class="wrap">
-    <section class="f-use" aria-label="Use Katagami">
-      <div class="f-say">
-        <p>The SIL Open Font License 1.1 lets you use, change and ship the fonts in any product, paid or free.</p>
-      </div>
-      <div class="f-acts">
-        <a class="f-dl" href="/download">{TRAY}<span>Download v{VERSION}</span><small>{facts["zip"]}</small></a>
-        <div class="f-css"><code>&lt;link rel="stylesheet" href="{css}"&gt;</code><button type="button" data-copy='<link rel="stylesheet" href="{css}">'>Copy</button></div>
-      </div>
-    </section>
-    <div class="f-grid">
-      <nav class="f-col f-members" aria-label="Members"><h3>Members</h3>{members}</nav>
-      <nav class="f-col f-hinted" aria-label="Explore"><h3>Explore</h3>{explore}</nav>
-      <nav class="f-col" aria-label="Project"><h3>Project</h3><a href="/about">About</a><a href="/faq">FAQ</a><a href="/download">Download</a><a href="/library">Library</a><a href="{REPO}">GitHub</a><a href="{REPO}/blob/main/OFL.txt">License</a></nav>
-      <div class="f-col f-build"><h3>This build</h3><p>Version {VERSION}</p><p>{facts["glyphs"]:,} glyphs</p><p>Built {facts["date"]}</p>{commit}</div>
-    </div>
-    <div class="f-type">
-      <div class="f-controls">
-        <div class="seg" role="group" aria-label="Member">{seg}</div>
-        <label class="f-weight">Weight <input type="range" min="100" max="900" step="1" value="800"><output>800</output></label>
-      </div>
-      <div class="f-word" aria-hidden="true"><b>Katagami</b></div>
-    </div>
-    <div class="f-bar">
-      <p>Made by <a href="https://kevinliu.studio">Kevin Liu</a></p>
-      <div class="seg f-theme" role="group" aria-label="Theme"><button type="button" data-theme-set="auto">Auto</button><button type="button" data-theme-set="light">Light</button><button type="button" data-theme-set="dark">Dark</button></div>
-      <button type="button" class="f-top">Back to top</button>
-    </div>
-  </div>
-</footer>"""
-
-
 SITE_URL = "https://katagami.kevinliu.studio"
 # each served page: (title, description, Open Graph image, schema.org page type)
 PAGE_META = {
@@ -963,51 +868,6 @@ def base_graph(facts: dict) -> list:
     return [site, person, family]
 
 
-def head_html(meta: dict, stamps: dict) -> str:
-    """The head of a page: title, description, canonical address, social cards,
-    its Markdown twin and its structured data."""
-    esc = lambda t: t.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")  # noqa: E731
-    url = SITE_URL + meta["path"]
-    image = f"{SITE_URL}/og/{meta.get('image', 'home')}.png"
-    graph = json.dumps({"@context": "https://schema.org", "@graph": meta["graph"]}, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
-    md = meta["path"].rstrip("/") + ".md" if meta["path"] != "/" else "/index.md"
-    return "".join([
-        '<meta charset="utf-8">\n',
-        '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n',
-        # the theme the footer's switch saved, set before the first paint
-        '<script>try{var t=localStorage.getItem("katagami-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;if(localStorage.getItem("katagami-mode")==="machine")document.documentElement.dataset.mode="machine"}catch(e){}</script>\n',
-        f"<title>{esc(meta['title'])}</title>\n",
-        f'<meta name="description" content="{esc(meta["description"])}">\n',
-        f'<link rel="canonical" href="{url}">\n',
-        '<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">\n',
-        '<meta name="author" content="Kevin Liu">\n',
-        '<meta name="theme-color" content="#f1f2ef" media="(prefers-color-scheme: light)">\n',
-        '<meta name="theme-color" content="#0e0f10" media="(prefers-color-scheme: dark)">\n',
-        '<meta property="og:site_name" content="Katagami">\n',
-        f'<meta property="og:type" content="{meta.get("og_type", "website")}">\n',
-        f'<meta property="og:title" content="{esc(meta["title"])}">\n',
-        f'<meta property="og:description" content="{esc(meta["description"])}">\n',
-        f'<meta property="og:url" content="{url}">\n',
-        f'<meta property="og:image" content="{image}">\n',
-        '<meta property="og:image:width" content="1200">\n<meta property="og:image:height" content="630">\n',
-        f'<meta property="og:image:alt" content="{esc(meta["title"])}">\n',
-        '<meta name="twitter:card" content="summary_large_image">\n',
-        f'<meta name="twitter:title" content="{esc(meta["title"])}">\n',
-        f'<meta name="twitter:description" content="{esc(meta["description"])}">\n',
-        f'<meta name="twitter:image" content="{image}">\n',
-        f'<link rel="alternate" type="text/markdown" href="{md}" title="This page in Markdown">\n',
-        '<link rel="alternate" type="text/plain" href="/llms.txt" title="llms.txt">\n',
-        '<link rel="sitemap" type="application/xml" href="/sitemap.xml">\n',
-        '<link rel="icon" href="/favicon.svg" type="image/svg+xml">\n',
-        '<link rel="icon" href="/favicon.png" type="image/png" sizes="64x64">\n',
-        '<link rel="apple-touch-icon" href="/apple-touch-icon.png">\n',
-        '<link rel="manifest" href="/site.webmanifest">\n',
-        f'<link rel="preload" href="/fonts/KatagamiSans.woff2?v={stamps.get("fonts/KatagamiSans.woff2", "")}" as="font" type="font/woff2" crossorigin>\n',
-        f'<link rel="stylesheet" href="/site.css?v={stamps.get("site.css", "")}">\n',
-        f'<script type="application/ld+json">{graph}</script>\n',
-    ])
-
-
 def page_graph(meta: dict, facts: dict, crumbs: list | None = None, extra: list | None = None) -> list:
     """base_graph with the page itself, its breadcrumb trail and any page-specific nodes."""
     url = SITE_URL + meta["path"]
@@ -1033,19 +893,6 @@ def page_graph(meta: dict, facts: dict, crumbs: list | None = None, extra: list 
     return graph
 
 
-def wrap(page: str, here: str, meta: dict, facts: dict, stamps: dict) -> str:
-    """A page fragment as a whole document: the shared head, header and footer,
-    with every asset URL stamped by its content hash, so a changed file gets a
-    new URL and the cache headers in vercel.json never pair a new page with old data."""
-    page = re.sub(r"<title>.*?</title>\n?", "", page, count=1, flags=re.S)
-    page = re.sub(r'<meta name="description"[^>]*>\n?', "", page, count=1)
-    page = page.replace("<!-- site:nav -->", nav_html(here, facts)).replace("<!-- site:footer -->", footer_html(facts))
-    for rel, digest in stamps.items():
-        page = page.replace(f'"{rel}"', f'"{rel}?v={digest}"').replace(f'"/{rel}"', f'"/{rel}?v={digest}"')
-    return ('<!doctype html>\n<html lang="en">\n<head>\n' + head_html(meta, stamps) + "</head>\n<body>\n" + page
-            + f'\n<script src="/site.js?v={stamps.get("site.js", "")}" defer></script>\n</body>\n</html>\n')
-
-
 def record(page: str, meta: dict, stamps: dict) -> dict:
     """A page fragment as the Next app's record: its metadata and structured
     data, the tags from its head, the body between the header and the footer,
@@ -1062,23 +909,16 @@ def record(page: str, meta: dict, stamps: dict) -> dict:
 
 
 def emit(here: str, page: str, meta: dict, facts: dict, stamps: dict) -> None:
-    """Write one page: an HTML document beside the others for the static site, a
-    record under content/pages/ for the Next app."""
-    if NEXT:
-        out = SITE / "content" / "pages" / (("index" if here == "/" else here.strip("/")) + ".json")
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(record(page, meta, stamps), ensure_ascii=False, separators=(",", ":")))
-        return
-    out = SITE / (("index" if here == "/" else here.strip("/")) + ".html")
+    """Write one page as a record under content/pages/."""
+    out = SITE / "content" / "pages" / (("index" if here == "/" else here.strip("/")) + ".json")
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(wrap(page, here, meta, facts, stamps))
+    out.write_text(json.dumps(record(page, meta, stamps), ensure_ascii=False, separators=(",", ":")))
 
 
 def write_site_facts(facts: dict, stamps: dict) -> None:
     """The numbers the Next app's header and footer print, with the asset hashes."""
-    if NEXT:
-        (SITE / "content").mkdir(exist_ok=True)
-        (SITE / "content" / "site.json").write_text(json.dumps({**facts, "stamps": stamps}, ensure_ascii=False, indent=1))
+    (SITE / "content").mkdir(exist_ok=True)
+    (SITE / "content" / "site.json").write_text(json.dumps({**facts, "stamps": stamps}, ensure_ascii=False, indent=1))
 
 
 def faq_entities(fragment: str) -> list:
@@ -1257,6 +1097,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    require_site()
     # --pages rewraps the hand-written pages only, for a change to their markup;
     # --data writes data.js and glyphs.js alone and leaves the web fonts, downloads and pages as they are
     # --first writes the first-paint faces alone

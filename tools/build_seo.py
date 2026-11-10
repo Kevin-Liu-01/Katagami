@@ -24,8 +24,9 @@ from fontTools.ttLib import TTFont
 
 sys.path.insert(0, str(Path(__file__).parent))
 from build_site import (CJK, FAMILY, FONTS, ITALICS, MEMBER_PATHS, OPTIONAL, PAGE_META, PUBLIC, REPO, SCRIPT_COUNT, SITE, SITE_URL,  # noqa: E402
-                        VERSION, ZIP, emit, asset_stamps, page_graph, site_facts, wrap)
+                        VERSION, ZIP, emit, asset_stamps, page_graph, site_facts)
 from build_world import SCRIPTS, SERIF_ONLY  # noqa: E402
+from kerf_build.sitepath import require_site  # noqa: E402
 
 MERGED = len(SCRIPTS)  # scripts merged from Noto
 
@@ -881,6 +882,7 @@ FACTS: dict = {}
 
 
 def main() -> None:
+    require_site()
     F, C = member_facts(), companion_facts()
     M = json.loads((PUBLIC / "map" / "map.json").read_text())
     T = {t["name"]: t for t in json.loads(TYPEFACES.read_text())} if TYPEFACES.exists() else {}

@@ -5,11 +5,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { SITE, PUB } from "./site-path.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const SITE = process.env.KATAGAMI_SITE || path.resolve(ROOT, "../Katagami-Website");
-// a Next app serves the site's files from public/
-const PUB = fs.existsSync(path.join(SITE, "next.config.ts")) ? path.join(SITE, "public") : SITE;
 const BASE = process.env.BASE || "http://localhost:3077";
 const PW = process.env.KATAGAMI_PLAYWRIGHT || "/Users/kevinliu/repos/Prototemplate/node_modules/playwright-core/index.mjs";
 const CHROME = process.env.CHROME || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";

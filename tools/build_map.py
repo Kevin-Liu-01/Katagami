@@ -32,11 +32,11 @@ import shutil
 from pathlib import Path
 
 from fontTools.ttLib import TTFont
+from kerf_build.sitepath import PUBLIC, require_site
 
 ROOT = Path(__file__).resolve().parents[1]
 WORLD = Path(os.environ.get("GT_WORLD", Path.home() / "gt/gt-cloud-wt-langmap/apps/landing/public/world"))
-SITE = Path(os.environ.get("KATAGAMI_SITE", ROOT.parent / "Katagami-Website"))
-OUT = (SITE / "public" if (SITE / "next.config.ts").exists() else SITE) / "map"
+OUT = PUBLIC / "map"
 LEVELS = (1, 0.5, 0.25)
 STATS_LEVEL = 0.5
 COVERED = 0.9
@@ -111,6 +111,7 @@ def resolve_pool(units: dict, blends: dict, cell_id: int):
 
 
 def main() -> None:
+    require_site()
     OUT.mkdir(parents=True, exist_ok=True)
     units_file = json.loads((WORLD / "units.json").read_text())
     units = {u["id"]: u["pool"] for u in units_file["units"]}

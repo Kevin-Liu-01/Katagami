@@ -34,6 +34,7 @@ from __future__ import annotations
 import copy
 import json
 import math
+import os
 import re
 import shutil
 import subprocess
@@ -63,6 +64,22 @@ OUT = ROOT / "build" / "mono"
 SANS_ITALIC = ROOT / "build" / "sans-italic"
 OUT_ITALIC = ROOT / "build" / "mono-italic"
 FEATURES = ROOT / "vendor" / "inter" / "src" / "features"
+
+# what Katagami Sans's masters are made from; masters older than any of these are stale
+SANS_SOURCES = [ROOT / "tools" / "build_sans.py", *(ROOT / "tools" / "kerf_build" / f"{name}.py" for name in ("fontops", "outline", "missing", "profiles"))]
+
+
+def require_sans(italic: bool) -> None:
+    """Stop unless Katagami Sans's masters are in build/ and newer than the code that makes them."""
+    for space in [SANS / "KatagamiSans.designspace"] + ([SANS_ITALIC / "KatagamiSans-Italic.designspace"] if italic else []):
+        target = "sans-italic" if space.parent == SANS_ITALIC else "sans-roman"
+        if not space.exists():
+            sys.exit(f"{space.relative_to(ROOT)} is missing. Katagami Mono is fitted from Katagami Sans's masters, so run tools/build.sh {target} first.")
+        newer = [p.relative_to(ROOT).as_posix() for p in SANS_SOURCES if p.stat().st_mtime > space.stat().st_mtime]
+        if newer and not os.environ.get("MONO_STALE_SANS"):
+            sys.exit(f"{space.relative_to(ROOT)} is older than {', '.join(newer)}. Run tools/build.sh {target} first, "
+                     "or set MONO_STALE_SANS=1 to fit Mono from the masters as they are.")
+
 
 CELL = 1280  # 0.625 em: Katagami's x-height sits at 0.87 of the cell, as Berkeley Mono's does at 0.6 em
 MAX_INK = {"upper": 0.76, "lower": 0.72, "other": 0.76}  # share of the cell, for symbols
@@ -118,11 +135,14 @@ SPACER = "kerf.spacer"
 def interpolate_bold(italic: bool, out: Path) -> Path:
     """Katagami Sans at design weight 740, as a UFO with the masters' point structure, in `out`."""
     src = SANS_ITALIC / "KatagamiSans-Italic.designspace" if italic else SANS / "KatagamiSans.designspace"
-    subprocess.run(
+    done = subprocess.run(
         [sys.executable, "-m", "fontmake", "-m", str(src),
          "-i", f"Katagami Sans {'Bold Italic' if italic else 'Bold'}", "-o", "ufo", "--output-dir", str(out)],
-        check=True, capture_output=True,
+        capture_output=True, text=True,
     )
+    if done.returncode:
+        sys.stderr.write(done.stdout + done.stderr)
+        sys.exit(f"fontmake could not interpolate Katagami Sans Bold from {src.relative_to(ROOT)}.")
     return next(out.glob("*Bold Italic.ufo" if italic else "*Bold.ufo"))
 
 
@@ -563,6 +583,7 @@ def fit(italic: bool, work: Path) -> tuple[dict, dict]:
 
 
 def main(italic: bool = False) -> None:
+    require_sans(italic)
     out = OUT_ITALIC if italic else OUT
     if out.exists():
         shutil.rmtree(out)

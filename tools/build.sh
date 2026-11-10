@@ -1,11 +1,19 @@
 #!/usr/bin/env bash
 # Build Katagami from Inter's sources.
 # Usage: tools/build.sh [sans|round|text|serif|mono|cjk|all]
-# A member builds its roman and its Italic; add -roman or -italic (serif-italic) for one of them.
+# A member builds its roman and its Italic; add -roman or -italic (serif-italic, cjk-roman, cjk-italic) for one of them.
+# BUILD_DRY=1 checks the target's name and builds nothing.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PY=.venv/bin/python
 which="${1:-all}"
+# BUILD_DRY=1 checks the target's name and stops before anything is fetched or built
+case "$which" in
+  all|sans|round|text|serif|mono|cjk) ;;
+  sans-roman|sans-italic|round-roman|round-italic|text-roman|text-italic|serif-roman|serif-italic|mono-roman|mono-italic|cjk-roman|cjk-italic) ;;
+  *) echo "tools/build.sh does not build '$which'. Usage: tools/build.sh [sans|round|text|serif|mono|cjk|all], or a member with -roman or -italic." >&2; exit 2 ;;
+esac
+[[ -n "${BUILD_DRY:-}" ]] && exit 0
 
 INTER_COMMIT=353b61b9f4430d5f420d56605a6e7993e0941470  # rsms/inter master, 2026-10
 if [[ ! -d vendor/inter ]]; then
@@ -76,9 +84,11 @@ proportional() {
 
 proportional sans KatagamiSans
 
-if [[ "$which" == cjk || "$which" == all ]]; then
-  $PY tools/build_cjk.py
-fi
+case "$which" in
+  all|cjk) $PY tools/build_cjk.py ;;
+  cjk-roman) $PY tools/build_cjk.py --roman ;;
+  cjk-italic) $PY tools/build_cjk.py --italic ;;
+esac
 
 mkdir -p fonts/mono
 if wants mono roman; then
