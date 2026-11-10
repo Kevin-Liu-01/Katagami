@@ -150,6 +150,8 @@ tools/build.sh serif-italic   # one member's Italic (or serif-roman)
 
 The build fetches Inter's sources at a pinned commit into `vendor/inter` and Noto Sans into `vendor/noto`. A proportional member takes 15 to 40 minutes on a busy machine, most of it in fontmake and the script merge. Mono takes a few minutes after Sans.
 
+`.venv/bin/python -B tools/check.py` checks the committed fonts against the numbers in this README and in SPEC.md. It builds nothing and takes about twenty seconds.
+
 After a build, these commands write the website into a checkout of [Katagami-Website](https://github.com/Kevin-Liu-01/Katagami-Website) next to this repository, or at `KATAGAMI_SITE`. The website is a Next.js app that renders the page records these commands write.
 
 | Command | What it writes |
@@ -180,6 +182,7 @@ After a build, these commands write the website into a checkout of [Katagami-Web
 | `tools/seo/typefaces.json` | facts about the typefaces the comparison pages name, each with its sources |
 | `tools/og.mjs`, `tools/readme.mjs` | the social cards and the README images |
 | `tools/logo.py` | the mark: a square cut three times, whose leftover piece is the K |
+| `tools/check.py` | checks the fonts in `fonts/` against the numbers in this README and in SPEC.md, and tests the build's pure helpers |
 | `docs/` | the logo and the README images |
 | `SPEC.md` | every design decision and its numbers |
 
