@@ -18,7 +18,7 @@ in place, after fontmake (and, for the roman, the script merge):
      linked to Italic) or 1 (Italic), so a roman and its Italic link as one family.
   5. Line metrics: the Italic takes the roman's hhea and typo metrics, so both
      set the same line height, and both files clip at the tallest and deepest
-     glyph of the two.
+     glyph of the two at every master.
   6. Unhinted: a gasp table that asks for smoothing at every size, and a prep
      program that turns on smart dropout control (as gftools fix-unhinted does).
   7. Components: every glyph built from a flipped, rotated or scaled component
@@ -55,6 +55,7 @@ from fontTools.ttLib.tables._g_l_y_f import (
     flagOnCurve, flagOverlapSimple,
 )
 from fontTools.ttLib.tables.TupleVariation import TupleVariation
+import uharfbuzz as hb
 
 sys.path.insert(0, str(Path(__file__).parent))
 from kerf_build.contours import fix_shared_segments  # noqa: E402
@@ -170,14 +171,39 @@ def metrics_from(font: TTFont, roman: TTFont) -> None:
     os2.sTypoAscender, os2.sTypoDescender, os2.sTypoLineGap = src_os2.sTypoAscender, src_os2.sTypoDescender, src_os2.sTypoLineGap
 
 
-def clipping(font: TTFont, family: list[TTFont]) -> None:
+def master_extremes(path: Path) -> tuple[int, int]:
+    """The highest and the lowest outline point of any glyph of the file at the
+    lightest weight, the default and the heaviest. head.yMax and head.yMin
+    cover the default master alone, and a merged script reaches further at Black."""
+    tt = TTFont(path, lazy=True)
+    axis = next(a for a in tt["fvar"].axes if a.axisTag == "wght")
+    count = tt["maxp"].numGlyphs
+    font = hb.Font(hb.Face(hb.Blob.from_file_path(str(path))))
+    top = bottom = 0
+    for w in sorted({axis.minValue, axis.defaultValue, axis.maxValue}):
+        font.set_variations({"wght": w})
+        for gid in range(count):
+            e = font.get_glyph_extents(gid)
+            if e is not None:
+                top, bottom = max(top, e.y_bearing), min(bottom, e.y_bearing + e.height)
+    return top, bottom
+
+
+def clipping(font: TTFont, extremes: list[tuple[int, int]]) -> None:
     """The Windows clipping box covers the tallest and deepest glyph of the
-    roman and the Italic together, and never less than the typo metrics, so
-    both files of a member have the same vertical metrics. USE_TYPO_METRICS
-    keeps it out of the line spacing."""
+    roman and the Italic together at every master (master_extremes), and never
+    less than the typo metrics, so both files of a member have the same
+    vertical metrics and no weight is clipped. The box is the same at every
+    weight: the MVAR records that would vary it (hcla, hcld), which the script
+    merge leaves behind, are dropped. USE_TYPO_METRICS keeps it out of the
+    line spacing."""
     os2 = font["OS/2"]
-    os2.usWinAscent = max([f["head"].yMax for f in family] + [os2.sTypoAscender])
-    os2.usWinDescent = max([-f["head"].yMin for f in family] + [-os2.sTypoDescender])
+    os2.usWinAscent = max([top for top, _ in extremes] + [os2.sTypoAscender])
+    os2.usWinDescent = max([-bottom for _, bottom in extremes] + [-os2.sTypoDescender])
+    if "MVAR" in font:
+        mvar = font["MVAR"].table
+        mvar.ValueRecord = [r for r in mvar.ValueRecord if r.ValueTag not in ("hcla", "hcld")]
+        mvar.ValueRecordCount = len(mvar.ValueRecord)
 
 
 def prune_names(font: TTFont) -> None:
@@ -500,7 +526,7 @@ def finish(key: str, only: str | None = None) -> None:
     roman_path = ROOT / "fonts" / key / f"{stem}[wght].ttf"
     italic_path = ROOT / "fonts" / key / f"{stem}-Italic[wght].ttf"
     roman = TTFont(roman_path) if roman_path.exists() else None
-    family_fonts = [TTFont(p) for p in (roman_path, italic_path) if p.exists()]
+    extremes = [master_extremes(p) for p in (roman_path, italic_path) if p.exists()]
     for path, italic in ((roman_path, False), (italic_path, True)):
         if not path.exists() or only and only != ("italic" if italic else "roman"):
             continue
@@ -522,7 +548,7 @@ def finish(key: str, only: str | None = None) -> None:
         stat(font, italic)
         if italic and roman is not None:
             metrics_from(font, roman)
-        clipping(font, family_fonts)
+        clipping(font, extremes)
         unhinted(font)
         sort_layout(font)
         meta(font)
