@@ -31,6 +31,7 @@ plate read their glyphs, no longer draws them as fonts/ ships them.
 from __future__ import annotations
 
 import hashlib
+import html
 import json
 import math
 import re
@@ -955,11 +956,12 @@ def write_site_facts(facts: dict, stamps: dict) -> None:
 
 
 def faq_entities(fragment: str) -> list:
-    """The questions and answers of the FAQ page, as schema.org Question nodes."""
+    """The questions and answers of the FAQ page, as schema.org Question nodes. Tags are
+    dropped and character references decoded, so a code sample reads as it does on the page."""
+    text = lambda s: html.unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", s))).strip()  # noqa: E731
     out = []
     for m in re.finditer(r'<details class="q"[^>]*>.*?<h2>(.*?)</h2>.*?<div class="a">(.*?)</div>\s*</details>', fragment, re.S):
-        answer = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", m.group(2))).strip()
-        out.append({"@type": "Question", "name": m.group(1), "acceptedAnswer": {"@type": "Answer", "text": answer}})
+        out.append({"@type": "Question", "name": text(m.group(1)), "acceptedAnswer": {"@type": "Answer", "text": text(m.group(2))}})
     return out
 
 
