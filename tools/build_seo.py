@@ -185,9 +185,11 @@ def render(blocks: list) -> tuple[str, str]:
             h.append('<div class="lib-faq">' + "".join(f"<details open><summary>{inline(q)}</summary><p>{inline(a)}</p></details>" for q, a in b[1]) + "</div>")
             m.append("\n\n".join(f"**{q}**\n\n{md_link(a)}" for q, a in b[1]))
         elif kind == "sources":
+            # the date an entry of typefaces.json was checked; no date, no sentence
+            checked = f"The sources were checked on {b[2]}." if len(b) > 2 and b[2] else ""
             h.append('<div class="lib-sources"><b>Sources</b><ul>' + "".join(f'<li><a href="{u}" rel="nofollow noopener">{html.escape(u)}</a></li>' for u in b[1])
-                     + f"</ul><p>The sources were checked on {TODAY}.</p></div>")
-            m.append("**Sources**\n\n" + "\n".join(f"- {u}" for u in b[1]) + f"\n\nThe sources were checked on {TODAY}.")
+                     + "</ul>" + (f"<p>{checked}</p>" if checked else "") + "</div>")
+            m.append("**Sources**\n\n" + "\n".join(f"- {u}" for u in b[1]) + (f"\n\n{checked}" if checked else ""))
     return "\n".join(h), "\n\n".join(m)
 
 
@@ -406,7 +408,7 @@ def compare_pages(F: dict) -> None:
             ("h2", "Questions"),
             ("faq", [(f"Is {mine} free for commercial use?", f"{mine} is free for commercial use. It is released under the SIL Open Font License 1.1, which allows use in commercial and non-commercial products."),
                      (f"Is {other['name']} free for commercial use?", f"{verdict} Check the license at {other.get('url', '')} before you ship it.")]),
-            ("sources", [SITE_URL + (MEMBER_PATHS[spec["members"][0]] if len(spec["members"]) == 1 else "/"), *other.get("sources", [])]),
+            ("sources", [SITE_URL + (MEMBER_PATHS[spec["members"][0]] if len(spec["members"]) == 1 else "/"), *other.get("sources", [])], other.get("checked")),
         ]
         page(path, spec["title"], f"{spec['lede']} A table sets their license, weights, axes, scripts and features side by side.", spec["title"].split(":")[0],
              spec["lede"], blocks, [("Library", "/library"), ("Comparisons", "/compare"), (spec["title"].split(":")[0], path)],
