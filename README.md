@@ -85,7 +85,7 @@ Together they set the main language of every place on the [map](https://katagami
   <img src="docs/readme/features-light.png" alt="Eight OpenType features, each off and on: fractions, small capitals, slashed zero, single-story a, disambiguation, circled characters, scientific inferiors and code ligatures">
 </picture>
 
-Every member carries Inter's features with their labels: tabular and proportional figures, fractions, superiors and inferiors, ordinals, the slashed zero, case-sensitive forms, 16 character variants and 8 stylistic sets. Katagami adds small capitals (`smcp`, `c2sc`). Katagami Mono adds code ligatures for `->`, `=>`, `!=`, `==` and `>=` (`dlig`), and each character in a ligature keeps its own cell. The [features page](https://katagami.kevinliu.studio/features) shows every feature off and on, with the CSS to turn it on.
+Every member carries Inter's features with their labels: tabular and proportional figures, fractions, superiors and inferiors, ordinals, the slashed zero, case-sensitive forms, 16 character variants and 8 stylistic sets. Katagami adds small capitals (`smcp`, `c2sc`). Katagami Mono adds code ligatures for `->`, `<-`, `=>`, `!=`, `==`, `===`, `!==`, `>=` and `<=` (`dlig`), and each character in a ligature keeps its own cell. The [features page](https://katagami.kevinliu.studio/features) shows every feature off and on, with the CSS to turn it on.
 
 ## Use it
 
@@ -131,7 +131,7 @@ flowchart LR
 - **Sans** squares bowls toward their corners (0.36 for capitals, 0.32 for lowercase), condenses round letters so o matches n, cuts terminals level and makes punctuation square.
 - **Round** squares about two thirds as far as Sans and rounds every sharp corner at 0.22 stems.
 - **Text** lowers the x-height to 0.71 of the caps, sets everything 4 percent smaller, tightens spacing, widens round letters and capitals, and condenses letters to 0.97 of their ink width with stems kept.
-- **Serif** is Text with rectangular serifs cut onto its stroke ends, after the design notes of Signifier. Each serif runs 0.85 of a stem past the stroke, ends square at 0.8 of the H crossbar's thickness (as thick as the hairlines at Thin, a third of the stem at Black), and meets the stroke's own side in a short bracket. Lowercase heads are triangular, the arms of E, F, L, T and Z take short vertical serifs, curved terminals (C, G, S, c, s, a, e, the figures) and the ends of r, f, t, j and y take vertical beaks as thick and as long as the serifs, and every point moves 0.6 of the way to its height in the next lighter master at Regular and 0.3 at Black, which thins the horizontals. Letters whose serifs would pass their sidebearings, such as v, y and A, are narrowed instead of widened, so the spacing stays even.
+- **Serif** is Text with rectangular serifs cut onto its stroke ends, after the design notes of Signifier. Each serif runs 0.85 of a stem past the stroke, ends square at 0.8 of the H crossbar's thickness (as thick as the hairlines at Thin, a third of the stem at Black), and meets the stroke's own side in a short bracket. Lowercase heads are triangular, and the arms of E, F, L, T and Z take short vertical serifs. The ends of curved strokes that the serifs leave bare, such as the top of a, the hook of f and the foot of g, keep Text's cut and take a small square facet at the outer corner. C, G, S, c and s, the arm of r and the tails of j and y keep Text's plain cut. Every point moves 0.6 of the way to its height in the next lighter master at Regular and 0.3 at Black, which thins the horizontals. Letters whose serifs would pass their sidebearings, such as v, y and A, are narrowed instead of widened, so the spacing stays even.
 - **Italics** start from Inter Italic's masters. Each is stood upright by 9.4 degrees, run through its member's transforms and slanted again. Every Italic glyph is its roman's design slanted: where Inter Italic draws a letter differently (its f, its single-storey a and others), the roman's glyph is slanted instead, and the Italic takes the roman's features and kerning. Serif Italic's serifs sit where the roman's do; Mono Italic's box drawing and Braille stay upright. The merged scripts and the CJK companions come compiled, so `kerf_build/slant.py` slants them the same 9.4 degrees: every outline, variation, anchor and placement.
 - **Mono** fits Sans to a 1280-unit cell, keeps the stems, stretches the arms of f, t, r and J into the cell, fits Greek and Cyrillic by the same rules, and draws the box-drawing block from Unicode names. It also draws all 256 Braille patterns, U+2800 to U+28FF, and the status symbols coding agents print in the terminal, such as ⏺, ⎿, ✔ and ✻, so spinners and panels never fall back to another font.
 - **Thin** keeps a floor: where squaring would thin a stroke below 0.8 of Inter's, the curve is eased back.
@@ -181,9 +181,16 @@ After a build, these commands write the website into a checkout of [Katagami-Web
 | `tools/kerf_build/fontops.py` | glyph swaps, resizing, spacing, composite re-seating, naming |
 | `tools/kerf_build/boxdraw.py` | box drawing and block elements |
 | `tools/kerf_build/terminal.py` | Braille patterns and the status symbols coding agents print |
+| `tools/kerf_build/missing.py` | the 93 characters Inter has no glyph for, the anchors their accents need and the soft-dotted rule |
+| `tools/kerf_build/cjk.py` | the table work of the CJK companions: Katagami Sans's Latin on the CJK weight axis, its merge and the glyph names |
+| `tools/kerf_build/contours.py` | contour repairs on a finished font: segments two contours share, duplicate contours and points |
 | `tools/build_site.py`, `tools/build_map.py`, `tools/build_seo.py` | the website: fonts, data, pages, map, library pages and the files for search and answer engines |
 | `tools/seo/typefaces.json` | facts about the typefaces the comparison pages name, each with its sources |
 | `tools/og.mjs`, `tools/readme.mjs` | the social cards and the README images |
+| `tools/stills.mjs`, `tools/readme_shrink.py` | the website's stills, and the README images reduced in size |
+| `tools/qa.sh` | fontbakery's Google Fonts profile on the built fonts, one member at a time |
+| `tools/proof.py` | comparison proof sheets, written to `build/proofs/` |
+| `tools/serif_lab/` | the lab Katagami Serif's terminals were designed in: sheets from pickled masters, with no font build |
 | `tools/logo.py` | the mark: a square cut three times, whose leftover piece is the K |
 | `tools/check.py` | checks the fonts in `fonts/` against the numbers in this README and in SPEC.md, and tests the build's pure helpers |
 | `docs/` | the logo and the README images |
@@ -191,7 +198,7 @@ After a build, these commands write the website into a checkout of [Katagami-Web
 
 ## Status
 
-Katagami 1.2 is out. Katagami Serif's small capitals are now as heavy as its lowercase: in 1.1 they were heavier at every weight, and at 800 and 900 the counters of M, N, U and K filled in. 1.1 gave each Italic the 28 merged scripts and each CJK companion an Italic. Since 0.1 Katagami has gained an Italic for every member, a reworked Katagami Serif (serifs that hold at Thin, a lighter Black, crisper brackets, even spacing and beaks on its curved terminals), two hand corrections (a straight Q tail and a squarer 2), Greek and Cyrillic fitted to Katagami Mono's cell, nine more scripts, 93 characters Inter does not have, small capitals for 620 letters, accents that attach to Cyrillic and Greek letters, and corrected names, version numbers, STAT, gasp and prep tables, and Windows clipping metrics.
+Katagami 1.2 is out. Katagami Serif's small capitals are now as heavy as its lowercase: in 1.1 they were heavier at every weight, and at 800 and 900 the counters of M, N, U and K filled in. 1.1 gave each Italic the 28 merged scripts and each CJK companion an Italic. Since 0.1 Katagami has gained an Italic for every member, a reworked Katagami Serif (serifs that hold at Thin, a lighter Black, crisper brackets, even spacing and small facets on its curved terminals), two hand corrections (a straight Q tail and a squarer 2), Greek and Cyrillic fitted to Katagami Mono's cell, nine more scripts, 93 characters Inter does not have, small capitals for 620 letters, accents that attach to Cyrillic and Greek letters, and corrected names, version numbers, STAT, gasp and prep tables, and Windows clipping metrics.
 
 ## Credits
 

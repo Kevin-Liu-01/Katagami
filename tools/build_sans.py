@@ -1444,12 +1444,13 @@ def cut_serifs(fonts, plan: dict, reach: float, depth: float, head_drop: float, 
     A serif runs out along its line `reach` of the stroke's width at Regular,
     ends square, `depth` of the master's H crossbar thick, and comes back flat
     to a short bracket into the stroke's own side, so a diagonal's serif meets
-    the diagonal. Toward Thin and Black the reach scales with the stem to the
-    power 0.15. The head of a lowercase stem is a triangle: its tip drops
-    `head_drop` stems below the line and the stem's top left corner moves down
-    onto the cut. The free end of an arm takes a vertical serif `beak` stems
-    long. Every serif is its own contour, added in the same order to every
-    master, so the masters stay compatible.
+    the diagonal. Toward Thin the reach scales with the stem to the power 0.3
+    and toward Black to the power 0 (SERIF_REACH_POWER). The head of a
+    lowercase stem is a triangle: its tip drops `head_drop` stems below the
+    line and the stem's top left corner moves down onto the cut. The free end
+    of an arm takes a vertical serif `beak` stems long. Every serif is its own
+    contour, added in the same order to every master, so the masters stay
+    compatible.
     """
     sw_ref = stem(fonts["Regular"])
     def crossbar(font) -> float:

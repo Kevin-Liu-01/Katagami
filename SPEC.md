@@ -5,7 +5,7 @@ Katagami is a type family with five members built from one source:
 - **Katagami Sans**, a squared proportional sans serif for interfaces and display.
 - **Katagami Round**, a rounder, universal sans serif for interfaces and text.
 - **Katagami Text**, the member for reading, with a lower x-height and tighter spacing.
-- **Katagami Serif**, Katagami Text with flat slab serifs.
+- **Katagami Serif**, Katagami Text with rectangular serifs and moderate contrast.
 - **Katagami Mono**, a monospace for code, terminals and tables, fitted from Katagami Sans.
 
 Each member has an Italic, built by the same transforms from Inter's Italic.
@@ -16,7 +16,7 @@ Camber and Berkeley Mono are commercial fonts. Katagami contains none of their o
 
 ## Principles
 
-1. **One skeleton.** Both members share units per em, vertical metrics, curve shape, terminals and punctuation. Text set in Katagami Sans with code in Katagami Mono must look like one family.
+1. **One skeleton.** The five members share units per em and line metrics and start from the same outlines. Katagami Sans and Katagami Mono also share curve shape, terminals and punctuation. Text set in Katagami Sans with code in Katagami Mono must look like one family.
 2. **Square curves, straight cuts.** Bowls are superellipses, not circles. Terminals are cut horizontally. Dots and punctuation are square.
 3. **Round letters as wide as straight ones.** In Inter, O is wider than H. In Katagami, rounds are condensed so O, H, o and n read as the same width.
 4. **Every glyph distinct in code.** In the mono, i, l, 1, I and | are distinguished by shape, not only by position. 0 and O differ by a centre bar in 0.
@@ -140,7 +140,7 @@ Every member has an Italic: one variable font beside its roman, `fonts/sans/Kata
 
 Every outline is fitted to the 1280-unit cell. Each decision is made on the Regular master and used for all masters.
 
-- **Even widths.** A monospace reads evenly when its letters fill the cell evenly. Letters move toward a target ink width, keeping a quarter of their own width so the alphabet does not turn uniform: lowercase 0.69 of the cell, round lowercase (o c e b d p q g a s) 0.74, capitals 0.74, round capitals 0.79, figures 0.72. Stems are held at their true thickness.
+- **Even widths.** A monospace reads evenly when its letters fill the cell evenly. Letters move toward a target ink width, keeping a quarter of their own width so the alphabet does not turn uniform: lowercase 0.69 of the cell, round lowercase (o c e b d p q g a s) 0.74, capitals 0.70, round capitals 0.75, figures 0.72. Stems are held at their true thickness.
 - **Wide letters fill the cell.** m 0.84, w 0.94, M 0.82, W 0.94, æ œ Æ Œ 0.88. Where they still condense, the stems keep only part of their weight (down to 45 percent at a scale of 0.55), which is how a monospace m finds room for its counters. A Bold glyph that still overflows the cell condenses again, and each pass puts back the share for its own scale. Small passes put back the full weight, so W, Ж, the arrows and ○ keep more weight at Bold than one condense at their total scale would leave. The weight put back never closes a counter. Fitting can condense a glyph up to five times, and every pass keeps each counter at least a fifth of its area before fitting, scaled, so the zeros of ‰ and ‱ and the counters of ₯, ⅒, ⑧ and the circled letters stay open at Bold.
 - **Arms, around a fixed stem.** f, t, r, dotless j and J keep their stem and stretch only what lies to its left and right, so arms and crossbars reach into the cell: f 0.70, t 0.68, r 0.58, dotless j 0.54, J 0.64.
 - **Narrow by identity.** i, l, I and 1 keep their own width; their flags and slabs fill the cell.

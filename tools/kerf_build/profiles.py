@@ -129,10 +129,11 @@ TEXT = Profile(
                 (600, 560), (700, 640), (800, 760), (900, 900)),
 )
 
-# Katagami Text with bracketed serifs, after NewsSerif, kept close to Text:
-# Text's outlines and widths with moderate contrast, serifs that run flat to a
-# short flat end and curve back into the stroke, lowercase heads cut on a slant,
-# and spurs on arms and level terminals. SPEC.md, Katagami Serif.
+# Katagami Text with rectangular serifs, after Signifier's design notes, kept
+# close to Text: Text's outlines with moderate contrast, serifs that end square
+# and meet the stroke's own side in a short bracket, triangular heads on lowercase
+# stems, vertical serifs on arms, and a small facet on the curved terminals the
+# serifs leave bare. SPEC.md, Katagami Serif.
 SERIF = replace(
     TEXT,
     key="serif",

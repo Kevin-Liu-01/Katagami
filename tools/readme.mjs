@@ -63,8 +63,10 @@ const CARDS = {
     ["Latin", "Français"], ["Greek", "Ελληνικά"], ["Cyrillic", "Русский"], ["Arabic", "العربية"], ["Hebrew", "עברית"], ["Devanagari", "हिन्दी"],
     ["Bengali", "বাংলা"], ["Gurmukhi", "ਪੰਜਾਬੀ"], ["Gujarati", "ગુજરાતી"], ["Odia", "ଓଡ଼ିଆ"], ["Tamil", "தமிழ்"], ["Telugu", "తెలుగు"],
     ["Kannada", "ಕನ್ನಡ"], ["Malayalam", "മലയാളം"], ["Sinhala", "සිංහල"], ["Thai", "ภาษาไทย"], ["Lao", "ພາສາລາວ"], ["Myanmar", "မြန်မာ"],
-    ["Khmer", "ខ្មែរ"], ["Georgian", "ქართული"], ["Armenian", "Հայերեն"], ["Ethiopic", "አማርኛ"], ["CJK SC", "简体中文"], ["CJK TC", "繁體中文"],
-    ["CJK JP", "日本語"], ["CJK KR", "한국어"]].map(([s, w]) => `<div><div class="tag">${s}</div><div class="x">${w}</div></div>`).join("")}</div>`,
+    ["Khmer", "ខ្មែរ"], ["Georgian", "ქართული"], ["Armenian", "Հայերեն"], ["Ethiopic", "አማርኛ"],
+    ["Tifinagh", "ⵜⴰⵎⴰⵣⵉⵖⵜ"], ["Ol Chiki", "ᱥᱟᱱᱛᱟᱲᱤ"], ["Coptic", "ⲙⲉⲧⲣⲉⲙⲛⲭⲏⲙⲓ"], ["Tibetan", "བོད་སྐད་"], ["Hanifi Rohingya", "𐴌𐴗𐴥𐴝𐴙𐴚𐴒𐴙𐴝"],
+    ["N'Ko", "ߒߞߏ"], ["Thaana", "ދިވެހި"], ["Vai", "ꕙꔤ"], ["Canadian syllabics", "ᐃᓄᒃᑎᑐᑦ"],
+    ["CJK SC", "简体中文"], ["CJK TC", "繁體中文"], ["CJK JP", "日本語"], ["CJK KR", "한국어"]].map(([s, w]) => `<div><div class="tag">${s}</div><div class="x">${w}</div></div>`).join("")}</div>`,
     `.sc{display:grid;grid-template-columns:repeat(4,1fr);gap:14px 20px}.sc>div{padding:6px 0}.x{font-size:34px;line-height:1.4;white-space:nowrap}`),
 
   features: (t) => page(t, `<div class="ft"><div></div><div class="tag">Off</div><div class="tag">On</div>${[
