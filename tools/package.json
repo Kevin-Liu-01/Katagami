@@ -1,0 +1,9 @@
+{
+  "name": "katagami-tools",
+  "private": true,
+  "type": "module",
+  "description": "The Node tools that draw Katagami's social cards, README images and stills.",
+  "dependencies": {
+    "playwright-core": "1.62.1"
+  }
+}

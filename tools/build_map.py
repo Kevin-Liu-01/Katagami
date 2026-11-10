@@ -3,7 +3,7 @@ language map data and the built Katagami fonts.
 
     python tools/build_map.py
 
-Reads GT's public/world data (GT_WORLD, default the langmap worktree) and
+Reads GT's public/world data (GT_WORLD, which has no default) and
 writes into Katagami-Website/map/:
 
     grid-<res>.u16.gz, density-<res>.u8.gz, blends-<res>.json   copied as is
@@ -29,13 +29,14 @@ import json
 import math
 import os
 import shutil
+import sys
 from pathlib import Path
 
 from fontTools.ttLib import TTFont
 from kerf_build.sitepath import PUBLIC, require_site
 
 ROOT = Path(__file__).resolve().parents[1]
-WORLD = Path(os.environ.get("GT_WORLD", Path.home() / "gt/gt-cloud-wt-langmap/apps/landing/public/world"))
+WORLD = Path(os.environ.get("GT_WORLD", ""))
 OUT = PUBLIC / "map"
 LEVELS = (1, 0.5, 0.25)
 STATS_LEVEL = 0.5
@@ -112,6 +113,8 @@ def resolve_pool(units: dict, blends: dict, cell_id: int):
 
 def main() -> None:
     require_site()
+    if not os.environ.get("GT_WORLD") or not (WORLD / "units.json").exists():
+        sys.exit("Set GT_WORLD to the folder that holds the world language map data. It has units.json, glyphs.json, languages.json and the grids.")
     OUT.mkdir(parents=True, exist_ok=True)
     units_file = json.loads((WORLD / "units.json").read_text())
     units = {u["id"]: u["pool"] for u in units_file["units"]}

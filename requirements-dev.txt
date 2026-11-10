@@ -1,0 +1,5 @@
+# What the checks and the image tools need beside the build: tools/qa.sh runs fontbakery,
+# and tools/readme_shrink.py imports PIL.
+-r requirements.txt
+fontbakery==1.1.0
+Pillow==12.3.0

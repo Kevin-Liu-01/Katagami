@@ -138,17 +138,18 @@ flowchart LR
 
 ## Building
 
-Python 3.11 or later and git are required.
+Python 3.11 or later, git and curl are required. The website tools also need Node.js, and the image tools need Google Chrome and `cwebp`.
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install -r requirements.lock   # the exact packages that built Katagami 1.2
 tools/build.sh                # every member, roman and Italic, and the CJK companions
 tools/build.sh serif          # one member: sans, round, text, serif, mono or cjk
 tools/build.sh serif-italic   # one member's Italic (or serif-roman)
+tools/build.sh fetch          # only download and check the sources
 ```
 
-The build fetches Inter's sources at a pinned commit into `vendor/inter` and Noto Sans into `vendor/noto`. A proportional member takes 15 to 40 minutes on a busy machine, most of it in fontmake and the script merge. Mono takes a few minutes after Sans.
+The build fetches Inter's sources at a pinned commit into `vendor/inter` and Noto's fonts at a pinned commit into `vendor/noto`. It checks every Noto file against the SHA-256 list in `tools/noto.sha256` and stops on a file that does not match. A proportional member takes 15 to 40 minutes on a busy machine, most of it in fontmake and the script merge. Mono takes a few minutes after Sans.
 
 `.venv/bin/python -B tools/check.py` checks the committed fonts against the numbers in this README and in SPEC.md. It builds nothing and takes about twenty seconds.
 
@@ -161,6 +162,8 @@ After a build, these commands write the website into a checkout of [Katagami-Web
 | `.venv/bin/python tools/build_seo.py` | the library page records, the Markdown twins, `llms.txt`, the sitemap and `robots.txt` |
 | `node tools/og.mjs` | the 1200 by 630 social cards |
 | `node tools/readme.mjs` | the images in this README and the website's, drawn from the site served at `BASE`; `python3 tools/readme_shrink.py` then reduces them |
+
+`requirements.lock` was made under Python 3.14, and `requirements.txt` lists the ten packages the build imports. `tools/qa.sh` needs fontbakery and `tools/readme_shrink.py` needs Pillow, and `.venv/bin/pip install -r requirements-dev.txt` installs both. `npm install --prefix tools` installs playwright-core for `og.mjs`, `readme.mjs` and `stills.mjs`. `CHROME` names the browser those three drive, and `BASE` names the address they read the site from, which is `http://localhost:3078` unless you set it. `tools/build_map.py` reads the world language map data from the folder that `GT_WORLD` names, and it has no default.
 
 ## Repository
 

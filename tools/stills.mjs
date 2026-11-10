@@ -1,7 +1,7 @@
 // Draws the website's stills (public/stills/ in the site checkout): pictures a page
 // shows in place of a live frame until the reader asks for one, so the first frame
 // already has them. Serve the built site at BASE first (pnpm build && pnpm start).
-// Needs playwright-core, Chrome and cwebp; set KATAGAMI_PLAYWRIGHT and CHROME as for og.mjs.
+// Needs playwright-core (npm install --prefix tools), Chrome and cwebp; CHROME names another browser.
 //
 //   fontify-before.webp, fontify-katagami.webp
 //       the landing page's Font-ify cell: fontify-sample.html in its own fonts and
@@ -20,9 +20,12 @@ import { PUB } from "./site-path.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = path.join(PUB, "stills");
 const BASE = process.env.BASE || "http://localhost:3078";
-const PW = process.env.KATAGAMI_PLAYWRIGHT || "/Users/kevinliu/repos/Prototemplate/node_modules/playwright-core/index.mjs";
+const PW = process.env.KATAGAMI_PLAYWRIGHT || "playwright-core";
 const CHROME = process.env.CHROME || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-const { chromium } = await import(PW);
+const { chromium } = await import(PW).catch(() => {
+  console.error("playwright-core is not installed. Run npm install --prefix tools, or set KATAGAMI_PLAYWRIGHT to its index.mjs.");
+  process.exit(1);
+});
 
 fs.mkdirSync(OUT, { recursive: true });
 const browser = await chromium.launch({ executablePath: CHROME });
