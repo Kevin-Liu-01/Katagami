@@ -2119,17 +2119,23 @@ def adjust_widths(fonts, widths: dict[str, float], condense: float = 1.0) -> Non
         reflow_composites(f, maps, old)
 
 
-def dotted_circle(fonts) -> None:
+def dotted_circle(fonts, scale: float = 1.0) -> None:
     """U+25CC DOTTED CIRCLE, drawn after every transform so none reshapes its
     dots: a ring as tall as the x-height, spaced as o is, its dots sized from
-    each master's stem (fontops.draw_dotted_circle)."""
-    sw_ref = stem(fonts["Regular"])
+    each master's stem (fontops.draw_dotted_circle). In Katagami Serif the
+    stem is the one cut_serifs kept from before the serifs (SERIF_STEM_KEY),
+    which stem() would measure with them. cut_serifs runs before
+    scale_outlines, so the kept stem is brought to the outlines' size by
+    `scale`, the profile's scale."""
+    def plain_stem(f) -> float:
+        return f.lib[SERIF_STEM_KEY] * scale if SERIF_STEM_KEY in f.lib else stem(f)
+    sw_ref = plain_stem(fonts["Regular"])
     anchors = dotted_circle_anchors(fonts["Regular"])
     for f in fonts.values():
         o = f["o"]
         b = o.getBounds(f)
         d = f.info.xHeight
-        draw_dotted_circle(f, dot_size(stem(f), sw_ref), d, d + b.xMin + (o.width - b.xMax), anchors)
+        draw_dotted_circle(f, dot_size(plain_stem(f), sw_ref), d, d + b.xMin + (o.width - b.xMax), anchors)
 
 
 def write_designspace(p: Profile, out_dir: Path, paths: dict[str, Path], italic: bool = False) -> Path:
@@ -2210,7 +2216,7 @@ def transform(p: Profile, italic: bool = False) -> tuple[dict, dict]:
     scale_outlines(fonts, p.scale)
     if not italic:
         # the Italic takes both from the roman (romanize), so they are the roman's slanted
-        dotted_circle(fonts)
+        dotted_circle(fonts, p.scale)
         for f in fonts.values():
             combining_double_acute(f)
     return fonts, soften_vertices(fonts, p.corner_radius)

@@ -166,6 +166,42 @@ class SiteHelpers(unittest.TestCase):
         self.assertEqual(self.site.cmap_runs([], ["a"]), {"runs": [], "kinds": []})
 
 
+class DottedCircle(unittest.TestCase):
+    """tools/build_sans.py: Katagami Serif's dotted circle takes its dots from the stem kept before the serifs."""
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            import build_sans
+            import ufoLib2
+        except (Exception, SystemExit) as error:
+            raise unittest.SkipTest(f"tools/build_sans.py did not import here: {error!r}")
+        cls.build_sans, cls.ufoLib2 = build_sans, ufoLib2
+
+    def master(self, serifed_i: float, kept_stem: float):
+        """A master with an x-height of 1020, an o, and an i that measures `serifed_i` with its serifs."""
+        f = self.ufoLib2.Font()
+        f.info.unitsPerEm, f.info.xHeight = 2048, 1020
+        for name, x0, x1, width in (("idotless", 60, 60 + serifed_i, serifed_i + 120), ("o", 80, 1080, 1160)):
+            g = f.newGlyph(name)
+            g.width = width
+            c = self.ufoLib2.objects.Contour()
+            for x, y in ((x0, 0), (x1, 0), (x1, 1020), (x0, 1020)):
+                c.points.append(self.ufoLib2.objects.Point(x, y, "line"))
+            g.appendContour(c)
+        f.lib[self.build_sans.SERIF_STEM_KEY] = kept_stem  # what cut_serifs keeps, before scale_outlines
+        return f
+
+    def test_dots_follow_the_stem_before_the_serifs(self):
+        fonts = {"Thin": self.master(239, 44 / 0.96), "Regular": self.master(467, 173 / 0.96), "Black": self.master(680, 386 / 0.96)}
+        self.build_sans.dotted_circle(fonts, 0.96)
+        for style, dot in (("Thin", 61), ("Regular", 121), ("Black", 181)):
+            g = fonts[style]["uni25CC"]
+            xs = [p.x for p in g.contours[0].points]
+            bounds = g.getBounds(fonts[style])
+            self.assertAlmostEqual(max(xs) - min(xs), dot, delta=1, msg=style)
+            self.assertAlmostEqual(bounds.yMax - bounds.yMin, 1020, delta=1, msg=style)
+
 def main() -> int:
     bad = fonts() + documents()
     for line in bad:
