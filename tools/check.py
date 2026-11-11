@@ -202,6 +202,27 @@ class DottedCircle(unittest.TestCase):
             self.assertAlmostEqual(max(xs) - min(xs), dot, delta=1, msg=style)
             self.assertAlmostEqual(bounds.yMax - bounds.yMin, 1020, delta=1, msg=style)
 
+class Clipping(unittest.TestCase):
+    """tools/finish.py: each member's Windows clipping box holds every glyph at every master."""
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            import finish
+        except (Exception, SystemExit) as error:
+            raise unittest.SkipTest(f"tools/finish.py did not import here: {error!r}")
+        cls.finish = finish
+
+    def test_the_box_holds_every_master(self):
+        for key in MEMBERS:
+            for name in (roman(key), italic(key)):
+                path = ROOT / "fonts" / name
+                top, bottom = self.finish.master_extremes(path)
+                with TTFont(path, lazy=True) as font:
+                    os2 = font["OS/2"]
+                    self.assertLessEqual(top, os2.usWinAscent, name)
+                    self.assertLessEqual(-bottom, os2.usWinDescent, name)
+
 def main() -> int:
     bad = fonts() + documents()
     for line in bad:
