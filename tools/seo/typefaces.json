@@ -15,7 +15,8 @@
   "sources": [
    "https://rsms.me/inter/",
    "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/METADATA.pb"
-  ]
+  ],
+  "checked": "2026-10-15"
  },
  {
   "name": "Noto Sans",
@@ -33,7 +34,8 @@
   "sources": [
    "https://raw.githubusercontent.com/google/fonts/main/ofl/notosans/METADATA.pb",
    "https://raw.githubusercontent.com/notofonts/noto-fonts/main/FAQ.md"
-  ]
+  ],
+  "checked": "2026-10-15"
  },
  {
   "name": "PP Mori",
@@ -51,7 +53,8 @@
   "sources": [
    "https://pangrampangram.com/products/mori",
    "https://fontsinuse.com/typefaces/127055/mori"
-  ]
+  ],
+  "checked": "2026-10-15"
  },
  {
   "name": "NewsSerif",
@@ -69,7 +72,8 @@
   "sources": [
    "https://charactertype.com/typefaces/newsserif/",
    "https://charactertype.com/eula/"
-  ]
+  ],
+  "checked": "2026-10-15"
  },
  {
   "name": "Signifier",
@@ -87,7 +91,8 @@
   "sources": [
    "https://klim.co.nz/fonts/signifier/",
    "https://klim.co.nz/blog/signifier-design-information/"
-  ]
+  ],
+  "checked": "2026-10-15"
  },
  {
   "name": "Source Serif 4",
@@ -105,7 +110,8 @@
   "sources": [
    "https://github.com/adobe-fonts/source-serif",
    "https://raw.githubusercontent.com/google/fonts/main/ofl/sourceserif4/METADATA.pb"
-  ]
+  ],
+  "checked": "2026-10-15"
  },
  {
   "name": "SF Pro",
@@ -123,7 +129,8 @@
   "sources": [
    "https://developer.apple.com/fonts/",
    "https://developer.apple.com/videos/play/wwdc2022/110381/"
-  ]
+  ],
+  "checked": "2026-10-15"
  },
  {
   "name": "Helvetica Now",
@@ -141,7 +148,8 @@
   "sources": [
    "https://www.monotype.com/fonts/helvetica-now",
    "https://www.myfonts.com/fonts/mti/helvetica-now-variable"
-  ]
+  ],
+  "checked": "2026-10-15"
  },
  {
   "name": "Roboto",
@@ -159,7 +167,8 @@
   "sources": [
    "https://github.com/google/fonts/blob/main/ofl/roboto/METADATA.pb",
    "https://opensource.googleblog.com/2015/05/roboto-googles-signature-font-is-now.html"
-  ]
+  ],
+  "checked": "2026-10-15"
  },
  {
   "name": "Berkeley Mono",
@@ -177,7 +186,8 @@
   "sources": [
    "https://usgraphics.com/products/berkeley-mono",
    "https://type-atlas.xyz/typeface/berkeley-mono/"
-  ]
+  ],
+  "checked": "2026-10-15"
  },
  {
   "name": "Camber",
@@ -195,7 +205,8 @@
   "sources": [
    "https://www.emtype.net/fonts/camber",
    "https://emtype.net/licenses"
-  ]
+  ],
+  "checked": "2026-10-15"
  },
  {
   "name": "Geist Sans",
@@ -213,7 +224,8 @@
   "sources": [
    "https://github.com/vercel/geist-font/releases",
    "https://github.com/google/fonts/blob/main/ofl/geist/METADATA.pb"
-  ]
+  ],
+  "checked": "2026-10-15"
  },
  {
   "name": "Geist Mono",
@@ -231,7 +243,8 @@
   "sources": [
    "https://github.com/vercel/geist-font/releases",
    "https://github.com/google/fonts/blob/main/ofl/geistmono/METADATA.pb"
-  ]
+  ],
+  "checked": "2026-10-15"
  },
  {
   "name": "JetBrains Mono",
@@ -249,7 +262,8 @@
   "sources": [
    "https://www.jetbrains.com/lp/mono/",
    "https://github.com/JetBrains/JetBrainsMono/wiki/OpenType-features"
-  ]
+  ],
+  "checked": "2026-10-15"
  },
  {
   "name": "Fira Code",
@@ -267,7 +281,8 @@
   "sources": [
    "https://github.com/tonsky/FiraCode",
    "https://github.com/google/fonts/blob/main/ofl/firacode/METADATA.pb"
-  ]
+  ],
+  "checked": "2026-10-15"
  },
  {
   "name": "IBM Plex Sans",
@@ -285,7 +300,8 @@
   "sources": [
    "https://github.com/IBM/plex",
    "https://github.com/google/fonts/blob/main/ofl/ibmplexsans/METADATA.pb"
-  ]
+  ],
+  "checked": "2026-10-15"
  },
  {
   "name": "IBM Plex Mono",
@@ -303,7 +319,8 @@
   "sources": [
    "https://github.com/google/fonts/blob/main/ofl/ibmplexmono/METADATA.pb",
    "https://github.com/IBM/plex/releases"
-  ]
+  ],
+  "checked": "2026-10-15"
  },
  {
   "name": "IBM Plex Serif",
@@ -321,6 +338,7 @@
   "sources": [
    "https://github.com/google/fonts/blob/main/ofl/ibmplexserif/METADATA.pb",
    "https://github.com/IBM/plex/releases"
-  ]
+  ],
+  "checked": "2026-10-15"
  }
 ]

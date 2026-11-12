@@ -13,18 +13,18 @@ Run after tools/build_site.py and tools/build_map.py.
 
 from __future__ import annotations
 
+import ast
 import html
 import json
 import re
 import sys
-import time
 from pathlib import Path
 
 from fontTools.ttLib import TTFont
 
 sys.path.insert(0, str(Path(__file__).parent))
 from build_site import (CJK, FAMILY, FONTS, ITALICS, MEMBER_PATHS, OPTIONAL, PAGE_META, PUBLIC, REPO, SCRIPT_COUNT, SITE, SITE_URL,  # noqa: E402
-                        VERSION, ZIP, emit, asset_stamps, page_graph, site_facts)
+                        VERSION, ZIP, emit, asset_stamps, page_graph, record_date, site_facts)
 from build_world import SCRIPTS, SERIF_ONLY  # noqa: E402
 from kerf_build.sitepath import require_site  # noqa: E402
 
@@ -32,7 +32,6 @@ MERGED = len(SCRIPTS)  # scripts merged from Noto
 
 ROOT = Path(__file__).resolve().parents[1]
 TYPEFACES = ROOT / "tools" / "seo" / "typefaces.json"
-TODAY = time.strftime("%Y-%m-%d")
 MEMBERS = ["sans", "round", "text", "serif", "mono"]
 FACE = {"sans": "'Katagami Sans'", "round": "'Katagami Round'", "text": "'Katagami Text'", "serif": "'Katagami Serif'", "mono": "'Katagami Mono'"}
 FEATURE_NAMES = {"calt": "Contextual alternates", "case": "Case-sensitive forms", "cpsp": "Capital spacing", "dlig": "Discretionary ligatures",
@@ -104,6 +103,23 @@ def companion_facts() -> dict:
         if path.exists():
             out[name] = {"file": path.name, "characters": len(TTFont(path, lazy=True).getBestCmap()), "size": path.stat().st_size}
     return out
+
+
+def curve_numbers() -> dict:
+    """The handle fraction f and the fitted exponent n of a circle's quarter arc and of each member's o,
+    as data.js gives them to the About page."""
+    text = (PUBLIC / "data.js").read_text()
+    curves = json.loads(text[text.index("{"):text.rindex("}") + 1])["curves"]
+    return {"circle": (curves["circle"]["f"], curves["circle"]["n"]), **{k: (curves[k]["outer"]["f"], curves[k]["outer"]["n"]) for k in MEMBERS}}
+
+
+def code_ligatures() -> list[str]:
+    """Katagami Mono's code ligatures as typed, shortest first, read from tools/build_mono.py without importing it."""
+    tree = ast.parse((ROOT / "tools" / "build_mono.py").read_text())
+    ligatures = next(ast.literal_eval(node.value) for node in tree.body
+                     if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "LIGATURES")
+    typed = {"equal": "=", "exclam": "!", "hyphen": "-", "greater": ">", "less": "<"}
+    return sorted(("".join(typed[g] for g in keys) for keys, _, _ in ligatures), key=len)
 
 
 def mb(n: int) -> str:
@@ -212,6 +228,7 @@ def page(path, title, description, h1, lede, blocks, crumbs, image="library", sc
 
 
 def member_pages(F: dict, C: dict, M: dict) -> None:
+    cf = curve_numbers()
     about = {
         "sans": ("a free variable sans serif for interfaces and display",
                  "Katagami Sans is the core member of the family. It is a sans serif for interfaces and display with squared bowls, level cuts and square punctuation.",
@@ -221,14 +238,14 @@ def member_pages(F: dict, C: dict, M: dict) -> None:
                   "Periods, commas, quotes and the dots on i and j are square.",
                   "The compact f has a crossbar that reaches 0.8 of a Regular stem past its stem at every weight.",
                   "The figures are a long-flag 1, a flat-top 3, an open 4 and a 6 and 9 with straight stems.",
-                  "Quarter arcs reach 0.73 of the way to their corners. The arcs of a circle reach 0.552."]),
+                  f"Quarter arcs reach {cf['sans'][0]:.2f} of the way to their corners. The arcs of a circle reach {cf['circle'][0]:.3f}."]),
         "round": ("a free rounded sans serif",
                   "Katagami Round squares its bowls less than Katagami Sans and rounds every sharp vertex. It is for interfaces and text that should look softer.",
                   ["Bowls are squared 0.24 of the way toward their corners in capitals and 0.22 of the way in lowercase.",
                    "Every sharp vertex is rounded with a radius of 0.22 stems. This includes stem ends, terminals and apexes.",
                    "It has the same figures, compact f and level cuts as Katagami Sans.",
                    "Its G has a spur.",
-                   "Quarter arcs reach 0.69 of the way to their corners."]),
+                   f"Quarter arcs reach {cf['round'][0]:.2f} of the way to their corners."]),
         "text": ("a free sans serif for long reading",
                  "Katagami Text is the member for reading. It has a lower x-height, is set smaller and tighter, and has wider round letters and capitals.",
                  ["The x-height is 0.71 of the cap height.",
@@ -237,7 +254,7 @@ def member_pages(F: dict, C: dict, M: dict) -> None:
                   "Its spacing is tighter.",
                   "The c's terminals sit closer together, the g's tail rises higher, the l is straight and the top of the t is cut at a slant.",
                   "The heavy weights are drawn lighter. Weight 700 sits at 640 on the design axis, and weight 800 sits at 760.",
-                  "Quarter arcs reach 0.59 of the way to their corners. No other member has rounder arcs."]),
+                  f"Quarter arcs reach {cf['text'][0]:.2f} of the way to their corners."]),
         "serif": ("a free serif font with rectangular serifs",
                   "Katagami Serif is Katagami Text with rectangular serifs. Each serif ends square and meets the stroke in a short bracket.",
                   ["Each serif reaches 0.85 of a stem past the stroke, and its thickness is 0.8 of the H crossbar's thickness.",
@@ -251,7 +268,7 @@ def member_pages(F: dict, C: dict, M: dict) -> None:
                  "Katagami Mono is Katagami Sans fitted to a monospace cell. It is for code, terminals and tables.",
                  ["Every character is 1280 units wide, which is 0.625 em.",
                   "Characters that look alike are drawn apart. The zero has a bar, the 1 has a long flag, i, l and j have flags, and the capital I has serifs.",
-                  "Code ligatures for ->, =>, !=, == and >= are off until you turn on dlig, and every character keeps its own cell.",
+                  f"Code ligatures for {and_list(code_ligatures())} are off until you turn on dlig, and every character keeps its own cell.",
                   "The 160 box-drawing and block characters from U+2500 to U+259F are drawn to join across lines.",
                   "The f, t and r keep their stems and stretch their arms into the cell.",
                   "The crossbar of the f keeps 0.18 of the cell to the left of its stem at every weight."]),
@@ -330,10 +347,19 @@ def katagami_row(keys: list, F: dict) -> dict:
 
 def compare_specs() -> list[dict]:
     """What each comparison compares and the facts it adds beyond the table."""
+    cf = curve_numbers()
+    at = lambda k: round(cf[k][0], 2)  # noqa: E731
+    rounder = [k for k in MEMBERS if k != "sans" and at(k) < at("sans")]
+    same = [k for k in MEMBERS if k != "sans" and at(k) == at("sans")]
+    arcs = f"Katagami Sans's quarter arcs reach {cf['sans'][0]:.2f} of the way to their corners, and the arcs of a circle reach {cf['circle'][0]:.3f}."
+    if rounder:
+        arcs += f" {members_phrase(rounder)} {'has' if len(rounder) == 1 else 'have'} rounder arcs than Katagami Sans."
+    if same:
+        arcs += f" {members_phrase(same)} {'has' if len(same) == 1 else 'have'} the same arcs as Katagami Sans."
     return [
         {"slug": "katagami-vs-inter", "other": "Inter", "members": ["sans", "round", "text", "serif"], "title": "Katagami vs Inter: differences, coverage and license",
          "lede": f"Katagami starts from Inter's open-source outlines, and both families are free under the SIL Open Font License. Katagami squares the curves and cuts terminals level. It adds a rounded member, a reading member, a serif and a mono, and it merges {MERGED} more scripts.",
-         "notes": ["Katagami Sans's quarter arcs reach 0.73 of the way to their corners, and the arcs of a circle reach 0.552. The other Katagami members are rounder than Katagami Sans.",
+         "notes": [arcs,
                    "Katagami cuts the ends of c, e, s, a and g level, and Katagami Sans has square punctuation.",
                    "Katagami adds Chinese, Japanese and Korean through four companion fonts that the web stylesheet assigns to its proportional members.",
                    "Katagami has small capitals through `smcp` and `c2sc`. Inter 4.1 removed its incomplete small capitals.",
@@ -423,6 +449,7 @@ def compare_pages(F: dict) -> None:
 # ---------- guides and explainers ----------
 
 def guide_pages(F: dict, C: dict, M: dict, T: dict) -> None:
+    cf = curve_numbers()
     def row(name, keys=("license", "weights", "axes", "features")):
         t = T.get(name, {})
         return [name, *[(t.get(k) or "unknown") for k in keys]]
@@ -517,8 +544,8 @@ def guide_pages(F: dict, C: dict, M: dict, T: dict) -> None:
     page("/learn/squared-curves", "Squared curves and the handle fraction in Katagami", "How far a curve's handles reach toward its corner decides how square a bowl looks. A table gives the handle fraction f for a circle and for Katagami Text, Round and Sans.",
          "Squared curves", "A quarter arc sits in a box whose corner is where its two end tangents meet. The handle fraction f is how far each handle reaches toward that corner.",
          [("h2", "The numbers"),
-          ("table", ["Curve", "Handle fraction f", "Superellipse exponent n"], [["Circle", "0.552", "2.00"], ["Katagami Text", "0.59", "2.13"], ["Katagami Round", "0.69", "2.43"], ["Katagami Sans", "0.73", "2.62"]]),
-          ("p", "A larger f reaches further toward the corner and reads as squarer. The exponent n of the superellipse with the same reach is `n = -1 / log2(0.375 f + 0.5)`."),
+          ("table", ["Curve", "Handle fraction f", "Superellipse exponent n"], [["Circle", f"{cf['circle'][0]:.3f}", f"{cf['circle'][1]:.2f}"], *[[FAMILY[k], f"{cf[k][0]:.2f}", f"{cf[k][1]:.2f}"] for k in ("text", "round", "sans")]]),
+          ("p", "A larger f reaches further toward the corner and reads as squarer. The exponent n is that of the superellipse that fits the arc most closely."),
           ("h2", "How Katagami squares a bowl"),
           ("p", "The build moves each curve's handles toward the corner by a share of the remaining distance. In Katagami Sans the share is 0.36 in capitals and 0.32 in lowercase. The build also condenses round letters, so the squared corners carry the area that the narrower width removes. The [Curves section on the About page](/about#curves) draws o and n in Inter and in every member over each other and gives f and n for each.")],
          [("Library", "/library"), ("Explainers", "/library#explainers"), ("Squared curves", "/learn/squared-curves")], image="learn", group="Learn")
@@ -575,7 +602,7 @@ def agent_pages(F: dict) -> None:
           ("h2", "Katagami Mono"),
           ("table", ["Range", "Code points", "Used for", "Katagami Mono"], rows),
           ("p", f"Katagami Mono draws the status characters {have}." + (f" It does not draw {lacks} yet." if lacks else "")),
-          ("p", "Its cell is 1,280 units wide, which is 0.625 em. Code ligatures for `->`, `=>`, `!=`, `==` and `>=` stay off until you turn on `dlig`, and each character in a ligature keeps its own cell."),
+          ("p", f"Its cell is 1,280 units wide, which is 0.625 em. Code ligatures for {and_list([f'`{lig}`' for lig in code_ligatures()])} stay off until you turn on `dlig`, and each character in a ligature keeps its own cell."),
           ("h2", "Terminal settings"),
           ("table", ["Terminal", "Setting"], [["Ghostty", '`font-family = "Katagami Mono"` in `~/.config/ghostty/config`'], ["Kitty", "`font_family Katagami Mono` in `kitty.conf`"],
                                               ["WezTerm", '`config.font = wezterm.font("Katagami Mono")`'], ["Alacritty", '`family = "Katagami Mono"` under `[font.normal]`'],
@@ -816,7 +843,7 @@ def write() -> None:
     sitemap = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
     for _, path in urls:
         prio = "1.0" if path == "/" else "0.8" if path.count("/") == 1 and not path.startswith(("/languages/", "/scripts/")) else "0.5"
-        sitemap.append(f"  <url><loc>{SITE_URL}{path}</loc><lastmod>{TODAY}</lastmod><priority>{prio}</priority></url>")
+        sitemap.append(f"  <url><loc>{SITE_URL}{path}</loc><lastmod>{record_date(path)}</lastmod><priority>{prio}</priority></url>")
     sitemap.append("</urlset>")
     (PUBLIC / "sitemap.xml").write_text("\n".join(sitemap) + "\n")
     bots = ["GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-User", "Claude-SearchBot", "PerplexityBot", "Perplexity-User",
@@ -840,6 +867,7 @@ def write() -> None:
                                                                     ("learn", "Explainers", "The explainers cover variable fonts, OpenType features, squared curves and katagami stencils."),
                                                                     ("script", "Scripts", f"Katagami draws or merges {SCRIPT_COUNT} scripts and sets Chinese, Japanese and Korean."),
                                                                     ("language", "Languages", f"Katagami's map has {len([p for p in PAGES if p['group'] == 'Languages'])} languages.")]]
+    (ROOT / "build").mkdir(exist_ok=True)
     (ROOT / "build" / "og.json").write_text(json.dumps(og, ensure_ascii=False, indent=1))
     print(f"{len(PAGES)} library pages, {len(urls)} URLs in the sitemap, {len(og)} card images to draw")
 

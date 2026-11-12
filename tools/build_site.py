@@ -30,6 +30,7 @@ plate read their glyphs, no longer draws them as fonts/ ships them.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import html
 import json
@@ -847,7 +848,7 @@ SITE_URL = "https://katagami.kevinliu.studio"
 # each served page: (title, description, Open Graph image, schema.org page type)
 PAGE_META = {
     "index.html": ("Katagami: a free variable type family in five members",
-                   f"Katagami is a free, open-source type family with five members: Sans, Round, Text, Serif and Mono. Each member is a variable roman and Italic with weights from 100 to 900, and the family sets {SCRIPT_COUNT} scripts plus Chinese, Japanese and Korean.",
+                   f"Katagami is a free, open-source type family with five members: Sans, Round, Text, Serif and Mono. Each member is a variable roman and Italic. Weights run from {WEIGHTS['sans'].replace(' ', ' to ')} in Sans, Round, Text and Serif and from {WEIGHTS['mono'].replace(' ', ' to ')} in Mono. The family sets {SCRIPT_COUNT} scripts plus Chinese, Japanese and Korean.",
                    "home", "WebPage"),
     "glyphs.html": ("Katagami glyphs: every character in five fonts",
                     "Search every character in Katagami Sans, Round, Text, Serif and Mono by character, Unicode name or code point, and see each glyph on its metric lines.",
@@ -894,7 +895,7 @@ def base_graph(facts: dict) -> list:
               "genre": "Typeface", "url": f"{SITE_URL}/",
               "description": PAGE_META["index.html"][1], "author": {"@id": person["@id"]}, "creator": {"@id": person["@id"]},
               "license": "https://openfontlicense.org/", "isAccessibleForFree": True, "softwareVersion": VERSION,
-              "dateCreated": "2026-10-07", "dateModified": facts["date"], "applicationCategory": "DesignApplication",
+              "dateCreated": "2026-10-07", "dateModified": fonts_date(), "applicationCategory": "DesignApplication",
               "operatingSystem": "macOS, Windows, Linux, Web", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
               "downloadUrl": f"{SITE_URL}/download/{ZIP}", "sameAs": [REPO],
               "keywords": "free font, variable font, open source font, OFL font, sans serif, serif, monospace font, multilingual font",
@@ -942,11 +943,47 @@ def record(page: str, meta: dict, stamps: dict) -> dict:
             "head": head.strip(), "main": main.strip(), "tail": tail.strip()}
 
 
+STAMP = re.compile(r"\?v=[0-9a-f]{10}")  # an asset's content hash in its address
+
+
+@functools.lru_cache(maxsize=None)
+def fonts_date() -> str:
+    """The day the committed fonts last changed, for the family's dateModified; today when git cannot say."""
+    try:
+        day = subprocess.run(["git", "-C", str(ROOT), "log", "-1", "--format=%cs", "--", "fonts"], capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        day = ""
+    return day or time.strftime("%Y-%m-%d")
+
+
+def page_date(rec: dict) -> str:
+    """The dateModified of a record's own page node, or "" when it has none."""
+    return next((node.get("dateModified", "") for node in rec.get("graph", []) if str(node.get("@id", "")).endswith("#page")), "")
+
+
+def content_key(rec: dict) -> str:
+    """What a page says, without the hashes in its asset addresses: two records with one key are the same page."""
+    return STAMP.sub("?v=", json.dumps([rec.get(k) for k in ("title", "description", "head", "main", "tail")], ensure_ascii=False))
+
+
+def record_date(here: str) -> str:
+    """The day the page at `here` last changed, read from its record; today for a page with no record yet."""
+    out = SITE / "content" / "pages" / (("index" if here == "/" else here.strip("/")) + ".json")
+    return (page_date(json.loads(out.read_text())) if out.exists() else "") or time.strftime("%Y-%m-%d")
+
+
 def emit(here: str, page: str, meta: dict, facts: dict, stamps: dict) -> None:
     """Write one page as a record under content/pages/."""
     out = SITE / "content" / "pages" / (("index" if here == "/" else here.strip("/")) + ".json")
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(record(page, meta, stamps), ensure_ascii=False, separators=(",", ":")))
+    new = record(page, meta, stamps)
+    if out.exists():
+        old = json.loads(out.read_text())
+        if page_date(old) and content_key(old) == content_key(new):
+            for node in new["graph"]:
+                if str(node.get("@id", "")).endswith("#page"):
+                    node["dateModified"] = page_date(old)  # the page says what it said, so it keeps its date
+    out.write_text(json.dumps(new, ensure_ascii=False, separators=(",", ":")))
 
 
 def write_site_facts(facts: dict, stamps: dict) -> None:
