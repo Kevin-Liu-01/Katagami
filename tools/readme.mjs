@@ -22,12 +22,18 @@ fs.mkdirSync(SITE_OUT, { recursive: true });
 const data = JSON.parse(fs.readFileSync(path.join(PUB, "data.js"), "utf8").replace(/^[^{]*/, "").replace(/;?\s*$/, ""));
 const fmt = (n) => n.toLocaleString("en-US");
 
+// `over` is the ink on a tile filled with ink, cut or score
 const THEMES = {
-  light: { sheet: "#f1f2ef", panel: "#f8f8f6", ink: "#111214", ink2: "#5d6165", cut: "#d92d20", score: "#2457c5", soft: "#e6e8e3" },
-  dark: { sheet: "#0e0f10", panel: "#151618", ink: "#ebece9", ink2: "#9a9ea2", cut: "#ff5246", score: "#6c94ff", soft: "#1f2124" },
+  light: { sheet: "#f1f2ef", panel: "#f8f8f6", ink: "#111214", ink2: "#5d6165", cut: "#d92d20", score: "#2457c5", soft: "#e6e8e3", over: "#f8f8f6" },
+  dark: { sheet: "#0e0f10", panel: "#151618", ink: "#ebece9", ink2: "#9a9ea2", cut: "#ff5246", score: "#6c94ff", soft: "#1f2124", over: "#0e0f10" },
 };
 const MEMBERS = [["sans", "Katagami Sans"], ["round", "Katagami Round"], ["text", "Katagami Text"], ["serif", "Katagami Serif"], ["mono", "Katagami Mono"]];
 const range = (k) => (k === "mono" ? "100 to 700" : "100 to 900");
+// the word settings in the twelve languages of the site's Font-ify film: language, BCP 47 tag, word
+const SETTINGS = [["English", "en", "Settings"], ["French", "fr", "Paramètres"], ["German", "de", "Einstellungen"],
+  ["Greek", "el", "Ρυθμίσεις"], ["Russian", "ru", "Настройки"], ["Arabic", "ar", "الإعدادات"],
+  ["Hebrew", "he", "הגדרות"], ["Hindi", "hi", "सेटिंग्स"], ["Thai", "th", "การตั้งค่า"],
+  ["Korean", "ko", "설정"], ["Japanese", "ja", "設定"], ["Chinese", "zh-Hans", "设置"]];
 
 const page = (t, body, css = "") => `<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/fonts/katagami.css"><style>
 html,body{margin:0;background:${t.panel};color:${t.ink};font-family:"Katagami Sans";-webkit-font-smoothing:antialiased}
@@ -40,7 +46,7 @@ const CARDS = {
   members: (t) => page(t, MEMBERS.map(([k, name]) => `<div class="row"><div class="tag">${name}<br>${range(k)}<br>${fmt(data[k].metrics.glyphs)} glyphs</div>
     <div class="s" style="font-family:'${name}';${k === "mono" ? "font-feature-settings:'dlig'" : ""}">${{
       sans: "Squared bowls and level cuts", round: "Every corner rounded at 0.22 stems", text: "A lower x-height for long reading",
-      serif: "Rectangular serifs, light contrast", mono: "0O 1lI {} => != -> fn(x)" }[k]}</div></div>`).join(""),
+      serif: "Rectangular serifs, moderate contrast", mono: "0O 1lI {} => != -> fn(x)" }[k]}</div></div>`).join(""),
     `.row{display:grid;grid-template-columns:150px 1fr;align-items:center;gap:24px;padding:16px 0}.row+.row{border-top:1px solid ${t.soft}}
      .s{font-size:40px;line-height:1.1;letter-spacing:-0.01em;white-space:nowrap}`),
 
@@ -77,6 +83,70 @@ const CARDS = {
       `<div><div class="tag">${tag}</div><div class="l">${label}</div></div><div class="o" style="font-family:'${fam}'">${s}</div><div class="n" style="font-family:'${fam}';font-feature-settings:'${tag}'">${s}</div>`).join("")}</div>`,
     `.ft{display:grid;grid-template-columns:220px 1fr 1fr;align-items:center;gap:10px 28px}.l{font-size:16px;margin-top:2px}
      .o,.n{font-size:38px;line-height:1.3;white-space:nowrap}.o{color:${t.ink2}}`),
+
+  // the word the Font-ify film sets: one family, twelve languages, on a checkerboard of the site's three inks
+  languages: (t) => {
+    const fill = [t.score, t.ink, t.cut];
+    return page(t, `<div class="lg">${SETTINGS.map(([name, lang, word], i) => {
+      const lit = (Math.floor(i / 3) + (i % 3)) % 2 === 0, bg = lit ? fill[Math.floor(i / 2) % 3] : t.sheet;
+      return `<div style="background:${bg};color:${lit ? t.over : t.ink}"><div class="tag">${name}</div><div class="x" lang="${lang}">${word}</div></div>`;
+    }).join("")}</div>`,
+    `.lg{display:grid;grid-template-columns:repeat(3,1fr)}.lg>div{position:relative;height:124px;display:grid;place-items:center}
+     .lg .tag{position:absolute;top:12px;left:14px;color:inherit;opacity:.7}.x{font-size:36px;line-height:1.3;white-space:nowrap}`);
+  },
+
+  // every script a member sets, upright and in its Italic
+  italics: (t) => page(t, `<div class="it"><div></div><div class="tag">Roman</div><div class="tag">Italic</div>${[
+    ...SETTINGS.filter(([name]) => ["English", "Greek", "Russian", "Arabic", "Hebrew", "Hindi", "Thai"].includes(name))
+      .map(([, lang, word], i) => [["Latin", "Greek", "Cyrillic", "Arabic", "Hebrew", "Devanagari", "Thai"][i], `<span lang="${lang}">${word}</span>`]),
+    ["CJK companions", SETTINGS.slice(9).map(([, lang, word]) => `<span lang="${lang}">${word}</span>`).join(" ")]].map(([tag, html]) =>
+      `<div class="tag">${tag}</div><div class="w">${html}</div><div class="w" style="font-style:italic">${html}</div>`).join("")}</div>`,
+    `.it{display:grid;grid-template-columns:170px 1fr 1fr;align-items:center;gap:4px 28px}.w{font-size:40px;line-height:1.45;white-space:nowrap}`),
+
+  // a coding agent's transcript in Katagami Mono, with its box drawing, status symbols and Braille
+  terminal: (t) => {
+    const m = data.mono.metrics, W = 58;
+    const row = (s = "") => `│ ${s}${" ".repeat(Math.max(0, W - [...s].length))} │`;
+    const c = (s, color) => `<span style="color:${color}">${s}</span>`;
+    const screen = [
+      `╭${"─".repeat(W + 2)}╮`, row(`✻ Katagami Mono`), row(`  ${fmt(m.glyphs)} glyphs · ${fmt(m.characters)} characters · ${m.weights[0]} to ${m.weights[1]}`), `╰${"─".repeat(W + 2)}╯`, "",
+      `${c(">", t.ink2)} check the fonts against the README`, "",
+      `${c("⏺", t.score)} Bash(.venv/bin/python -B tools/check.py)`,
+      `  ⎿  fonts and documents: 18 files checked, 0 mismatches`,
+      `     Ran 9 tests · OK`, "",
+      `${c("⏺", t.score)} Every count in README.md and SPEC.md matches the fonts.`, "",
+      `${c("✔", t.score)} 18 files  ${c("✔", t.score)} 9 tests  ${c("⏵⏵", t.ink2)} accept edits on`, "",
+      `${c("✻", t.cut)} Thinking… ${c("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏", t.ink2)}`].join("\n");
+    const braille = Array.from({ length: 256 }, (_, i) => String.fromCodePoint(0x2800 + i)).join("");
+    return page(t, `<pre class="term">${screen}</pre><div class="tag">All 256 Braille patterns, U+2800 to U+28FF</div>
+      <pre class="br">${[0, 64, 128, 192].map((i) => braille.slice(i, i + 64)).join("\n")}</pre>`,
+    `pre{margin:0;font-family:"Katagami Mono";line-height:1.21;white-space:pre}
+     .term{font-size:19px;background:${t.sheet};padding:22px 26px;border-radius:8px;margin-bottom:26px}.br{font-size:22px;margin-top:8px}`);
+  },
+
+  // five members on one line box: the rules are drawn at Katagami Sans's baselines, and every member's lines sit on them
+  lines: (t) => {
+    const key = (k) => ["upm", "ascender", "descender"].map((n) => data[k].metrics[n]).join(" ");
+    if (new Set(MEMBERS.map(([k]) => key(k))).size > 1) throw new Error(`the members' line metrics differ: ${MEMBERS.map(([k]) => key(k)).join(", ")}`);
+    const { upm, ascender, descender } = data.sans.metrics;
+    const words = ["Settings", "Ρυθμίσεις", "Настройки", "Billing", "Members"];
+    return page(t, `<div class="ln">${MEMBERS.map(([, n]) => `<div class="tag">${n.replace("Katagami ", "")}</div>`).join("")}
+      ${MEMBERS.map(([, n]) => `<div class="col" style="font-family:'${n}'">${words.map((w) => `<div class="l">${w}<span class="bl"></span></div>`).join("")}</div>`).join("")}
+      <div class="rules"></div></div>
+      <p class="cap">Blue rules are Katagami Sans's baselines and dashed rules the edges of its lines, at line-height normal. Every member has
+      ${upm} units per em, an ascender of ${ascender}, a descender of ${String(descender).replace("-", "−")} and no line gap.</p>
+      <script>document.fonts.ready.then(() => {
+        const box = document.querySelector(".ln").getBoundingClientRect(), rules = document.querySelector(".rules");
+        const at = (y, cls) => { const d = document.createElement("div"); d.className = cls; d.style.top = (y - box.top) + "px"; rules.append(d); };
+        const lines = [...document.querySelector(".col").querySelectorAll(".l")];
+        lines.forEach((l, i) => { const r = l.getBoundingClientRect();
+          at(r.top, "edge"); at(l.querySelector(".bl").getBoundingClientRect().top, "base"); if (i === lines.length - 1) at(r.bottom, "edge"); });
+      });</script>`,
+    `.ln{position:relative;display:grid;grid-template-columns:repeat(5,1fr);column-gap:14px;row-gap:14px}
+     .col{font-size:30px;line-height:normal;white-space:nowrap;position:relative;z-index:1}.bl{display:inline-block;width:0;height:0}
+     .rules{position:absolute;inset:0;pointer-events:none}.rules>div{position:absolute;left:0;right:0;height:0}
+     .edge{border-top:1px dashed color-mix(in srgb,${t.ink2} 45%,transparent)}.base{border-top:1px solid ${t.score}}.cap{margin:22px 0 0}`);
+  },
 };
 
 const b = await chromium.launch({ executablePath: CHROME });
@@ -104,10 +174,13 @@ for (const [scheme, t] of Object.entries(THEMES)) {
   s.setDefaultTimeout(90000);
   await s.goto(`${BASE}/`, { waitUntil: "networkidle" });
   await s.waitForTimeout(800);
-  await s.screenshot({ path: path.join(OUT, `hero-${scheme}.png`), clip: await s.locator("#hero").boundingBox() });
+  // the drawing, without the slider and buttons under it
+  await s.screenshot({ path: path.join(OUT, `hero-${scheme}.png`), clip: await s.locator(".c-hero .stage").boundingBox() });
   shrink.push(path.join(OUT, `hero-${scheme}.png`));
-  await s.goto(`${BASE}/map`, { waitUntil: "networkidle" });
-  await s.getByRole("button", { name: "World", exact: true }).click();
+  // the whole world (the map clamps a zoom of 1 to the widest view), without the map's tool bar
+  await s.goto(`${BASE}/map#20,10,1`, { waitUntil: "networkidle" });
+  await s.addStyleTag({ content: '[aria-label="Map tools"]{visibility:hidden!important}' });
+  await s.locator("#map").scrollIntoViewIfNeeded();
   await s.waitForTimeout(5000);
   await s.screenshot({ path: path.join(OUT, `map-${scheme}.png`), clip: await s.locator("#map").boundingBox() });
   shrink.push(path.join(OUT, `map-${scheme}.png`));
