@@ -876,8 +876,10 @@ MEMBER_PATHS = {"sans": "/katagami-sans", "round": "/katagami-round", "text": "/
 
 
 def asset_stamps() -> dict:
+    # the head films and their posters keep their names when they are recut, so their stamps carry the change
+    films = sorted(f"films/{p.name}" for p in (PUBLIC / "films").glob("*") if p.suffix in (".mp4", ".webp"))
     assets = ["data.js", "glyphs.js", "hero.js", "render.js", "fontify.js", "katagami-apply.js", "katagami-paper.js", *(f"fonts/{name}" for name in FIRST), "site.css", "site.js", "library.css", "glyph-wall.js", "glyph-wall.css", "map/map.json", "download/files.json",
-              "fonts/katagami.css", *(f"fonts/{name}" for name in (*WOFF2.values(), *WOFF2_ITALIC.values()))]
+              "fonts/katagami.css", *(f"fonts/{name}" for name in (*WOFF2.values(), *WOFF2_ITALIC.values())), *films]
     return {rel: hashlib.sha256((PUBLIC / rel).read_bytes()).hexdigest()[:10] for rel in assets if (PUBLIC / rel).exists()}
 
 
@@ -935,7 +937,9 @@ def record(page: str, meta: dict, stamps: dict) -> dict:
     page = re.sub(r"<title>.*?</title>\n?", "", page, count=1, flags=re.S)
     page = re.sub(r'<meta name="description"[^>]*>\n?', "", page, count=1)
     for rel, digest in stamps.items():
-        page = page.replace(f'"{rel}"', f'"/{rel}?v={digest}"').replace(f'"/{rel}"', f'"/{rel}?v={digest}"')
+        # a film's address ends in the time its play starts at (#t=), which follows the stamp
+        page = (page.replace(f'"{rel}"', f'"/{rel}?v={digest}"').replace(f'"/{rel}"', f'"/{rel}?v={digest}"')
+                .replace(f'"/{rel}#', f'"/{rel}?v={digest}#'))
     head, _, rest = page.partition("<!-- site:nav -->")
     main, _, tail = rest.partition("<!-- site:footer -->")
     return {"path": meta["path"], "title": meta["title"], "description": meta["description"], "image": meta.get("image", "home"),
