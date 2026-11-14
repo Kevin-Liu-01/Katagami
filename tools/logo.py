@@ -17,9 +17,11 @@ offcut. What remains reads as a K. Writes:
 
 from __future__ import annotations
 
+import math
 import os
 from pathlib import Path
 
+from fontTools.pens.boundsPen import BoundsPen
 from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.pens.transformPen import TransformPen
 from fontTools.ttLib import TTFont
@@ -40,6 +42,8 @@ KERF = 7
 STEM = 31
 APEX = (STEM + KERF, 50)
 REACH = 30
+# clear space around the logo's ink, in the same units: the mark is 100 tall and the word's cap height is 100
+PAD = 8
 
 
 def pieces() -> list[list[tuple[float, float]]]:
@@ -69,29 +73,39 @@ def mark_svg(fill: str = INK, cut_lines: bool = False, size: int = 100, theme: b
             f"{style}{body}</svg>\n")
 
 
-def word_paths(text: str, weight: int, height: float, x0: float) -> tuple[str, float]:
-    """The word set in Katagami Sans at `weight`, scaled so its cap height is `height`."""
+def word_paths(text: str, weight: int, height: float, x0: float) -> tuple[str, tuple[float, float, float, float]]:
+    """The word set in Katagami Sans at `weight`, scaled so its cap height is `height`, and the box
+    its ink fills: descenders, the dot of i and the overshoots of round letters included."""
     vf = TTFont(ROOT / "fonts" / "sans" / "KatagamiSans[wght].ttf")
     font = instantiateVariableFont(vf, {"wght": weight})
     gs, cmap = font.getGlyphSet(), font.getBestCmap()
     cap = font["OS/2"].sCapHeight
     s = height / cap
-    out, x = [], x0
+    out, x, boxes = [], x0, []
     for ch in text:
         name = cmap[ord(ch)]
-        pen = SVGPathPen(gs)
         # flip y: font units grow upward, SVG grows downward; the baseline sits at y = height
-        gs[name].draw(TransformPen(pen, (s, 0, 0, -s, x, height)))
+        place = (s, 0, 0, -s, x, height)
+        pen, bounds = SVGPathPen(gs), BoundsPen(gs)
+        gs[name].draw(TransformPen(pen, place))
+        gs[name].draw(TransformPen(bounds, place))
         out.append(pen.getCommands())
+        if bounds.bounds:
+            boxes.append(bounds.bounds)
         x += gs[name].width * s
-    return " ".join(out), x
+    box = (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
+    return " ".join(out), box
 
 
 def logo_svg() -> str:
     gap = 30
-    word, end = word_paths("Katagami", 600, 100, 100 + gap)
+    word, (left, top, right, bottom) = word_paths("Katagami", 600, 100, 100 + gap)
     body = "".join(f'<path d="{path(p)}"/>' for p in pieces()) + f'<path d="{word}"/>'
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {end:.0f} 100" height="100" fill="{INK}">'
+    # the mark fills 0 to 100 and the word stands on its baseline at 100, so the g's tail and the i's
+    # dot reach past that square; the viewBox holds all of the ink with PAD clear on every side
+    x0, y0 = math.floor(min(0, left) - PAD), math.floor(min(0, top) - PAD)
+    x1, y1 = math.ceil(max(100, right) + PAD), math.ceil(max(100, bottom) + PAD)
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{x0} {y0} {x1 - x0} {y1 - y0}" height="{y1 - y0}" fill="{INK}">'
             f"{body}</svg>\n")
 
 
