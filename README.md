@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/logo/katagami-logo-dark.svg">
-    <img src="docs/logo/katagami-logo.svg" alt="Katagami" height="52">
+    <img src="docs/logo/katagami-logo.svg" alt="Katagami" height="79">
   </picture>
 </p>
 
