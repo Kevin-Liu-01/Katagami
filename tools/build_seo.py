@@ -403,7 +403,7 @@ def compare_specs() -> list[dict]:
         {"slug": "katagami-vs-noto-sans", "other": "Noto Sans", "members": ["sans", "round", "text", "serif"], "title": "Katagami vs Noto Sans: multilingual coverage compared",
          "lede": f"The Noto project covers the scripts of Unicode across many fonts, and Noto Sans is its font for Latin, Greek and Cyrillic. Katagami draws its own Latin, Greek and Cyrillic. It merges {MERGED} scripts from the Noto fonts and scales them to Katagami's x-height.",
          "notes": ["Katagami's Latin, Greek and Cyrillic are its own design. Its Devanagari, Arabic, Thai, Ethiopic and other merged scripts use Noto's outlines.",
-                   "Katagami adds Chinese, Japanese and Korean through four companion fonts built from Noto Sans SC, TC, JP and KR."]},
+                   "Katagami adds Chinese, Japanese and Korean through four companion fonts built from Frex Sans GB and IBM Plex Sans TC, JP and KR."]},
     ]
 
 

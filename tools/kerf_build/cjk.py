@@ -1,6 +1,6 @@
 """The parts of the Katagami CJK build that work on whole tables: Katagami Sans's
 Latin core as a variable font on the CJK file's weight axis and its merge into
-the CJK file, glyph names, the direction of Noto's outer contours and the
+the CJK file, glyph names, the direction of the source's outer contours and the
 ligature carets."""
 
 from __future__ import annotations
@@ -333,17 +333,30 @@ def merge_latin(font: TTFont, latin: TTFont, v_origin: int, marks: set[str]) -> 
         if table.format in (4, 12) and table.isUnicode():
             table.cmap.update(have)
 
+    if "GDEF" not in font:  # Plex KR's subset keeps no glyph class, so it has no GDEF of its own
+        from fontTools.ttLib import newTable
+
+        font["GDEF"] = newTable("GDEF")
+        font["GDEF"].table = empty = ot.GDEF()
+        empty.Version = 0x00010000
+        empty.GlyphClassDef = empty.AttachList = empty.LigCaretList = empty.MarkAttachClassDef = None
     gdef, lgdef = font["GDEF"].table, latin["GDEF"].table
-    start = _merge_var_store(gdef.VarStore, lgdef.VarStore) if lgdef.VarStore else 0
+    if lgdef.VarStore and getattr(gdef, "VarStore", None) is None:  # a CJK font with no anchor variations takes the Latin's
+        gdef.VarStore, start = lgdef.VarStore, 0
+    else:
+        start = _merge_var_store(gdef.VarStore, lgdef.VarStore) if lgdef.VarStore else 0
     shift = _shift(var_data_by=start)
     for tag in ("GSUB", "GPOS"):
         if tag == "GPOS":
             _walk(latin[tag].table.LookupList, shift)
         _merge_layout(font[tag].table, latin[tag].table)
-    if gdef.GlyphClassDef or gdef.MarkAttachClassDef or getattr(gdef, "MarkGlyphSetsDef", None):
-        raise ValueError("the CJK font's GDEF already has glyph classes")
+    if gdef.MarkAttachClassDef or getattr(gdef, "MarkGlyphSetsDef", None):
+        raise ValueError("the CJK font's GDEF already has mark attachment classes or mark sets")
+    # the CJK font's own glyph classes (Plex TC classes some glyphs as bases) stay beside the Latin's
+    own = gdef.GlyphClassDef.classDefs if gdef.GlyphClassDef else {}
     gdef.GlyphClassDef = ot.GlyphClassDef()
-    gdef.GlyphClassDef.classDefs = {**(lgdef.GlyphClassDef.classDefs if lgdef.GlyphClassDef else {}), **{g: 3 for g in marks}}
+    gdef.GlyphClassDef.classDefs = {**own, **(lgdef.GlyphClassDef.classDefs if lgdef.GlyphClassDef else {}),
+                                    **{g: 3 for g in marks}}
     gdef.MarkAttachClassDef = lgdef.MarkAttachClassDef
     gdef.MarkGlyphSetsDef = getattr(lgdef, "MarkGlyphSetsDef", None)
     if lgdef.LigCaretList:

@@ -173,26 +173,33 @@ def _capped(pts: list, moved: list) -> list:
     return out
 
 
-def embolden(font: TTFont, strength: float) -> list[str]:
+def embolden(font: TTFont, strength: float, fixed_advance: bool = False,
+             per_glyph: dict[str, float] | None = None) -> list[str]:
     """Thicken (or, below zero, thin) every simple glyph by `strength` units on
     each axis, as FreeType's FT_Outline_EmboldenXY does: each point moves along
     the bisector of its two edges, so the point structure stays and the three
     masters still interpolate. Ink and advances grow by `strength`, and the
-    outlines move right by half of it, so sidebearings stay. On a contour that
+    outlines move right by half of it, so sidebearings stay. With `fixed_advance`
+    the ink grows in place and every advance stays, as a CJK font's full-width
+    em needs. `per_glyph` gives a glyph its own strength. On a contour that
     the move shrinks (a counter when thickening, an outer contour when thinning)
     each point moves at most CAP of the room ahead of it, and the contour moves
     only as far as it stays the same way round with no lobe inside out, so a
     tapered stroke thins at Thin and small counters stay open at Black. Returns
     the glyphs whose contours the second rule limits."""
-    if not strength:
+    if not strength and not per_glyph:
         return []
     glyf, hmtx = font["glyf"], font["hmtx"]
-    half = strength / 2
+    base = strength
     order = font.getGlyphOrder()
     limited = []
     for name in order:
         g = glyf[name]
         if g.isComposite() or g.numberOfContours <= 0:
+            continue
+        strength = per_glyph.get(name, base) if per_glyph else base
+        half = strength / 2
+        if not strength:
             continue
         coords = list(g.coordinates)
         ends = list(g.endPtsOfContours)
@@ -219,17 +226,19 @@ def embolden(font: TTFont, strength: float) -> list[str]:
                         hi = mid
                 moved = _capped(pts, _moved(pts, half * lo, truetype))
                 limited.append(name)
-            new += [(x + half, y) for x, y in moved]
+            new += [(x + (0 if fixed_advance else half), y) for x, y in moved]
         g.coordinates = type(g.coordinates)([(round(x), round(y)) for x, y in new])
         g.recalcBounds(glyf)
         width, _ = hmtx[name]
-        hmtx[name] = (max(0, round(width + strength)) if width else 0, g.xMin)
+        grown = width if fixed_advance else round(width + strength)
+        hmtx[name] = (max(0, grown) if width else 0, g.xMin)
     for name in order:
         g = glyf[name]
         if g.isComposite():
             g.recalcBounds(glyf)
             width, _ = hmtx[name]
-            hmtx[name] = (max(0, round(width + strength)) if width else 0, g.xMin)
+            grown = width if fixed_advance else round(width + (per_glyph.get(name, base) if per_glyph else base))
+            hmtx[name] = (max(0, grown) if width else 0, g.xMin)
     return sorted(set(limited))
 
 

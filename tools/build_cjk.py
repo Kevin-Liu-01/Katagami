@@ -1,10 +1,14 @@
 """Build Katagami CJK SC, TC, JP and KR: Chinese, Japanese and Korean companions to
-the Katagami members, from Google's Noto Sans SC, TC, JP and KR (SIL OFL 1.1).
+the Katagami members, from Frex Sans GB and IBM Plex Sans TC, JP and KR (SIL OFL 1.1).
 
     python tools/build_cjk.py [SC TC JP KR] [--roman|--italic]
 
 These stay separate from the members, as Pretendard JP does, so a page fetches a
-CJK file only when it shows CJK text. Each is Noto's variable font subset to a
+CJK file only when it shows CJK text. Plex is a grotesque with a squared,
+engineered Latin, as Katagami's is, and Frex Sans GB is its fork that draws the
+shapes of China's national standard. `kerf_build.cjk_source` puts each source on
+Katagami's weight axis, 100 to 900, with a Black thickened from Bold, and lends
+it the characters it lacks from the other three. Each is then subset to a
 national character standard:
 
     SC  GB 2312: 6,763 hanzi and its CJK symbols
@@ -12,7 +16,7 @@ national character standard:
     JP  JIS X 0208: 6,355 kanji, hiragana, katakana and its symbols
     KR  all 11,172 Hangul syllables and the jamo
 
-plus CJK punctuation and the full-width forms. In place of Noto's Latin each
+plus CJK punctuation and the full-width forms. In place of the source's Latin each
 file has Katagami Sans's: Google Fonts' Latin core, the auxiliary letters of its
 languages and the dotted circle, with Sans's kerning, marks, composition,
 language forms and contextual punctuation, so Latin in a CJK file sets as it
@@ -20,7 +24,7 @@ does in Katagami Sans at every weight. The website serves the CJK characters
 alone and sets Latin, Greek and Cyrillic in the members.
 
 The Latin is merged at Katagami's 2048-unit em and each file is saved at
-Noto's 1000-unit em, because at 2048 Katagami CJK TC is over Google Fonts'
+the sources' 1000-unit em, because at 2048 Katagami CJK TC is over Google Fonts'
 9 MiB limit. Its hhea and win metrics hold Katagami's line (1984 and -494 on
 2048, no gap), so apps space its lines as Katagami's,
 and its typo metrics follow Google's CJK rule (0.88 and -0.12 em, no gap,
@@ -28,7 +32,7 @@ USE_TYPO_METRICS off). The website sets a CJK file in the same CSS family as a
 Katagami member with unicode-range, and its @font-face rules give it the same
 line with ascent-override, descent-override and line-gap-override.
 
-Each companion has a roman and an Italic. The Italic is Noto's letters slanted
+Each companion has a roman and an Italic. The Italic is the source's letters slanted
 by Katagami Sans Italic's angle about its half x-height (`kerf_build.slant`),
 as the members' Italics slant their letters, with Sans Italic's Latin.
 
@@ -54,20 +58,20 @@ from finish import prune_unreachable, stat, unhinted  # noqa: E402
 from chws_tool import add_chws  # noqa: E402
 from kerf_build.cjk import (build_latin, glyph_names, lig_carets, ligatures, merge_latin,  # noqa: E402
                             reverse_ccw_outers, unicode_marks)
+from kerf_build.cjk_source import assemble, credits  # noqa: E402
 from kerf_build.contours import fix_shared_segments  # noqa: E402
 from kerf_build.fontops import VENDOR, VERSION, italic_style  # noqa: E402
 from kerf_build.slant import slant  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-NOTO = ROOT / "vendor" / "noto"
 SANS = ROOT / "fonts" / "sans" / "KatagamiSans[wght].ttf"
 SANS_ITALIC = ROOT / "fonts" / "sans" / "KatagamiSans-Italic[wght].ttf"
 OUT = ROOT / "fonts" / "cjk"
 UPM = 2048  # the em the Latin is merged at, Katagami's
-FILE_UPM = 1000  # the em the files are saved at, Noto's: at 2048 Katagami CJK TC passes Google Fonts' 9 MiB limit
+FILE_UPM = 1000  # the em the files are saved at, the sources': at 2048 Katagami CJK TC passes Google Fonts' 9 MiB limit
 KERF_LINE = {"ascender": 1984, "descender": -494, "lineGap": 0}  # Katagami Sans's line, here in hhea and win
 # Google's CJK rule: typo metrics at 0.88 and -0.12 em with no gap, USE_TYPO_METRICS off,
-# hhea equal to win. The typo ascender is also the vertical origin of Noto's glyphs.
+# hhea equal to win. The typo ascender is also the vertical origin of the sources' glyphs.
 CJK_TYPO = {"ascender": round(0.88 * UPM), "descender": round(-0.12 * UPM), "lineGap": 0}
 SCRIPT = {"SC": "Hans", "TC": "Hant", "JP": "Jpan", "KR": "Kore"}  # the meta table's script tags
 SHARED = [(0x3000, 0x303F), (0xFF00, 0xFFEF), (0x3200, 0x32FF), (0x3300, 0x33FF)]  # punctuation, full width, enclosed
@@ -102,7 +106,7 @@ def big5_chars() -> set[int]:
 
 
 def charset(region: str) -> set[int]:
-    """The characters taken from Noto. Katagami Sans supplies the space and the rest of the Latin."""
+    """The characters taken from the source. Katagami Sans supplies the space and the rest of the Latin."""
     shared = {u for lo, hi in SHARED for u in range(lo, hi + 1)}
     if region == "SC":
         return {u for u in euc_chars("gb2312") if u >= 0x2E80} | shared
@@ -117,9 +121,11 @@ def charset(region: str) -> set[int]:
     return hangul | shared
 
 
-def rename(font: TTFont, family: str, italic: bool) -> None:
-    """Names the default instance, Thin in Noto's variable fonts, as Google Fonts
-    names it, and in an Italic every named instance as an Italic (Thin Italic)."""
+def rename(font: TTFont, family: str, italic: bool, credit: str, designers: str) -> None:
+    """Names the default instance, Thin, as Google Fonts names it, and in an Italic
+    every named instance as an Italic (Thin Italic). The sources' own names go,
+    IBM's trademark line with them, since no Katagami name uses theirs; the
+    copyright line keeps their notices and the designer line their designers."""
     ps = family.replace(" ", "")
     name = font["name"]
     version = f"{VERSION[0]}.{VERSION[1]:03d}"
@@ -131,40 +137,32 @@ def rename(font: TTFont, family: str, italic: bool) -> None:
     default = {a.axisTag: a.defaultValue for a in font["fvar"].axes}
     style = next(name.getDebugName(i.subfamilyNameID) for i in font["fvar"].instances if i.coordinates == default)
     weight = style.removesuffix("Italic").strip() or "Regular"
-    for rec in list(name.names):
-        if rec.nameID == 1:
-            rec.string = family if weight == "Regular" else f"{family} {weight}"
-        elif rec.nameID == 4:
-            rec.string = f"{family} {style}"
-        elif rec.nameID == 2:
-            rec.string = "Italic" if italic else "Regular"
-        elif rec.nameID == 16:
-            rec.string = family
-        elif rec.nameID == 17:
-            rec.string = style
-        elif rec.nameID == 6:
-            rec.string = f"{ps}-{style.replace(' ', '')}"
-        elif rec.nameID == 3:
-            rec.string = f"{version};{VENDOR};{ps}-{style.replace(' ', '')}"
-        elif rec.nameID == 5:
-            rec.string = f"Version {version}"
-        elif rec.nameID == 25:
-            rec.string = ps + ("Italic" if italic else "")
-        elif rec.nameID == 13:
-            rec.string = ("This Font Software is licensed under the SIL Open Font License, Version 1.1. "
-                          "This license is available with a FAQ at: https://openfontlicense.org")
-        elif rec.nameID == 14:
-            rec.string = "https://openfontlicense.org"
-    for rec in name.names:
-        if rec.nameID == 0:
-            noto = rec.toUnicode().replace("(c)", "Copyright")
-            rec.string = ("Copyright 2026 The Katagami Project Authors (https://github.com/Kevin-Liu-01/Katagami). "
-                          f"Derived from Noto Sans CJK, {noto}")
+    name.names = [rec for rec in name.names if rec.nameID >= 256]
+    for nid, text in {
+        0: f"Copyright 2026 The Katagami Project Authors (https://github.com/Kevin-Liu-01/Katagami). {credit}",
+        1: family if weight == "Regular" else f"{family} {weight}",
+        2: "Italic" if italic else "Regular",
+        3: f"{version};{VENDOR};{ps}-{style.replace(' ', '')}",
+        4: f"{family} {style}",
+        5: f"Version {version}",
+        6: f"{ps}-{style.replace(' ', '')}",
+        8: "The Katagami Project Authors",
+        9: f"Kevin Liu (Latin); {designers}",
+        11: "https://github.com/Kevin-Liu-01/Katagami",
+        12: "https://github.com/Kevin-Liu-01",
+        13: ("This Font Software is licensed under the SIL Open Font License, Version 1.1. "
+             "This license is available with a FAQ at: https://openfontlicense.org"),
+        14: "https://openfontlicense.org",
+        16: family,
+        17: style,
+        25: ps + ("Italic" if italic else ""),
+    }.items():
+        name.setName(text, nid, 3, 1, 0x409)
 
 
 def style_bits(font: TTFont, sans: TTFont, italic: bool) -> None:
     """REGULAR or ITALIC in fsSelection and macStyle, and in an Italic the Latin's
-    italic angle and caret slope. A roman keeps Noto's upright caret."""
+    italic angle and caret slope. A roman keeps the source's upright caret."""
     os2, head = font["OS/2"], font["head"]
     os2.fsSelection = os2.fsSelection & ~(1 << 0 | 1 << 5 | 1 << 6) | (1 << 0 if italic else 1 << 6)
     head.macStyle = (head.macStyle & ~0b11) | (0b10 if italic else 0)
@@ -183,7 +181,7 @@ def set_metrics(font: TTFont, sans: TTFont) -> None:
     os2.fsSelection &= ~(1 << 7)
     # the Latin is Sans's, so are its x-height and cap height
     os2.sxHeight, os2.sCapHeight = sans["OS/2"].sxHeight, sans["OS/2"].sCapHeight
-    # code pages are read from a few test characters each, so Noto's CJK pages are kept as well
+    # code pages are read from a few test characters each, so the source's CJK pages are kept as well
     pages = os2.ulCodePageRange1, os2.ulCodePageRange2
     os2.recalcUnicodeRanges(font)
     os2.recalcCodePageRanges(font)
@@ -194,7 +192,7 @@ def set_metrics(font: TTFont, sans: TTFont) -> None:
 
 def latin_font(sans_path: Path, cjk: TTFont, cache: dict) -> TTFont:
     """Katagami Sans's (or Sans Italic's) Latin on the CJK file's axis, a fresh copy
-    for each merge. It is built once per avar; Noto's four files share one."""
+    for each merge. It is built once per avar, so a roman and its Italic share one."""
     key = (sans_path, repr(cjk["avar"].segments))
     if key not in cache:
         buf = io.BytesIO()
@@ -204,10 +202,12 @@ def latin_font(sans_path: Path, cjk: TTFont, cache: dict) -> TTFont:
 
 
 def build(region: str, cache: dict, italic: bool = False) -> Path:
-    noto = NOTO / f"NotoSans{region}[wght].ttf"
     chars = charset(region)
-    font = TTFont(noto)
-    font.setGlyphOrder(glyph_names(TTFont(noto), chars))  # before any table is read, so every table takes the names
+    if ("source", region) not in cache:  # the roman and the Italic start from one source
+        cache["source", region] = assemble(region, chars)
+    source, used = cache["source", region]
+    font = TTFont(source)
+    font.setGlyphOrder(glyph_names(TTFont(source), chars))  # before any table is read, so every table takes the names
     have = font.getBestCmap()
     opts = subset.Options()
     opts.layout_features = ["*"]
@@ -230,7 +230,7 @@ def build(region: str, cache: dict, italic: bool = False) -> Path:
     add_HVAR(font)  # from every glyph's phantom-point deltas, so it covers the Latin
     lig_carets(font, ligatures(font))
     set_metrics(font, sans)
-    rename(font, f"Katagami CJK {region}", italic)
+    rename(font, f"Katagami CJK {region}", italic, *credits(used))
     style_bits(font, sans, italic)
     stat(font, italic)
     font["OS/2"].achVendID = VENDOR

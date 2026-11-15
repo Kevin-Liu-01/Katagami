@@ -62,7 +62,34 @@ NOTO2=(notosanstifinagh/NotoSansTifinagh-Regular.ttf "notosansolchiki/NotoSansOl
        "notosansthaana/NotoSansThaana[wght].ttf" notosansvai/NotoSansVai-Regular.ttf
        "notosanscanadianaboriginal/NotoSansCanadianAboriginal[wght].ttf")
 for entry in "${NOTO2[@]}"; do noto "${entry%%/*}" "${entry##*/}"; done
-for cjk in SC TC JP KR; do noto "notosans$(printf %s "$cjk" | tr '[:upper:]' '[:lower:]')" "NotoSans$cjk[wght].ttf"; done
+
+# The CJK companions' sources (SIL OFL 1.1): the masters of IBM Plex Sans JP, KR and TC from each
+# release's sources.zip, and Frex Sans GB's variable font from its release. Each archive must match its SHA-256.
+# cjk_source DIR URL SHA256 MEMBER: MEMBER of the archive at URL, unpacked into vendor/DIR once
+cjk_source() {
+  local dir=$1 url=$2 want=$3 member=$4 zip got
+  zip="vendor/$dir/$(basename "$url")"
+  mkdir -p "vendor/$dir"
+  if [[ ! -f "$zip" ]]; then
+    curl -sfL -o "$zip.part" "$url" || { echo "Could not download $url." >&2; exit 1; }
+    got=$(sha256 "$zip.part")
+    [[ "$got" == "$want" ]] || { echo "The download of $url has SHA-256 $got and tools/build.sh expects $want." >&2; exit 1; }
+    mv "$zip.part" "$zip"
+  fi
+  got=$(sha256 "$zip")
+  [[ "$got" == "$want" ]] || { echo "$zip has SHA-256 $got and tools/build.sh expects $want. Delete the file and run again." >&2; exit 1; }
+  # unzip reads [ and ] as a pattern, so they are escaped
+  [[ -f "vendor/$dir/$(basename "$member")" ]] || unzip -q -j -o "$zip" "$(printf %s "$member" | sed 's/\[/\\[/g; s/\]/\\]/g')" -d "vendor/$dir"
+}
+PLEX=https://github.com/IBM/plex/releases/download
+cjk_source plex/jp "$PLEX/%40ibm%2Fplex-sans-jp%403.0.0/sources.zip" \
+  4ac6374873b634a9dc19cd2b8f40e9acfe55ea37c269c08c0dcdb9b2abdce3de "sources/masters/IBM Plex Sans JP.glyphs"
+cjk_source plex/kr "$PLEX/%40ibm%2Fplex-sans-kr%401.1.0/sources.zip" \
+  69e8e90ca6966c7fe10f74655efc18ef4b12da4a2ca97607bbaa967b3da447e5 "sources/masters/IBM Plex Sans KR.glyphs"
+cjk_source plex/tc "$PLEX/%40ibm%2Fplex-sans-tc%401.1.1/sources.zip" \
+  93649217ac3222b2117175b4fcb862636e571595f5fd3a42a27c04520ccba139 "sources/masters/IBM Plex Sans TC.glyphs"
+cjk_source frex https://github.com/maoken-fonts/frex-sans/releases/download/v1.100/FrexSansGB.zip \
+  a82c3254c7f1070ce227cb9afbc6f98a30d32ba202f7c83275992141dfb52c15 "variable/Frex Sans GB[wght].ttf"
 
 # Inter's masters as UFOs in build/ufo and build/ufo-italic. A stamp beside each folder names the
 # Inter commit it was converted from, and a folder from another commit is converted again.
@@ -74,7 +101,7 @@ for dir in ufo ufo-italic; do
 done
 
 if [[ "$which" == fetch ]]; then
-  echo "Sources fetched and checked: Inter at ${INTER_COMMIT:0:7}, $(wc -l < tools/noto.sha256 | tr -d ' ') Noto files at ${NOTO_COMMIT:0:7}."
+  echo "Sources fetched and checked: Inter at ${INTER_COMMIT:0:7}, $(wc -l < tools/noto.sha256 | tr -d ' ') Noto files at ${NOTO_COMMIT:0:7}, IBM Plex Sans JP, KR and TC and Frex Sans GB."
   exit 0
 fi
 
