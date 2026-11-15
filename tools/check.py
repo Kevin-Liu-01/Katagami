@@ -30,10 +30,10 @@ EXPECT = {
     "text/KatagamiText[wght].ttf": (15212, 8346, WIDE, 9), "text/KatagamiText-Italic[wght].ttf": (15212, 8346, WIDE, 9),
     "serif/KatagamiSerif[wght].ttf": (15212, 8346, WIDE, 9), "serif/KatagamiSerif-Italic[wght].ttf": (15212, 8346, WIDE, 9),
     "mono/KatagamiMono[wght].ttf": (4123, 3378, MONO, 7), "mono/KatagamiMono-Italic[wght].ttf": (4123, 3378, MONO, 7),
-    "cjk/KatagamiCJKSC[wght].ttf": (8865, 8138, CJK, 9), "cjk/KatagamiCJKSC-Italic[wght].ttf": (8866, 8138, CJK, 9),
-    "cjk/KatagamiCJKTC[wght].ttf": (15239, 14524, CJK, 9), "cjk/KatagamiCJKTC-Italic[wght].ttf": (15240, 14524, CJK, 9),
-    "cjk/KatagamiCJKJP[wght].ttf": (9107, 7729, CJK, 9), "cjk/KatagamiCJKJP-Italic[wght].ttf": (9108, 7729, CJK, 9),
-    "cjk/KatagamiCJKKR[wght].ttf": (15195, 12792, CJK, 9), "cjk/KatagamiCJKKR-Italic[wght].ttf": (15196, 12792, CJK, 9),
+    "cjk/KatagamiCJKSC[wght].ttf": (8488, 7949, CJK, 9), "cjk/KatagamiCJKSC-Italic[wght].ttf": (8489, 7949, CJK, 9),
+    "cjk/KatagamiCJKTC[wght].ttf": (15053, 14325, CJK, 9), "cjk/KatagamiCJKTC-Italic[wght].ttf": (15054, 14325, CJK, 9),
+    "cjk/KatagamiCJKJP[wght].ttf": (12583, 7540, CJK, 9), "cjk/KatagamiCJKJP-Italic[wght].ttf": (12584, 7540, CJK, 9),
+    "cjk/KatagamiCJKKR[wght].ttf": (12579, 12245, CJK, 9), "cjk/KatagamiCJKKR-Italic[wght].ttf": (12580, 12245, CJK, 9),
 }
 
 

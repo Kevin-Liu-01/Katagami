@@ -88,7 +88,7 @@ This is the word settings in twelve languages, all set from the one stylesheet i
 
 - **Drawn:** Latin, Greek and Cyrillic.
 - **Merged:** Arabic, Hebrew, Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala, Thai, Lao, Myanmar, Khmer, Georgian, Armenian, Ethiopic, Tifinagh, Ol Chiki, Coptic, Tibetan, Hanifi Rohingya, N'Ko, Thaana, Vai and Canadian Aboriginal syllabics, merged from Noto and scaled to Katagami's x-height. Tibetan comes from Noto Serif Tibetan, the only Noto Tibetan. Each proportional member maps 8,346 characters.
-- **Companions:** Katagami CJK SC (8,138 characters), TC (14,524), JP (7,729) and KR (12,792), built from Noto Sans SC, TC, JP and KR. The web stylesheet assigns them to Sans, Round, Text and Serif.
+- **Companions:** Katagami CJK SC (7,949 characters), TC (14,325), JP (7,540) and KR (12,245), built from Frex Sans GB and IBM Plex Sans TC, JP and KR. The web stylesheet assigns them to Sans, Round, Text and Serif.
 
 ### An Italic for every script
 
@@ -161,7 +161,7 @@ flowchart LR
   noto["Noto<br/>28 scripts"] --> world
   sans -- "Sans masters" --> mono["build_mono.py<br/>1280-unit cell"]
   mono --> fontmake2["fontmake"]
-  notocjk["Noto Sans SC, TC, JP, KR"] --> cjk["build_cjk.py"]
+  plexcjk["Frex Sans GB<br/>IBM Plex Sans TC, JP, KR"] --> cjk["build_cjk.py"]
   world --> finish["finish.py<br/>names, STAT, version"]
   fontmake --> finish
   fontmake2 --> finish
@@ -192,7 +192,7 @@ tools/build.sh serif-italic   # one member's Italic (or serif-roman)
 tools/build.sh fetch          # only download and check the sources
 ```
 
-The build fetches Inter's sources at a pinned commit into `vendor/inter` and Noto's fonts at a pinned commit into `vendor/noto`. It checks every Noto file against the SHA-256 list in `tools/noto.sha256` and stops on a file that does not match. A proportional member takes 15 to 40 minutes on a busy machine, most of it in fontmake and the script merge. Mono takes a few minutes after Sans.
+The build fetches Inter's sources at a pinned commit into `vendor/inter` and Noto's fonts at a pinned commit into `vendor/noto`. It checks every Noto file against the SHA-256 list in `tools/noto.sha256` and stops on a file that does not match. For the CJK companions it fetches the masters of IBM Plex Sans TC, JP and KR from each release's `sources.zip` into `vendor/plex`, and Frex Sans GB's release into `vendor/frex`, each archive checked against the SHA-256 in `tools/build.sh`. The build compiles each Plex font once into `build/cjk-src`, which takes from a few minutes for KR to most of an hour for JP. A proportional member takes 15 to 40 minutes on a busy machine, most of it in fontmake and the script merge. Mono takes a few minutes after Sans.
 
 `.venv/bin/python -B tools/check.py` checks the committed fonts against the numbers in this README and in SPEC.md, and tests the build's pure helpers. It builds nothing and takes a few seconds.
 
@@ -257,4 +257,4 @@ The name comes from katagami (型紙, "pattern paper"), the Japanese paper stenc
 
 ## License
 
-Katagami is licensed under the [SIL Open Font License 1.1](OFL.txt). It is a modified version of Inter and keeps the copyright notices of Inter, of Noto and of Adobe, whose Noto Sans CJK the companions are built from. The build code in `tools/` is licensed under the [MIT License](tools/LICENSE).
+Katagami is licensed under the [SIL Open Font License 1.1](OFL.txt). It is a modified version of Inter and keeps the copyright notices of Inter and of Noto. The CJK companions are modified versions of IBM Plex Sans TC, JP and KR and of Frex Sans GB, and keep IBM's notice with its Reserved Font Name "Plex" and the Frex Sans authors' notice; no Katagami name uses "Plex". The build code in `tools/` is licensed under the [MIT License](tools/LICENSE).
