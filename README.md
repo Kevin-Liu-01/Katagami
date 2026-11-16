@@ -185,14 +185,14 @@ Python 3.11 or later, git and curl are required. The website tools also need Nod
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.lock   # the exact packages that built Katagami 1.2
+.venv/bin/pip install -r requirements.lock   # the exact packages that built Katagami 1.3
 tools/build.sh                # every member, roman and Italic, and the CJK companions
 tools/build.sh serif          # one member: sans, round, text, serif, mono or cjk
 tools/build.sh serif-italic   # one member's Italic (or serif-roman)
 tools/build.sh fetch          # only download and check the sources
 ```
 
-The build fetches Inter's sources at a pinned commit into `vendor/inter` and Noto's fonts at a pinned commit into `vendor/noto`. It checks every Noto file against the SHA-256 list in `tools/noto.sha256` and stops on a file that does not match. For the CJK companions it fetches the masters of IBM Plex Sans TC, JP and KR from each release's `sources.zip` into `vendor/plex`, and Frex Sans GB's release into `vendor/frex`, each archive checked against the SHA-256 in `tools/build.sh`. The build compiles each Plex font once into `build/cjk-src`, which takes from a few minutes for KR to most of an hour for JP. A proportional member takes 15 to 40 minutes on a busy machine, most of it in fontmake and the script merge. Mono takes a few minutes after Sans.
+The build fetches Inter's sources at a pinned commit into `vendor/inter` and Noto's fonts at a pinned commit into `vendor/noto`. It checks every Noto file against the SHA-256 list in `tools/noto.sha256` and stops on a file that does not match. For the CJK companions it fetches the masters of IBM Plex Sans TC, JP and KR from each release's `sources.zip` into `vendor/plex`, IBM's static Plex Sans JP and TC at a pinned commit, for the `palt` and `vpal` values IBM adds when it exports them, and Frex Sans GB's release into `vendor/frex`, each file checked against the SHA-256 in `tools/build.sh`. The build compiles each Plex font once into `build/cjk-src`, which takes from a few minutes for KR to most of an hour for JP. A proportional member takes 15 to 40 minutes on a busy machine, most of it in fontmake and the script merge. Mono takes a few minutes after Sans.
 
 `.venv/bin/python -B tools/check.py` checks the committed fonts against the numbers in this README and in SPEC.md, and tests the build's pure helpers. It builds nothing and takes a few seconds.
 
@@ -243,7 +243,7 @@ After a build, these commands write the website into a checkout of its repositor
 
 ## Status
 
-Katagami 1.2 is out. Version 1.0 was released on 4 November 2026, and 1.1 and 1.2 followed on 7 November. In 1.2 Katagami Serif's small capitals are as heavy as its lowercase. In 1.1 they were heavier at every weight, and at 800 and 900 the counters of M, N, U and K filled in. The 1.2 download, on the site and in the GitHub release, was rebuilt on 12 November 2026 with two fixes and the same version number. Every member's Windows clipping box now covers every glyph at every weight, where at Black 15 glyphs of each proportional member had fallen below it. Katagami Serif's dotted circle now takes its dots from the stem before the serifs are cut, so its dots grow with the weight and its ring stands as tall as the x-height.
+Katagami 1.3 is out. Version 1.0 was released on 4 November 2026, 1.1 and 1.2 followed on 7 November, and 1.3 on 16 November. In 1.3 the four CJK companions are built from IBM Plex Sans TC, JP and KR and from Frex Sans GB in place of Noto Sans CJK, so their hanzi, kana and Hangul follow Plex's squared design, and each has its own Black. 1.3 also keeps the two fixes the 1.2 download gained on 12 November. Every member's Windows clipping box covers every glyph at every weight, where at Black 15 glyphs of each proportional member had fallen below it. Katagami Serif's dotted circle takes its dots from the stem before the serifs are cut, so its dots grow with the weight and its ring stands as tall as the x-height. In 1.2 Katagami Serif's small capitals became as heavy as its lowercase; in 1.1 they were heavier at every weight, and at 800 and 900 the counters of M, N, U and K filled in.
 
 1.1 gave each Italic the 28 merged scripts and each CJK companion an Italic. Since 0.1 Katagami has gained an Italic for every member, a reworked Katagami Serif (serifs that hold at Thin, a lighter Black, crisper brackets, even spacing and small facets on its curved terminals), two hand corrections (a straight Q tail and a squarer 2), Greek and Cyrillic fitted to Katagami Mono's cell, nine more scripts, 93 characters Inter does not have, small capitals for 620 letters, accents that attach to Cyrillic and Greek letters, and corrected names, version numbers, STAT, gasp and prep tables, and Windows clipping metrics.
 
