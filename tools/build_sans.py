@@ -307,6 +307,194 @@ def lower_xheight(fonts, k: float) -> None:
         f.info.xHeight = round(xh * k)
 
 
+# Katagami Serif's g has two bowls, as Geist Serif's does. Every part is drawn from the master's
+# own o, so the masters stay compatible and the strokes keep the member's weight and contrast.
+G_BOWL = (0.72, 0.64)  # the upper bowl's outer width and height, as shares of o's
+G_TILT = 7.0  # degrees the upper bowl leans back, its top to the left, as Geist Serif's eye does
+G_LOOP = (0.88, 0.17)  # the lower loop's outer width, a share of o's, and its top, a share of the x-height
+G_BAND = 1.0  # the lower loop's top band, in stems; its foot keeps o's hairline
+G_LINK = 0.62  # the link from the upper bowl down to the band, in stems
+G_EAR = (0.6, 0.45, 1.3)  # the ear: how far past the bowl it reaches, how far above it rises, and how tall its upright end is, in stems
+G_FORMS = ("gcursive", "ghook", "gbar")  # built on g, drawn with one bowl: drawn out of g first so they keep it
+
+
+def _flat(contour, steps: int = 24) -> list[tuple[float, float]]:
+    """A contour as a dense polygon (cubic segments sampled)."""
+    pts = contour.points
+    n = len(pts)
+    start = next(i for i, q in enumerate(pts) if q.type is not None)
+    out = []
+    k = start
+    for _ in range(n):
+        q = pts[k]
+        if q.type is not None:
+            # the segment ending at the next on-curve point
+            run = [k]
+            m = (k + 1) % n
+            while pts[m].type is None:
+                run.append(m)
+                m = (m + 1) % n
+            run.append(m)
+            ctrl = [(pts[r].x, pts[r].y) for r in run]
+            if len(ctrl) == 4:
+                out += [_point(ctrl, t / steps) for t in range(steps)]
+            else:
+                out.append(ctrl[0])
+        k = (k + 1) % n
+    return out
+
+
+def _extreme(poly, angle: float) -> tuple[float, float]:
+    """The polygon's farthest point in the direction `angle` (degrees)."""
+    c, s = math.cos(math.radians(angle)), math.sin(math.radians(angle))
+    return max(poly, key=lambda q: q[0] * c + q[1] * s)
+
+
+def _o_parts(f) -> tuple:
+    """o's outer and inner contours, its outer box and its side and top strokes."""
+    o = f["o"]
+    area = lambda c: sum(a.x * b.y - b.x * a.y for a, b in zip(c.points, c.points[1:] + c.points[:1]))  # noqa: E731
+    outer, inner = sorted(o.contours, key=area, reverse=True)[:2]
+    box = lambda c: (min(q.x for q in c.points), min(q.y for q in c.points), max(q.x for q in c.points), max(q.y for q in c.points))  # noqa: E731
+    ob, ib = box(outer), box(inner)
+    return outer, inner, ob, ib[0] - ob[0], ob[3] - ib[3]
+
+
+def _placed(contours, fn) -> list:
+    out = []
+    for c in contours:
+        nc = copy.deepcopy(c)
+        for q in nc.points:
+            q.x, q.y = fn(q.x, q.y)
+        out.append(nc)
+    return out
+
+
+def two_storey_g(fonts) -> None:
+    """Redraw g with two bowls, from each master's own o (SPEC.md, Katagami Serif).
+
+    The upper bowl is o scaled to G_BOWL, emboldened back to o's side stroke
+    and top hairline, and leaned back G_TILT degrees about its centre; its top
+    sits where o's does, centred on g's top anchor, so g's accents stay where
+    they were. The lower loop is o scaled to G_LOOP's width, from the old g's
+    foot up to G_LOOP's share of the x-height, its sides and foot emboldened
+    back to o's and its counter lowered from the top so the band over it is
+    G_BAND stems thick. A link G_LINK stems wide runs from the bowl's lower
+    left, out to the left and into the band, and an ear leaves the bowl's top
+    right in a flag G_EAR[2] stems tall. The parts overlap and the glyph takes
+    the TrueType overlap flag. The letters of G_FORMS are drawn out of g first."""
+    for f in fonts.values():
+        decompose(f, [n for n in G_FORMS if n in f and any(c.baseGlyph == "g" for c in f[n].components)])
+    sw_ref = stem(fonts["Regular"])
+    for f in fonts.values():
+        g = f["g"]
+        sw = stem(f)
+        outer, inner, (ox0, oy0, ox1, oy1), side, hair = _o_parts(f)
+        ocx, ocy = (ox0 + ox1) / 2, (oy0 + oy1) / 2
+        ow, oh = ox1 - ox0, oy1 - oy0
+        top = next(a for a in g.anchors if a.name == "top")
+        foot = g.getBounds(f).yMin
+        xh = f.info.xHeight
+
+        # the upper bowl
+        sx, sy = G_BOWL
+        bowl = _placed([outer, inner], lambda x, y: (ocx + sx * (x - ocx), ocy + sy * (y - ocy)))
+        tmp = f.newGlyph("_g_part")
+        for c in bowl:
+            tmp.appendContour(c)
+        embolden_x(tmp, side * (1 - sx))
+        embolden_y(tmp, hair * (1 - sy))
+        th = math.radians(G_TILT)
+        cos, sin = math.cos(th), math.sin(th)
+        bowl = _placed(tmp.contours, lambda x, y: (ocx + (x - ocx) * cos - (y - ocy) * sin, ocy + (x - ocx) * sin + (y - ocy) * cos))
+        del f["_g_part"]
+        bpoly = _flat(bowl[0])
+        btop = max(q[1] for q in bpoly)
+        bx = _extreme(bpoly, 90)[0]
+        dx, dy = top.x - bx, oy1 - btop
+        bowl = _placed(bowl, lambda x, y: (x + dx, y + dy))
+        bpoly, bin_poly = _flat(bowl[0]), _flat(bowl[1])
+        bx0, bx1 = min(q[0] for q in bpoly), max(q[0] for q in bpoly)
+        bcx = (bx0 + bx1) / 2
+
+        # the lower loop
+        lw = G_LOOP[0] * ow
+        ltop = G_LOOP[1] * xh
+        lsx, lsy = lw / ow, (ltop - foot) / oh
+        loop = _placed([outer, inner], lambda x, y: (ocx + lsx * (x - ocx), ocy + lsy * (y - ocy)))
+        tmp = f.newGlyph("_g_part")
+        for c in loop:
+            tmp.appendContour(c)
+        embolden_x(tmp, side * (1 - lsx))
+        embolden_y(tmp, hair * (1 - lsy))
+        loop = [copy.deepcopy(c) for c in tmp.contours]
+        del f["_g_part"]
+        lb = lambda c: (min(q.x for q in c.points), min(q.y for q in c.points), max(q.x for q in c.points), max(q.y for q in c.points))  # noqa: E731
+        lx0, ly0, lx1, ly1 = lb(loop[0])
+        # the loop's left edge under the bowl's left edge, its foot on the old g's
+        loop = _placed(loop, lambda x, y: (x + (bx0 - 0.04 * lw) - lx0, y + foot - ly0))
+        lx0, ly0, lx1, ly1 = lb(loop[0])
+        ix0, iy0, ix1, iy1 = lb(loop[1])
+        band = G_BAND * sw
+        k = max(0.2, (ly1 - band - iy0) / (iy1 - iy0))
+        for q in loop[1].points:
+            q.y = iy0 + (q.y - iy0) * k
+
+        # the link: a stroke from inside the bowl's lower left, out to the left and down onto the loop's top left
+        lpoly, lin_poly = _flat(loop[0]), _flat(loop[1])
+        mid = lambda ang, share, a, b: (lambda o_, i_: (o_[0] + share * (i_[0] - o_[0]), o_[1] + share * (i_[1] - o_[1])))(_extreme(a, ang), _extreme(b, ang))  # noqa: E731
+        s0 = mid(240, 0.5, bpoly, bin_poly)
+        e0 = mid(125, 0.45, lpoly, lin_poly)
+        span = math.hypot(s0[0] - e0[0], s0[1] - e0[1])
+        c1 = (s0[0] - 0.55 * span, s0[1] - 0.15 * span)
+        c2 = (e0[0] - 0.55 * span, e0[1] + 0.3 * span)
+        half = G_LINK * sw / 2
+        def normal(a, b):
+            d = math.hypot(b[0] - a[0], b[1] - a[1]) or 1.0
+            return (-(b[1] - a[1]) / d, (b[0] - a[0]) / d)
+        n0, n3 = normal(s0, c1), normal(c2, e0)
+        side_a = [(q[0] + half * n[0], q[1] + half * n[1]) for q, n in zip((s0, c1, c2, e0), (n0, n0, n3, n3))]
+        side_b = [(q[0] - half * n[0], q[1] - half * n[1]) for q, n in zip((s0, c1, c2, e0), (n0, n0, n3, n3))]
+        link = _contour([(*side_a[0], True), (*side_a[1], False), (*side_a[2], False), (*side_a[3], True),
+                         (*side_b[3], True), (*side_b[2], False), (*side_b[1], False), (*side_b[0], True)])
+        if sum(a.x * b.y - b.x * a.y for a, b in zip(link.points, link.points[1:] + link.points[:1])) < 0:
+            link = _contour([(q.x, q.y, q.type is not None) for q in reversed(link.points)])
+            link.points.insert(0, link.points.pop())  # an on-curve point first, as the others
+
+        # the ear: a flag from inside the bowl's top right, its top rising from the bowl, its foot level
+        k_ear = sw_ref * (sw / sw_ref) ** 0.4
+        reach, rise, tall = G_EAR[0] * sw_ref, G_EAR[1] * sw_ref, G_EAR[2] * k_ear
+        ex, et = bx1 + reach, oy1 + rise
+        foot_y = et - tall
+        def crossing(poly, y):
+            xs = [a[0] + (y - a[1]) * (b[0] - a[0]) / (b[1] - a[1]) for a, b in zip(poly, poly[1:] + poly[:1]) if (a[1] - y) * (b[1] - y) < 0]
+            return max(xs) if xs else None
+        out_x, in_x = crossing(bpoly, foot_y), crossing(bin_poly, foot_y)
+        r_foot = (out_x - 0.45 * ((out_x - in_x) if in_x is not None else hair * 2), foot_y)
+        r_top = mid(70, 0.45, bpoly, bin_poly)
+        r_mid = mid(40, 0.5, bpoly, bin_poly)
+        ear = _contour([(*r_top, True), (*r_mid, True), (*r_foot, True), (ex, foot_y, True), (ex, et, True), (ex - 0.12 * sw_ref, et, True)])
+        if sum(a.x * b.y - b.x * a.y for a, b in zip(ear.points, ear.points[1:] + ear.points[:1])) < 0:
+            ear = _contour([(q.x, q.y, True) for q in reversed(ear.points)])
+
+        # the old g's sidebearings, so its spacing and kerning still fit; its accents move with it
+        before = snapshot(f)
+        old = g.getBounds(f)
+        rsb = g.width - old.xMax
+        g.clearContours()
+        for c in bowl + loop + [link, ear]:
+            g.appendContour(c)
+        g.lib["public.truetype.overlap"] = True
+        shift = old.xMin - g.getBounds(f).xMin
+        for c in g.contours:
+            for q in c.points:
+                q.x += shift
+        for a in g.anchors:
+            a.x = (lx0 + lx1) / 2 + shift if a.name == "bottom" else a.x + shift
+        g.width = round(g.getBounds(f).xMax + rsb)
+        reflow_composites(f, {"g": XMap(0, shift, 1)}, before)
+
+
 def slant_t(fonts, share: float) -> None:
     """Cut the top of t's stem at a slant: its left corner drops `share` stems."""
     if not share:
@@ -1921,7 +2109,12 @@ TERMINAL_SYMBOLS = set("?¿&§$¢€£@‽")  # symbols drawn with the letters' 
 LEVEL_FACE_ANGLE = 6  # degrees: a cut further from level than this (Inter's a.2, £, §) ends plain
 FACETS_KEY = "com.kerf.facets"
 FACET_PREV, FACET_NEXT = "facet:prev", "facet:next"  # a facet's foot, its outer corner the point before it or after it
-FACET = 1.4  # the face's height, as a share of the cut's length: a tall upright face, as Geist Serif ends its curves
+FACET = 1.0  # the face's height, as a share of the cut's length, where the curve reaches that far
+FACET_REACH = 0.8  # where it does not, the face stops at this share of the farthest the outer edge stands from the cut
+BEAK = 0.55  # a level cut's face runs on past the cut by this share of its length, to a point, as Geist Serif's do
+BEAKLESS = set("aɐɑ")  # letters whose ends keep a level cut under their face, as Geist Serif's a does
+FACET_PLAIN = 0.45  # their face's height, as a share of the cut's length (the beak letters' is FACET)
+BEAK_FLOOR = 0.7  # a hairline cut (Thin) measures its beak on at least this share of the Regular stem, so the beak still shows
 RIGHT_EXITS = False  # whether a stroke rising out at the foot of a letter's right side (c, C, e, t) takes a facet
 # letters whose curved ends both stay a level cut: none since Geist Serif became the reference,
 # whose C, S, c, s and G end in tall upright faces like the rest
@@ -2129,12 +2322,15 @@ def _first_crossing(c, fn, lo: float, hi: float):
     return None
 
 
-def _facet(pts, term) -> bool:
+def _facet(pts, term, beak: float = 0.0, cap: float = math.inf) -> bool:
     """A square face at the cut's outer corner: the outer edge is trimmed where
-    it stands FACET of the cut's length from the cut's line (split by de Casteljau, so it
-    stays a piece of its own curve), and the corner becomes a short face square to the
-    cut, its foot a new point on the cut. Returns False, changing nothing, where the
-    edge is not a single curve or does not reach that far."""
+    it stands FACET of the cut's length from the cut's line (FACET_PLAIN with no beak), or FACET_REACH of the
+    farthest it stands from it where the curve is shorter (split by de Casteljau, so it
+    stays a piece of its own curve), and the corner becomes a face square to the cut.
+    Its foot is a new point `beak` of the cut's length, held between BEAK_FLOOR of `cap` and `cap`, past
+    the cut's line, so the face runs on to a point and the cut slopes back from there
+    to the inner corner; with no beak the foot is on the cut. Returns False, changing nothing, where the
+    edge is not a single curve."""
     kind, ci, i, j, outer, way, scale = term
     if kind == "upright":
         outer = j if outer == i else i  # an upright term records the corner below or above the outer edge
@@ -2150,8 +2346,10 @@ def _facet(pts, term) -> bool:
     far = pts[o_side[3]]
     if (far.x - ox) * nx + (far.y - oy) * ny < 0:
         nx, ny = -nx, -ny
-    h = FACET * length
-    t = _first_crossing(_side_curve(pts, o_side), lambda p: (p[0] - ox) * nx + (p[1] - oy) * ny - h, 0.0, 0.95)
+    curve = _side_curve(pts, o_side)
+    reach = max((_point(curve, k / 40)[0] - ox) * nx + (_point(curve, k / 40)[1] - oy) * ny for k in range(39))
+    h = min((FACET if beak else FACET_PLAIN) * length, FACET_REACH * reach)
+    t = _first_crossing(curve, lambda p: (p[0] - ox) * nx + (p[1] - oy) * ny - h, 0.0, 0.95) if h > 1 else None
     if t is None:
         return False
     _trim(pts, o_side, t)
@@ -2161,7 +2359,8 @@ def _facet(pts, term) -> bool:
     wrap = (lo, hi) == (0, len(pts) - 1)
     # named for the site's morph, which grows the facet out of the outer corner: the one before the foot or after it
     before = o_side[0] == (hi if wrap else lo)
-    foot = Point(ox + d * ux, oy + d * uy, "line", name=FACET_PREV if before else FACET_NEXT)
+    past = beak * min(max(length, BEAK_FLOOR * cap), cap) if kind == "level" else 0.0
+    foot = Point(ox + d * ux - past * nx, oy + d * uy - past * ny, "line", name=FACET_PREV if before else FACET_NEXT)
     if wrap:
         pts.append(foot)
     else:
@@ -2189,20 +2388,29 @@ def small_cap_terminals(fonts, plan: dict) -> dict:
 
 
 def cut_terminals(fonts, plan: dict) -> None:
-    """Give every terminal plan_terminals found a tall upright face at its outer
-    corner (`_facet`), on Text's own curve: Text's cut stays where it is, the outer
-    edge is only trimmed along itself, and no other point moves. A terminal takes a
-    facet only where every master can cut it. The facet adds a point, so this runs
+    """Give every terminal plan_terminals found an upright face at its outer
+    corner (`_facet`), on Text's own curve, which runs on past a level cut to a
+    point (BEAK), except in the letters of BEAKLESS: the outer edge is only
+    trimmed along itself, the inner corner stays, and no other point moves. A
+    terminal takes a facet only where every master can cut it. The facet adds a point, so this runs
     after the stem serifs, whose plan holds point numbers, and each contour's later
     terminals are cut first, so the earlier numbers stay valid."""
-    kept = {name: [term for term in terms if all(_facet(copy.deepcopy(f[name].contours[term[1]].points), term)
+    ref = fonts["Regular"]
+    def beak(name):
+        base = name.split(".")[0]
+        codes = ref[name].unicodes or (ref[base].unicodes if base in ref else [])
+        ch = chr(codes[0]) if codes else ""
+        return 0.0 if (ch.upper() if name.endswith(".smcp") else ch) in BEAKLESS or ch in BEAKLESS else BEAK
+    # a beak is at most BEAK of the Regular stem long, so Black's wide cuts do not run theirs into the bowls
+    cap = ref.lib.get(SERIF_STEM_KEY) or stem(ref)
+    kept = {name: [term for term in terms if all(_facet(copy.deepcopy(f[name].contours[term[1]].points), term, beak(name), cap)
                                                  for f in fonts.values())] for name, terms in plan.items()}
     for f in fonts.values():
         # which glyphs took facets, so an Italic can take the roman's design where the two differ (build pops it)
         f.lib[FACETS_KEY] = sorted(name for name, terms in kept.items() if terms)
         for name, terms in kept.items():
             for term in sorted(terms, key=lambda tm: (tm[1], -max(tm[2], tm[3]))):
-                _facet(f[name].contours[term[1]].points, term)
+                _facet(f[name].contours[term[1]].points, term, beak(name), cap)
 
 
 def close_c(fonts, share: float) -> None:
@@ -2468,6 +2676,8 @@ def transform(p: Profile, italic: bool = False) -> tuple[dict, dict]:
     adjust_widths(fonts, p.widths, p.condense)
     lift_ascenders(fonts, p.ascender_lift)
     lower_xheight(fonts, p.xheight_scale)
+    if p.two_storey_g:
+        two_storey_g(fonts)
     if p.serif_reach:
         plan = plan_serifs(fonts)
         fit_serifs(fonts, plan, p.serif_reach, SERIF_FIT)

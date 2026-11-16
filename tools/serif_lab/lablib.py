@@ -83,6 +83,8 @@ def build(part, text, variant="moved", consts=None):
             for n in sorted(need):
                 nf.layers.defaultLayer.insertGlyph(f[n], n, copy=True)
             fonts[style] = nf
+        if getattr(P, "two_storey_g", False) and B is NEW and "g" in fonts["Regular"]:
+            B.two_storey_g(fonts)
         plan = B.plan_serifs(fonts)
         B.fit_serifs(fonts, plan, P.serif_reach, B.SERIF_FIT)
         plan = B.plan_serifs(fonts)

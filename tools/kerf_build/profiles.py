@@ -31,6 +31,7 @@ class Profile:
     serif_head: float = 0.0  # stems the tip of a lowercase head serif drops below its line
     serif_beak: float = 0.0  # stems an arm's vertical serif reaches past the arm
     serif_contrast: tuple[tuple[str, float], ...] = ()  # per master, the share of the way each point's y moves toward the next lighter master's
+    two_storey_g: bool = False  # g redrawn with two bowls from the member's own o
     xheight_scale: float = 1.0  # the lowercase from baseline to x-height scaled; ascenders move down with it
     scale: float = 1.0  # every glyph scaled about the origin; the line height stays
     promote: tuple[str, ...] = ()  # Inter feature files whose alternates become the default
@@ -132,8 +133,8 @@ TEXT = Profile(
 # Katagami Text with the details of Geist Serif (Vercel): Text's outlines with high
 # contrast and thin rising strokes, wedge serifs that taper to a fine tip and climb
 # the stroke in a curved bracket, sloped wedge heads on lowercase stems, pointed
-# beaks on arms, and a tall upright face on the curved terminals the serifs leave
-# bare. SPEC.md, Katagami Serif.
+# beaks on arms, beaked faces on the curved terminals the serifs leave bare, and a
+# g with two bowls. SPEC.md, Katagami Serif.
 SERIF = replace(
     TEXT,
     key="serif",
@@ -144,6 +145,7 @@ SERIF = replace(
     serif_head=0.7,  # stems the head serif's tip drops
     serif_beak=1.2,  # stems an arm's pointed beak runs past the bar
     serif_contrast=(("Regular", 0.75), ("Black", 0.45)),  # of the way to the next lighter master's y
+    two_storey_g=True,  # a g with two bowls, as Geist Serif's
 )
 
 PROFILES = {p.key: p for p in (SANS, ROUND, TEXT, SERIF)}
