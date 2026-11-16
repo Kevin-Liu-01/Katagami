@@ -90,6 +90,25 @@ cjk_source plex/tc "$PLEX/%40ibm%2Fplex-sans-tc%401.1.1/sources.zip" \
   93649217ac3222b2117175b4fcb862636e571595f5fd3a42a27c04520ccba139 "sources/masters/IBM Plex Sans TC.glyphs"
 cjk_source frex https://github.com/maoken-fonts/frex-sans/releases/download/v1.100/FrexSansGB.zip \
   a82c3254c7f1070ce227cb9afbc6f98a30d32ba202f7c83275992141dfb52c15 "variable/Frex Sans GB[wght].ttf"
+# IBM's static Plex Sans JP and TC, for the palt and vpal values IBM adds on export and its sources lack
+PLEX_COMMIT=bc6a7e4b37634eb79785d59781893db63ee3edcb  # IBM/plex master, 2026-11-12
+plex_static() {  # plex_static REGION WEIGHT SHA256
+  local r=$1 w=$2 want=$3 file got
+  file="vendor/plex/$r/IBMPlexSans$(printf %s "$r" | tr '[:lower:]' '[:upper:]')-$w.ttf"
+  if [[ ! -f "$file" ]]; then
+    curl -sfL -o "$file.part" "https://raw.githubusercontent.com/IBM/plex/$PLEX_COMMIT/packages/plex-sans-$r/fonts/complete/ttf/unhinted/$(basename "$file")" \
+      || { echo "Could not download $(basename "$file") from IBM/plex at ${PLEX_COMMIT:0:7}." >&2; exit 1; }
+    mv "$file.part" "$file"
+  fi
+  got=$(sha256 "$file")
+  [[ "$got" == "$want" ]] || { echo "$file has SHA-256 $got and tools/build.sh expects $want. Delete the file and run again." >&2; exit 1; }
+}
+plex_static jp Thin aa28c0a68a8040c7082a85d34b1fef0e31d726cfc904db1ac542b349797a71e9
+plex_static jp Regular 0168493ae143d16e4c0d374c090b1ee5eab9ee475536d2e429368dbcfc4a6abe
+plex_static jp Bold 070c08915b21a9484e31a73594e4aae69991e4477959a96a6ab4031f4e30ec9f
+plex_static tc Thin 926c53b660543b40a51653522b6b10fbcf07497d610760ec3da8bb10fdcbc72c
+plex_static tc Regular a411899a70de84a29b726c9abf7d34166d5a49f4807abc7aabbb037c2fc19451
+plex_static tc Bold eb1f3d7a98e408a76f70bfa885595d017eb9a60085d16aa978cda87d557fb33c
 
 # Inter's masters as UFOs in build/ufo and build/ufo-italic. A stamp beside each folder names the
 # Inter commit it was converted from, and a folder from another commit is converted again.

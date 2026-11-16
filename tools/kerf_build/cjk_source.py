@@ -516,6 +516,103 @@ def _area_length(font: TTFont, name: str) -> tuple[float, float]:
     return abs(area.value), length.value
 
 
+SPACING = ("palt", "vpal")
+STATIC = {100: "Thin", 400: "Regular", 700: "Bold"}  # IBM's static fonts by user weight
+
+
+def _static_spacing(region: str, font: TTFont) -> dict[str, dict[int, dict[str, dict]]]:
+    """IBM's palt and vpal, which IBM adds when it exports its static fonts and its sources do not define, as
+    {tag: {weight: {glyph: value fields}}} for the glyphs of `font`: by code point where IBM's glyph has one,
+    else by name. Plex KR's statics have neither feature."""
+    src = SOURCES[region]
+    out = {}
+    if "glyphs" not in src:
+        return out
+    cmap, names = font.getBestCmap(), set(font.getGlyphOrder())
+    for w, style in STATIC.items():
+        path = src["glyphs"].parent / f"{src['name'].replace(' ', '')}-{style}.ttf"
+        if not path.exists():
+            continue
+        st = TTFont(path)
+        gpos = st["GPOS"].table
+        to_ours = {}
+        for u, g in st.getBestCmap().items():
+            if u in cmap:
+                to_ours.setdefault(g, cmap[u])
+        for tag in SPACING:
+            for fr in gpos.FeatureList.FeatureRecord:
+                if fr.FeatureTag != tag:
+                    continue
+                for i in fr.Feature.LookupListIndex:
+                    lookup = gpos.LookupList.Lookup[i]
+                    for stb in lookup.SubTable:
+                        stb = getattr(stb, "ExtSubTable", stb)
+                        if lookup.LookupType != 1:
+                            raise ValueError(f"{path.name}: {tag} lookup {i} is not single positioning")
+                        cov = stb.Coverage.glyphs
+                        values = [stb.Value] * len(cov) if stb.Format == 1 else stb.Value
+                        for g, v in zip(cov, values):
+                            ours = to_ours.get(g) or (g if g in names else None)
+                            if ours:
+                                fields = {k: getattr(v, k) for k in ("XPlacement", "YPlacement", "XAdvance", "YAdvance")
+                                          if getattr(v, k, 0)}
+                                out.setdefault(tag, {}).setdefault(w, {}).setdefault(ours, fields)
+    return out
+
+
+def _add_spacing(statics: dict, spacing: dict) -> list[str]:
+    """Each master gains a palt and a vpal lookup with IBM's values at its weight (the nearest of IBM's statics
+    at or below it, so Black takes Bold's), with one coverage and one value format in every master, so
+    varLib makes the values vary with weight. A feature the source already has is left alone."""
+    from fontTools.ttLib.tables.otBase import ValueRecord
+    from fontTools.varLib.featureVars import sortFeatureList
+
+    added = []
+    for tag, by_weight in spacing.items():
+        sample = next(iter(statics.values()))
+        if any(fr.FeatureTag == tag for fr in sample["GPOS"].table.FeatureList.FeatureRecord):
+            continue
+        glyphs = sorted({g for vals in by_weight.values() for g in vals}, key=sample.getGlyphID)
+        fields = sorted({k for vals in by_weight.values() for v in vals.values() for k in v})
+        fmt = sum({"XPlacement": 1, "YPlacement": 2, "XAdvance": 4, "YAdvance": 8}[k] for k in fields)
+        for w, st in statics.items():
+            near = max((s for s in by_weight if s <= w), default=min(by_weight))
+            vals = by_weight[near]
+            sub = ot.SinglePos()
+            sub.Format, sub.ValueFormat = 2, fmt
+            sub.Coverage = ot.Coverage()
+            sub.Coverage.glyphs = list(glyphs)
+            sub.Value = []
+            for g in glyphs:
+                vr = ValueRecord()
+                for k in fields:
+                    setattr(vr, k, vals.get(g, {}).get(k, 0))
+                sub.Value.append(vr)
+            sub.ValueCount = len(glyphs)
+            lookup = ot.Lookup()
+            lookup.LookupType, lookup.LookupFlag, lookup.SubTable, lookup.SubTableCount = 1, 0, [sub], 1
+            gpos = st["GPOS"].table
+            gpos.LookupList.Lookup.append(lookup)
+            gpos.LookupList.LookupCount = len(gpos.LookupList.Lookup)
+            record = ot.FeatureRecord()
+            record.FeatureTag = tag
+            record.Feature = ot.Feature()
+            record.Feature.FeatureParams = None
+            record.Feature.LookupListIndex = [len(gpos.LookupList.Lookup) - 1]
+            record.Feature.LookupCount = 1
+            gpos.FeatureList.FeatureRecord.append(record)
+            gpos.FeatureList.FeatureCount = len(gpos.FeatureList.FeatureRecord)
+            index = len(gpos.FeatureList.FeatureRecord) - 1
+            for sr in gpos.ScriptList.ScriptRecord:
+                for ls in [sr.Script.DefaultLangSys, *[r.LangSys for r in sr.Script.LangSysRecord]]:
+                    if ls is not None:
+                        ls.FeatureIndex.append(index)
+                        ls.FeatureCount = len(ls.FeatureIndex)
+            sortFeatureList(gpos)
+        added.append(f"{tag} for {len(glyphs)} glyphs")
+    return added
+
+
 def _black(thin: TTFont, bold: TTFont) -> tuple[TTFont, list[str]]:
     """Bold with each glyph thickened by BLACK_RATIO of its own growth from Thin, every advance kept,
     top bearings following the ink."""
@@ -547,6 +644,9 @@ def assemble(region: str, chars: set[int]) -> tuple[Path, list[str]]:
     if src.get("raise"):
         for st in statics.values():
             _raise(st, src["raise"])
+    spacing = _add_spacing(statics, _static_spacing(region, font))
+    if spacing:
+        print(f"  {region}: IBM's {' and '.join(spacing)}", flush=True)
     used = [region]
     missing = chars - have
     for name in LENDERS[region]:
