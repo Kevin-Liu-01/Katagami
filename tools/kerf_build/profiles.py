@@ -129,21 +129,21 @@ TEXT = Profile(
                 (600, 560), (700, 640), (800, 760), (900, 900)),
 )
 
-# Katagami Text with rectangular serifs, after Signifier's design notes, kept
-# close to Text: Text's outlines with moderate contrast, serifs that end square
-# and meet the stroke's own side in a short bracket, triangular heads on lowercase
-# stems, vertical serifs on arms, and a small facet on the curved terminals the
-# serifs leave bare. SPEC.md, Katagami Serif.
+# Katagami Text with the details of Geist Serif (Vercel): Text's outlines with high
+# contrast and thin rising strokes, wedge serifs that taper to a fine tip and climb
+# the stroke in a curved bracket, sloped wedge heads on lowercase stems, pointed
+# beaks on arms, and a tall upright face on the curved terminals the serifs leave
+# bare. SPEC.md, Katagami Serif.
 SERIF = replace(
     TEXT,
     key="serif",
     family="Katagami Serif",
     file_stem="KatagamiSerif",
-    serif_reach=0.85,  # the square end, past each side of a stroke, at Regular
-    serif_depth=0.8,  # of the H crossbar
-    serif_head=0.35,  # stems the head serif's tip drops
-    serif_beak=0.55,  # stems
-    serif_contrast=(("Regular", 0.6), ("Black", 0.3)),  # of the way to the next lighter master's y
+    serif_reach=0.95,  # the wedge's tip, past each side of a stroke, at Regular
+    serif_depth=1.25,  # of the H crossbar, where the wedge meets its bracket
+    serif_head=0.7,  # stems the head serif's tip drops
+    serif_beak=1.2,  # stems an arm's pointed beak runs past the bar
+    serif_contrast=(("Regular", 0.75), ("Black", 0.45)),  # of the way to the next lighter master's y
 )
 
 PROFILES = {p.key: p for p in (SANS, ROUND, TEXT, SERIF)}

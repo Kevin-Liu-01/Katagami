@@ -65,7 +65,7 @@ def build(part, text, variant="moved", consts=None):
         src = pre("roman" if part == "slanted" else part)
         ref = src["Regular"]
         cmap = {u: g.name for g in ref for u in g.unicodes}
-        want = {cmap[ord(c)] for c in text if ord(c) in cmap} | {"x", "H", "idotless", "l", "f", "t", "space", "n", "o"}
+        want = {cmap[ord(c)] for c in text if ord(c) in cmap} | {"x", "H", "I", "idotless", "l", "f", "t", "space", "n", "o"}
         need = set()
 
         def deps(name):
@@ -87,7 +87,10 @@ def build(part, text, variant="moved", consts=None):
         B.fit_serifs(fonts, plan, P.serif_reach, B.SERIF_FIT)
         plan = B.plan_serifs(fonts)
         terminals = M.plan_terminals(fonts, plan)
+        strokes = B.plan_thin_strokes(fonts) if hasattr(B, "thin_strokes") else None
         B.add_contrast(fonts, dict(P.serif_contrast))
+        if strokes is not None:
+            B.thin_strokes(fonts, strokes)
         # build_sans.py cuts its terminals after the stem serifs since the facets (d6b70d5 and later)
         after = M is NEW
         if option:
@@ -99,6 +102,8 @@ def build(part, text, variant="moved", consts=None):
         else:
             M.cut_terminals(fonts, terminals, P.serif_depth, P.serif_reach)
         B.cut_serifs(fonts, plan, P.serif_reach, P.serif_depth, P.serif_head, P.serif_beak)
+        if hasattr(B, "taper_bars"):
+            B.taper_bars(fonts)
         if option:
             ENDS.after_serifs(fonts, kept, option, P.serif_depth)
         elif after:
