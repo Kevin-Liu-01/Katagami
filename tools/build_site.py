@@ -23,7 +23,8 @@ The site lives in its own repo, Katagami-Website, checked out next to this one
 Run after tools/build.sh, then commit and push Katagami-Website; Vercel deploys it.
 After editing only a page fragment, `tools/build_site.py --pages` rewraps the pages.
 After a change to the Curves plate's data, `tools/build_site.py --data` writes data.js and glyphs.js alone.
-After a change to the download table's links, `tools/build_site.py --downloads` writes the zip and files.json alone.
+After a change to the download table's links, `tools/build_site.py --downloads` writes the zip, the language packages
+(build/packages, for the release) and files.json alone.
 The full build and --data stop before writing data.js when build/, where the hero and the Curves
 plate read their glyphs, no longer draws them as fonts/ ships them.
 """
@@ -40,6 +41,7 @@ import subprocess
 import time
 import unicodedata
 import zipfile
+from collections import Counter
 from pathlib import Path
 
 import sys
@@ -51,7 +53,8 @@ from fontTools.misc.bezierTools import calcBounds, calcCubicBounds, calcCubicPar
 from fontTools.misc.roundTools import otRound
 from fontTools.pens.basePen import BasePen
 from fontTools.pens.recordingPen import RecordingPen
-from fontTools.ttLib import TTFont
+from fontTools.ttLib import TTFont, newTable
+from fontTools.unicodedata import script as script_code
 
 sys.path.insert(0, str(Path(__file__).parent))
 from build_world import SCRIPTS  # noqa: E402
@@ -869,7 +872,7 @@ PAGE_META = {
                  "These answers cover commercial use under the SIL Open Font License, which member to use, web fonts, OpenType features, languages and how the fonts are made.",
                  "faq", "FAQPage"),
     "download.html": ("Download Katagami: free variable fonts under the OFL",
-                      f"Katagami {VERSION} has five variable TrueType fonts and four CJK companions, each with an Italic. The page has install steps for macOS, Windows and Linux and a stylesheet for the web.",
+                      f"Katagami {VERSION} has five variable TrueType fonts and four CJK companions, each with an Italic. The page offers every font in one zip or a smaller package for one language, with install steps for macOS, Windows and Linux and a stylesheet for the web.",
                       "download", "WebPage"),
 }
 MEMBER_PATHS = {"sans": "/katagami-sans", "round": "/katagami-round", "text": "/katagami-text", "serif": "/katagami-serif", "mono": "/katagami-mono"}
@@ -1024,12 +1027,114 @@ def write_pages() -> None:
 
 
 CJK_FILES = [ROOT / "fonts" / "cjk" / f"{name}{style}[wght].ttf" for name in CJK for style in ("", "-Italic")]
+# The language packages, a smaller zip for a reader who sets a few languages: the five
+# members cut to the characters Katagami draws itself (Latin, Greek, Cyrillic and its
+# symbols) and the merged scripts a package names, and the CJK companion it names, roman
+# and Italic. Every font keeps its names and version, so the full set replaces a package
+# cleanly. Mono merges no scripts and ships whole. Together the packages weigh more than
+# the full zip, so they are assets of the GitHub release, not files in the site's git:
+# --downloads writes them to build/packages, and files.json links each to the release.
+PACKAGE_DIR = ROOT / "build" / "packages"
+PACKAGES = [
+    # the zip's name after the version, the flag the download menu draws (ISO 3166), the name it shows,
+    # the merged scripts (build_world.SCRIPTS) and the CJK companion
+    ("English", "US", "English", (), None),
+    ("Chinese-Simplified", "CN", "Simplified Chinese", (), "SC"),
+    # rows are named by script, and Traditional Chinese takes Hong Kong's flag, so neither row reads as a claim about a country
+    ("Chinese-Traditional", "HK", "Traditional Chinese", (), "TC"),
+    ("Japanese", "JP", "Japanese", (), "JP"),
+    ("Korean", "KR", "Korean", (), "KR"),
+    ("Arabic", "SA", "Arabic", ("Arabic",), None),
+    ("Hebrew", "IL", "Hebrew", ("Hebrew",), None),
+    ("Indian", "IN", "Indian languages",
+     ("Devanagari", "Bengali", "Gurmukhi", "Gujarati", "Oriya", "Tamil", "Telugu", "Kannada", "Malayalam", "OlChiki"), None),
+    ("Thai", "TH", "Thai", ("Thai",), None),
+]
+# each merged script's ISO 15924 code, the one its characters carry most, for the meta table
+ISO = {name: Counter(t for lo, hi in ranges for u in range(lo, hi + 1) if (t := script_code(chr(u))) not in ("Zzzz", "Zyyy", "Zinh")).most_common(1)[0][0]
+       for name, ranges in SCRIPTS.items()}
+
+
+@functools.lru_cache(maxsize=None)
+def cut(path: Path, scripts: tuple) -> bytes:
+    """A proportional font cut to Katagami's own characters and the merged `scripts`, with all
+    its layout, names, variations and glyph names. The meta table, which the subsetter drops,
+    goes back with the merged scripts it no longer supports taken out of slng."""
+    import io
+    font = TTFont(path, recalcTimestamp=False)
+    meta = dict(font["meta"].data)
+    slng = meta["slng"].split(", ")
+    assert set(ISO.values()) <= set(slng), f"{path.name}'s slng lacks {set(ISO.values()) - set(slng)}"
+    keep = {u for u in font.getBestCmap() if u not in SCRIPT_OF or SCRIPT_OF[u] in scripts}
+    sub = subset.Subsetter(subset.Options(layout_features=["*"], name_IDs=["*"], name_languages=["*"], name_legacy=True,
+                                          notdef_outline=True, glyph_names=True, legacy_kern=True))
+    sub.populate(unicodes=keep)
+    sub.subset(font)
+    gone = {ISO[name] for name in SCRIPTS if name not in scripts}
+    font["meta"] = newTable("meta")
+    font["meta"].data = {**meta, "slng": ", ".join(t for t in slng if t not in gone)}
+    buf = io.BytesIO()
+    font.save(buf)
+    return buf.getvalue()
+
+
+def write_package(zpath: Path, folder: str, fonts: list[Path], companions: list[Path], scripts: tuple) -> None:
+    with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+        # the key says which cut of which files the zip holds, so a changed package is made again
+        z.comment = package_key(fonts, companions, scripts).encode()
+        for arc, data in [*((f"{folder}/{path.name}", path.read_bytes() if "Mono" in path.name else cut(path, scripts)) for path in fonts),
+                          *((f"{folder}/cjk/{path.name}", path.read_bytes()) for path in companions),
+                          (f"{folder}/OFL.txt", (ROOT / "OFL.txt").read_bytes())]:
+            info = zipfile.ZipInfo(arc, date_time=(2026, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            z.writestr(info, data)
+
+
+def package_key(fonts: list[Path], companions: list[Path], scripts: tuple) -> str:
+    import inspect
+    return hashlib.sha256(repr((inspect.getsource(cut), scripts, [p.name for p in (*fonts, *companions)])).encode()).hexdigest()[:16]
+
+
+def package_fresh(zpath: Path, fonts: list[Path], companions: list[Path], scripts: tuple) -> bool:
+    if not zpath.exists() or not all(fresh(path, zpath) for path in (*fonts, *companions)):
+        return False
+    with zipfile.ZipFile(zpath) as z:
+        return z.comment == package_key(fonts, companions, scripts).encode()
+
+
+def write_packages(fonts: list[Path], cjk_files: list[Path]) -> list[dict]:
+    """Each language package's zip in build/packages, made again where its fonts or its cut
+    changed, and its entry for files.json, linked to the release. Other zips there are removed."""
+    PACKAGE_DIR.mkdir(parents=True, exist_ok=True)
+    packages = {f"Katagami-{VERSION}-{part}.zip": (part, *rest) for part, *rest in PACKAGES}
+    for old in PACKAGE_DIR.glob("*.zip"):
+        if old.name not in packages:
+            old.unlink()
+    tag, made, entries = f"v{VERSION}", [], []
+    for name, (part, flag, label, scripts, companion) in packages.items():
+        zpath = PACKAGE_DIR / name
+        companions = [path for path in cjk_files if companion and path.name.startswith(f"KatagamiCJK{companion}")]
+        if not package_fresh(zpath, fonts, companions, scripts):
+            started = time.time()
+            write_package(zpath, f"Katagami-{VERSION}-{part}", fonts, companions, scripts)
+            made.append(name)
+            print(f"{name}: {zpath.stat().st_size / 1e6:.1f} MB in {time.time() - started:.0f} s")
+        # the scripts it sets: Katagami's own, the merged ones, and a companion's from its meta table (Hans, Hant, Jpan or Kore)
+        own = ["Latn", "Grek", "Cyrl", *(ISO[s] for s in scripts), *(TTFont(path)["meta"].data["dlng"] for path in companions[:1])]
+        entries.append({"key": part.lower(), "flag": flag, "name": label, "scripts": own,
+                        "cjk": f"Katagami CJK {companion}" if companion else None, "file": name, "bytes": zpath.stat().st_size,
+                        "url": f"{REPO}/releases/download/{tag}/{name}"})
+    if made or fonts_ref() != tag:
+        print(f"files.json links the packages to the {tag} release. Upload them there, once the release holds this checkout's fonts: "
+              f"gh release upload {tag} {PACKAGE_DIR.relative_to(ROOT)}/*.zip --clobber", file=sys.stderr)
+    return entries
 
 
 def write_downloads() -> None:
     """The zip of the five members and the four CJK companions, roman and Italic, and
-    the license, and files.json, which the download page lists: every font file
-    with its size and a link. An older version's zip is removed."""
+    the license, the language packages (write_packages), and files.json, which the
+    download page lists: every font file with its size and a link, and each package.
+    An older version's zip is removed."""
     out = PUBLIC / "download"
     out.mkdir(exist_ok=True)
     for old in out.glob("Katagami-*.zip"):
@@ -1060,8 +1165,9 @@ def write_downloads() -> None:
             "file": path.name, "bytes": path.stat().st_size, "url": raw(path)} for path in cjk_files]
     with zipfile.ZipFile(zpath) as z:
         listing = [i.filename for i in z.infolist()]
+    packages = write_packages(fonts, cjk_files)
     (out / "files.json").write_text(json.dumps({"version": VERSION, "zip": {"file": zpath.name, "bytes": zpath.stat().st_size, "files": listing},
-                                                "members": files, "italics": italics, "cjk": cjk}, separators=(",", ":")))
+                                                "packages": packages, "members": files, "italics": italics, "cjk": cjk}, separators=(",", ":")))
 
 
 def site_data() -> dict:
@@ -1178,5 +1284,5 @@ if __name__ == "__main__":
     # --pages rewraps the hand-written pages only, for a change to their markup;
     # --data writes data.js and glyphs.js alone and leaves the web fonts, downloads and pages as they are
     # --first writes the first-paint faces alone
-    # --downloads writes the zip and files.json alone
+    # --downloads writes the zip, the language packages and files.json alone
     write_pages() if "--pages" in sys.argv else write_data() if "--data" in sys.argv else first_fonts() if "--first" in sys.argv else write_downloads() if "--downloads" in sys.argv else main()

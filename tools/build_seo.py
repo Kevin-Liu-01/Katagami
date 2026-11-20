@@ -889,10 +889,20 @@ def write_twins_for_main(facts: dict) -> None:
         "convert": f"# Font-ify\n\n{PAGE_META['convert.html'][1]}\n\nFont-ify replaces a monospace stack with Katagami Mono and a serif stack with Katagami Serif. Icon fonts and `var()` stacks stay as they are, and every other stack becomes the member you pick. The original stack stays behind Katagami as its fallback.\n\nA site opens directly from an address such as {SITE_URL}/convert?url=example.com.\n",
         "about": f"# About Katagami\n\n{PAGE_META['about.html'][1]}\n\nKevin Liu started Katagami on 7 October 2026 to make one type family that feels like a coherent system. It has a sans, a rounded sans, a reading face, a serif and a mono on one skeleton. Katagami starts from Inter's open-source outlines. Its merged scripts and CJK companions come from Noto. The name comes from katagami, the Japanese paper stencils that are cut to dye patterns on cloth. The Japanese word 型紙 means pattern paper.\n\nThe [katagami stencils page]({SITE_URL}/learn/katagami-stencils) has more about the stencils.\n",
         "faq": f"# Katagami FAQ\n\n" + "\n\n".join(f"## {q['name']}\n\n{q['acceptedAnswer']['text']}" for q in FACTS["faq"]) + "\n",
-        "download": f"# Download Katagami\n\n{PAGE_META['download.html'][1]}\n\nThe zip with every font is at {SITE_URL}/download/{ZIP}.\n\n" + "\n".join(f"- {F[k]['family']}: `{F[k]['file']}`, {mb(F[k]['size'])}; Italic `{F[k]['italic']}`, {mb(F[k]['italic_size'])}" for k in MEMBERS) + f"\n\nOn the web, link the stylesheet.\n\n```html\n{WEB_SNIPPET}\n```\n",
+        "download": f"# Download Katagami\n\n{PAGE_META['download.html'][1]}\n\nThe zip with every font is at {SITE_URL}/download/{ZIP}.\n\n" + packages_text() + "\n".join(f"- {F[k]['family']}: `{F[k]['file']}`, {mb(F[k]['size'])}; Italic `{F[k]['italic']}`, {mb(F[k]['italic_size'])}" for k in MEMBERS) + f"\n\nOn the web, link the stylesheet.\n\n```html\n{WEB_SNIPPET}\n```\n",
     })
     for name, text in MAIN_TWINS.items():
         (PUBLIC / f"{name}.md").write_text(text + f"\n---\n\nSource: {SITE_URL}/{'' if name == 'index' else name}\n")
+
+
+def packages_text() -> str:
+    """The language packages the download page offers, from download/files.json, for its Markdown twin."""
+    packages = json.loads((PUBLIC / "download" / "files.json").read_text()).get("packages", [])
+    if not packages:
+        return ""
+    return ("Each language package is a smaller zip with the five members in Latin, Greek and Cyrillic and one language's script, "
+            "and Chinese, Japanese and Korean packages add their CJK companion.\n\n"
+            + "\n".join(f"- {p['name']}: {p['url']}, {mb(p['bytes'])}" for p in packages) + "\n\n")
 
 
 def write_llms(facts: dict) -> None:

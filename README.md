@@ -128,7 +128,7 @@ Every member carries Inter's features with their labels, among them tabular and 
 
 ## Use it
 
-**On a computer.** Download the zip from the [download page](https://katagami.kevinliu.studio/download) or from the [latest release](https://github.com/Kevin-Liu-01/Katagami/releases/latest), or take the files from `fonts/` here, and install the `.ttf` files the way your system installs fonts. The download page has the steps for macOS, Windows and Linux.
+**On a computer.** Download the zip from the [download page](https://katagami.kevinliu.studio/download) or from the [latest release](https://github.com/Kevin-Liu-01/Katagami/releases/latest), or take the files from `fonts/` here, and install the `.ttf` files the way your system installs fonts. The download page has the steps for macOS, Windows and Linux. A reader who sets one language can take its package from the release, a smaller zip with the five members in Latin, Greek and Cyrillic and that language's script. English, Simplified Chinese, Traditional Chinese, Japanese, Korean, Arabic, Hebrew, the Indian languages and Thai each have one.
 
 **On the web.** Link the stylesheet, then name the family in your CSS. Each member is one family split by script, roman and Italic, so a page downloads only the scripts and styles it shows. The files are served with `Access-Control-Allow-Origin: *`.
 
@@ -200,7 +200,7 @@ After a build, these commands write the website into a checkout of its repositor
 
 | Command | What it writes |
 |---|---|
-| `.venv/bin/python tools/build_site.py` | the web fonts, the site's data, the download zip and a record for every page; `--pages` writes only the records |
+| `.venv/bin/python tools/build_site.py` | the web fonts, the site's data, the download zip, the language packages in `build/packages` for the release, and a record for every page; `--pages` writes only the records and `--downloads` only the zips and `files.json` |
 | `.venv/bin/python tools/build_map.py` | the map's grids and coverage figures |
 | `.venv/bin/python tools/build_seo.py` | the library pages, the Markdown twins, `llms.txt`, the sitemap and `robots.txt` |
 | `node tools/og.mjs` | the 1200 by 630 social cards |
