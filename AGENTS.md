@@ -4,7 +4,7 @@ Read this file before you change anything here. README.md says what Katagami is 
 
 ## Two repositories
 
-This repository holds the fonts in `fonts/` and the build tools in `tools/`. The website lives in a second repository, Katagami-Website, which is private. The tools here write most of that site. They write its web fonts, its data, its page records, its library pages, its map and its download.
+This repository holds the fonts in `fonts/` and the build tools in `tools/`. The website lives in a second repository, Katagami-Website, which is private. The tools here write most of that site. They write its web fonts, its data, its page records, its library pages, its map and its list of downloads.
 
 Set `KATAGAMI_SITE` to the absolute path of the site checkout or worktree you mean to write into. Without it the tools look for a folder named `Katagami-Website` beside this one, and from a git worktree that folder does not exist. `tools/kerf_build/sitepath.py` and `tools/site-path.mjs` read the variable for `tools/build_site.py`, `tools/build_map.py`, `tools/build_seo.py`, `tools/og.mjs`, `tools/readme.mjs` and `tools/stills.mjs`, and they stop the run when the folder is not a Katagami-Website checkout. `tools/logo.py` reads the variable itself.
 
@@ -25,7 +25,7 @@ KATAGAMI_SITE=/absolute/path/to/Katagami-Website .venv/bin/python tools/build_si
 - `tools/serif_lab/prep.py roman` pickles Katagami Serif's masters once, in a minute or two. `tools/serif_lab/sheets.py` then draws proof sheets of Serif's terminals in a few seconds each, with no font build. Both need `build/ufo`, which `tools/build.sh` makes on its first run.
 - `tools/proof.py sans` draws a comparison sheet of a built member into `build/proofs/`. It also takes `mono`, `family`, `round`, `text` and `detail`. `tools/proof.py serif` draws Katagami Serif before and after a change beside Geist Serif, and its docstring names the files it needs.
 - `tools/build_world.py serif --only Devanagari,Thai` merges only the scripts you name into a member that fontmake has already built.
-- `tools/build_site.py --pages` rewrites only the site's page records and `content/site.json`. `--downloads` writes only the full zip, the language packages in `build/packages` and `files.json`. `--first` writes only the first-paint font scripts. `--data` writes only `data.js` and `glyphs.js`, and it needs the masters in `build/` and Inter's in `build/ufo`.
+- `tools/build_site.py --pages` rewrites only the site's page records and `content/site.json`. `--downloads` writes only the full zip and the language packages, both into `build/release` for the GitHub release, and `files.json`. `--first` writes only the first-paint font scripts. `--data` writes only `data.js` and `glyphs.js`, and it needs the masters in `build/` and Inter's in `build/ufo`.
 - fontTools reads any committed font in a second or two. Use it to answer a question about a file in `fonts/` without building.
 
 ## Worktrees

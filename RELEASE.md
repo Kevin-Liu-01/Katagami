@@ -16,7 +16,7 @@ A release changes two repositories and publishes a GitHub release. This list giv
 ## In the site repository
 
 9. Make a worktree of the site from its `origin/main` and run `pnpm install` in it. Work from a fonts checkout whose HEAD is the pushed release commit, and set `KATAGAMI_SITE` to the site worktree.
-10. Run `tools/build_site.py`. It writes the web fonts, `data.js`, `glyphs.js`, the first-paint scripts, the full zip, `files.json`, the page records and `content/site.json`, and it removes the old version's zip. It also writes the nine language packages into this repository's `build/packages`, and `files.json` links each of them to the release. The run can take hours, and it needs the masters in `build/` and Inter's in `build/ufo`.
+10. Run `tools/build_site.py`. It writes the web fonts, `data.js`, `glyphs.js`, the first-paint scripts, `files.json`, the page records and `content/site.json` into the site. It writes the full zip and the nine language packages into this repository's `build/release`, and `files.json` links each of them to the release. The site holds no zip. The run can take hours, and it needs the masters in `build/` and Inter's in `build/ufo`.
 11. Run `tools/build_map.py` when the fonts' coverage changed. It needs the map data folder that `GT_WORLD` names.
 12. Run `tools/build_seo.py`. It writes the library records, the Markdown twins, `llms.txt`, `llms-full.txt`, the sitemap and `build/og.json`. The Markdown twins and `llms-full.txt` name the zip and state each package's size, so this step follows every change to the downloads.
 13. Run `node tools/og.mjs` when a share card's text or a Latin glyph changed. It needs playwright-core, which `npm install --prefix tools` installs, and Chrome. Set `CHROME` when Chrome is not at the path in the script.
@@ -30,20 +30,14 @@ grep -n 'Katagami 1\.5' page.html *-page.html README.md
 16. In the site, run `pnpm check`, then `pnpm build`. The build stops when a stamp does not match its file. Serve the site with `pnpm dev` and open the home page, /download and /about. Compare each page whose glyphs changed with a picture taken before the change.
 17. When a picture's subject changed, serve the site and redraw it. `node tools/stills.mjs` draws the stills. `BASE=http://localhost:3078 node tools/readme.mjs` and then `python3 tools/readme_shrink.py` draw the README images of both repositories. This repository's images in `docs/readme/` take a `Docs:` commit of their own here, as 1.5's "Docs: the README pictures are redrawn from Katagami 1.5, with the new Serif" did.
 18. Commit the site with a message that names the version and says what it changed.
-19. Fetch the site's `origin/main` and rebase onto it, because other work lands there. Run `pnpm check` again. Push after the owner agrees. Vercel deploys every push to `main`.
-
-## After both are pushed
-
-20. Create the GitHub release and its tag on the fonts release commit, with the full zip from the site and notes that say what changed and credit the sources of the CJK companions.
+19. Create the GitHub release and its tag on the fonts release commit, with every zip in `build/release` and notes that say what changed and credit the sources of the CJK companions. The site sends `/download/Katagami-1.6.zip` to the release's copy, so the release must hold its zips before the site deploys. Ask the owner first.
 
 ```bash
-gh release create v1.6 "$KATAGAMI_SITE/public/download/Katagami-1.6.zip" --target <commit> --title "Katagami 1.6" --notes-file <notes> --latest
+gh release create v1.6 build/release/*.zip --target <commit> --title "Katagami 1.6" --notes-file <notes> --latest
 ```
 
-21. Upload the language packages to the release. `files.json` already links each of them there.
+20. Fetch the site's `origin/main` and rebase onto it, because other work lands there. Run `pnpm check` again. Push after the owner agrees. Vercel deploys every push to `main`.
 
-```bash
-gh release upload v1.6 build/packages/*.zip
-```
+## After the site is pushed
 
-22. Check the live site after Vercel reports the deploy. `/download/Katagami-1.6.zip` answers 200 with the zip's size, `/download/files.json` names version 1.6, and every package address in it answers 200. The footer shows the new version, and its commit link opens.
+21. Check the live site after Vercel reports the deploy. `/download/Katagami-1.6.zip` redirects to the release and the download answers 200 with the zip's size. `/download/files.json` names version 1.6, and every package address in it answers 200. The footer shows the new version, and its commit link opens.

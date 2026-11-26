@@ -200,7 +200,7 @@ After a build, these commands write the website into a checkout of its repositor
 
 | Command | What it writes |
 |---|---|
-| `.venv/bin/python tools/build_site.py` | the web fonts, the site's data, the download zip, the language packages in `build/packages` for the release, and a record for every page; `--pages` writes only the records and `--downloads` only the zips and `files.json` |
+| `.venv/bin/python tools/build_site.py` | the web fonts, the site's data and a record for every page, and the download zip and the language packages in `build/release` for the GitHub release; `--pages` writes only the records and `--downloads` only the zips and `files.json` |
 | `.venv/bin/python tools/build_map.py` | the map's grids and coverage figures |
 | `.venv/bin/python tools/build_seo.py` | the library pages, the Markdown twins, `llms.txt`, the sitemap and `robots.txt` |
 | `node tools/og.mjs` | the 1200 by 630 social cards |
