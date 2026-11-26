@@ -262,7 +262,7 @@ def member_pages(F: dict, C: dict, M: dict) -> None:
                    "The strokes that rise to the right are thin, as a broad pen draws them: the left of A, the right of V and v, the arm of K and the stems of N.",
                    "The top of a lowercase stem slopes down to a wedge on its left, about 20 degrees at Regular.",
                    "The arms of E, F, L, T and Z end in pointed beaks, and the middle bars of E and F take a beak up and down.",
-                   "The curved ends of c, s, C, S, G, f and the figures run past their cut to a beak, and g has two bowls.",
+                   "The curved ends of s, C, S, G, f and the figures run past their cut to a beak, the tops of a and c end in a block about a stem wide, and g has two bowls.",
                    "Each point keeps its x coordinate and moves toward its height in the next lighter weight, 75 percent of the way at Regular and 45 percent at Black. This makes horizontals thinner than stems."]),
         "mono": ("a free monospace font for code",
                  "Katagami Mono is Katagami Sans fitted to a monospace cell. It is for code, terminals and tables.",
