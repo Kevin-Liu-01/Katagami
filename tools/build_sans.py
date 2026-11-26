@@ -350,6 +350,23 @@ def _extreme(poly, angle: float) -> tuple[float, float]:
     return max(poly, key=lambda q: q[0] * c + q[1] * s)
 
 
+def _ray(poly, origin, direction) -> tuple[float, float]:
+    """Where the ray from `origin` along `direction` last crosses the polygon."""
+    ox, oy = origin
+    dx, dy = direction
+    best = None
+    for (ax, ay), (bx, by) in zip(poly, poly[1:] + poly[:1]):
+        ex, ey = bx - ax, by - ay
+        den = dx * ey - dy * ex
+        if abs(den) < 1e-12:
+            continue
+        t = ((ax - ox) * ey - (ay - oy) * ex) / den
+        u = ((ax - ox) * dy - (ay - oy) * dx) / den
+        if t > 0 and 0 <= u <= 1 and (best is None or t > best):
+            best = t
+    return (ox + best * dx, oy + best * dy) if best is not None else origin
+
+
 def _o_parts(f) -> tuple:
     """o's outer and inner contours, its outer box and its side and top strokes."""
     o = f["o"]
@@ -472,7 +489,11 @@ def two_storey_g(fonts) -> None:
         out_x, in_x = crossing(bpoly, foot_y), crossing(bin_poly, foot_y)
         r_foot = (out_x - 0.45 * ((out_x - in_x) if in_x is not None else hair * 2), foot_y)
         r_top = mid(70, 0.45, bpoly, bin_poly)
-        r_mid = mid(40, 0.5, bpoly, bin_poly)
+        # the root's middle point lies mid-stroke on the ray from the bowl's centre through the midpoint of
+        # its neighbours, so the root runs along the stroke from r_top to r_foot and never doubles back
+        bcy = sum(q[1] for q in bpoly) / len(bpoly)
+        aim = ((r_top[0] + r_foot[0]) / 2 - bcx, (r_top[1] + r_foot[1]) / 2 - bcy)
+        r_mid = tuple((o_ + i_) / 2 for o_, i_ in zip(_ray(bpoly, (bcx, bcy), aim), _ray(bin_poly, (bcx, bcy), aim)))
         ear = _contour([(*r_top, True), (*r_mid, True), (*r_foot, True), (ex, foot_y, True), (ex, et, True), (ex - 0.12 * sw_ref, et, True)])
         if sum(a.x * b.y - b.x * a.y for a, b in zip(ear.points, ear.points[1:] + ear.points[:1])) < 0:
             ear = _contour([(q.x, q.y, True) for q in reversed(ear.points)])
