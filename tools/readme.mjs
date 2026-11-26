@@ -59,7 +59,7 @@ const CARDS = {
     <div><div class="g" style="font-family:'Katagami Sans';font-size:84px">cesag</div><p class="cap">c, e, s, a and g end in level cuts.</p></div>
     <div><div class="g" style="font-family:'Katagami Sans'"><span style="font-weight:100">f</span><span style="font-weight:400">f</span><span style="font-weight:900">f</span></div><p class="cap">The f's crossbar reaches the same distance past its stem at every weight.</p></div>
     <div><div class="g" style="font-family:'Katagami Sans'">g</div><p class="cap">The g's tail mirrors its bowl and ends in a level cut.</p></div>
-    <div><div class="g" style="font-family:'Katagami Serif'">nE</div><p class="cap">Katagami Serif's serifs end square and meet each stroke in a short bracket.</p></div>
+    <div><div class="g" style="font-family:'Katagami Serif'">nE</div><p class="cap">Katagami Serif's serifs taper to a wedge and climb each stroke in a curved bracket.</p></div>
     <div><div class="g" style="font-weight:900"><span style="font-family:'Katagami Sans'">N</span><span style="font-family:'Katagami Round'">N</span></div><p class="cap">Katagami Round, right, rounds every corner that Sans keeps sharp.</p></div>
     <div><div class="g" style="font-family:'Katagami Mono';font-size:80px">0O1lI</div><p class="cap">Katagami Mono draws 0 and O, and 1, l and I, apart.</p></div></div>`,
     `.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}.tiles>div{background:${t.sheet};padding:22px 24px 18px;border-radius:8px;overflow:hidden}
@@ -191,8 +191,10 @@ for (const [scheme, t] of Object.entries(THEMES)) {
   q.setDefaultTimeout(90000);
   for (const [route, name] of [["/", "home"], ["/glyphs", "glyphs"], ["/features", "features"], ["/map", "map"], ["/convert", "convert"],
     ["/about", "about"], ["/faq", "faq"], ["/download", "download"], ["/katagami-serif", "library"]]) {
-    await q.goto(`${BASE}${route}`, { waitUntil: "networkidle" });
-    await q.waitForTimeout(route === "/map" ? 4000 : 1200);
+    // Font-ify fetches a live page through the site's proxy and keeps loading its parts, so its
+    // network may never go idle: that page waits for its load event and a few seconds instead
+    await q.goto(`${BASE}${route}`, { waitUntil: route === "/convert" ? "load" : "networkidle" });
+    await q.waitForTimeout(route === "/map" ? 4000 : route === "/convert" ? 6000 : 1200);
     const file = path.join(SITE_OUT, `${name}-${scheme}.png`);
     await q.screenshot({ path: file });
     shrink.push(file);
