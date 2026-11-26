@@ -176,7 +176,7 @@ U+2500 to U+259F are drawn by `tools/kerf_build/boxdraw.py`, not taken from Inte
 
 `tools/kerf_build/terminal.py` draws all 256 Braille patterns (U+2800 to U+28FF) as square dots the size of the period on a 2 by 4 grid spread evenly over the full line height, and the status symbols coding agents print in the terminal (⏺ ⎿ ✔ ✘ ✕ ◉ ▸ ⏵ ⏸ ⏹ ✢ ✳ ✶ ✻ ✽), each sized and weighted from its neighbours in every master.
 
-## Coverage in v1.4
+## Coverage in v1.5
 
 | | Katagami Sans, Round, Text, Serif | Their Italics | Katagami Mono and Mono Italic |
 |---|---|---|---|
