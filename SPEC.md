@@ -284,6 +284,8 @@ The circle has o's anchors, moved across with the ring, so Latin, Greek and Cyri
 
 `tools/finish.py` runs last on every built file. Fontbakery 1.1.0's Google Fonts profile (`fontbakery check-googlefonts`) was run on v0.1's romans and on v0.2's romans and Italics, each member's two files together.
 
+Version 1.2 changed the small capitals of Katagami Serif, and versions 1.4 and 1.5 redrew it after Geist Serif. No fontbakery run on the files of those versions is recorded here. The latest run recorded on the members is the one on the 18 files of version 1.1, and none of them has a FAIL or an ERROR. The latest on the companions is the run on the files built from Plex and Frex Sans GB in version 1.3. The table and the paragraphs below are a history in the order the rounds happened. A later paragraph can supersede a figure in an earlier one, such as the 60 built characters that became 93, the 601 small capitals that became 620 and the vendor ID KERF that became KATA.
+
 | Check | v0.1 | v0.2 |
 |---|---|---|
 | `opentype/font_version`: head and name 5 agree | FAIL: the script merge left Noto's 3.011 in head | PASS |
