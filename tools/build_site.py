@@ -106,6 +106,7 @@ CJK = {
 }
 FONT_URL = "https://katagami.kevinliu.studio/fonts/"
 HERO = "Katagami"  # morphs Mono, Round, Sans, Text and Serif; all five share Inter's point structure
+SERIF_REDRAWN = ("g",)  # letters Katagami Serif draws anew, which its hero state grows in and Text's shrinks away
 PAGES = {"page.html": "index.html", "about-page.html": "about.html", "map-page.html": "map.html", "convert-page.html": "convert.html",
          "glyphs-page.html": "glyphs.html", "features-page.html": "features.html", "faq-page.html": "faq.html",
          "download-page.html": "download.html"}  # hand-written fragment -> served page
@@ -281,8 +282,17 @@ def outlines() -> dict:
             for ci, k, _ in sorted(feet, reverse=True):
                 serif_base[ci].pop(k)
             text_flat = flatten(text, gname)
+            if gname in SERIF_REDRAWN:
+                # Katagami Serif draws this letter anew (its g has two bowls), so it cannot morph from Text
+                # point for point: toward Serif, Text's contours shrink to the letter's centre and Serif's
+                # own grow from zero height on their edges, as its slabs do
+                xs, ys = [p[0] for c in text_flat for p in c], [p[1] for c in text_flat for p in c]
+                centre = ((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2)
+                marked = [(c, False) for c in text_flat] + [(c, True) for c in flatten(serif, gname)]
+                serif_base = [[[*centre, t] for _, _, t in c] for c in text_flat]
+                feet = []
             assert [len(c) for c in serif_base] == [len(c) for c in text_flat], f"{ch}: Serif and Text outlines differ"
-            dx = serif_base[0][0][0] - text_flat[0][0][0]
+            dx = 0 if gname in SERIF_REDRAWN else serif_base[0][0][0] - text_flat[0][0][0]
             ys = [p[1] for c in serif_base for p in c]
             mid = (min(ys) + max(ys)) / 2
             slabs = [c for c, slab in marked if slab]

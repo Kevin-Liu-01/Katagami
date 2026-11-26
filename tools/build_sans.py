@@ -2099,12 +2099,12 @@ def taper_bars(fonts) -> None:
                 continue
             prev = pts[(k - 1) % 4]
             pts[k].y = bot_y + BAR_TIP * (top_y - bot_y)
-            # the bar's top leaves the stem level: a point where it does
-            at = Point(stem_x, top_y, "line")
+            # the bar's top leaves the stem level: a point where it does, named as a facet's foot for the
+            # site's morph, which grows it out of the corner beside it (the one after it, or before it)
             if abs(prev.y - top_y) < 0.5:
-                pts.insert(k, at)
+                pts.insert(k, Point(stem_x, top_y, "line", name=FACET_NEXT))
             else:
-                pts.insert(k + 1, at)
+                pts.insert(k + 1, Point(stem_x, top_y, "line", name=FACET_PREV))
 
 
 def flag_overlaps(font) -> None:
