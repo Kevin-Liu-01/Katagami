@@ -46,7 +46,7 @@ const CARDS = {
   members: (t) => page(t, MEMBERS.map(([k, name]) => `<div class="row"><div class="tag">${name}<br>${range(k)}<br>${fmt(data[k].metrics.glyphs)} glyphs</div>
     <div class="s" style="font-family:'${name}';${k === "mono" ? "font-feature-settings:'dlig'" : ""}">${{
       sans: "Squared bowls and level cuts", round: "Every corner rounded at 0.22 stems", text: "A lower x-height for long reading",
-      serif: "Rectangular serifs, moderate contrast", mono: "0O 1lI {} => != -> fn(x)" }[k]}</div></div>`).join(""),
+      serif: "Wedge serifs, high contrast", mono: "0O 1lI {} => != -> fn(x)" }[k]}</div></div>`).join(""),
     `.row{display:grid;grid-template-columns:150px 1fr;align-items:center;gap:24px;padding:16px 0}.row+.row{border-top:1px solid ${t.soft}}
      .s{font-size:40px;line-height:1.1;letter-spacing:-0.01em;white-space:nowrap}`),
 
