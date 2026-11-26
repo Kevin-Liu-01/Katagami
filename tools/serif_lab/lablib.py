@@ -109,6 +109,8 @@ def build(part, text, variant="moved", consts=None):
         if option:
             ENDS.after_serifs(fonts, kept, option, P.serif_depth)
         elif after:
+            if hasattr(M, "block_terminals"):
+                terminals = M.block_terminals(fonts, terminals)
             M.cut_terminals(fonts, terminals)
         respace(fonts, P.spacing)
         B.scale_outlines(fonts, P.scale)

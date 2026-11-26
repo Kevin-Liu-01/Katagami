@@ -314,7 +314,11 @@ G_TILT = 7.0  # degrees the upper bowl leans back, its top to the left, as Geist
 G_LOOP = (0.88, 0.17)  # the lower loop's outer width, a share of o's, and its top, a share of the x-height
 G_BAND = 1.0  # the lower loop's top band, in stems; its foot keeps o's hairline
 G_LINK = 0.62  # the link from the upper bowl down to the band, in stems
-G_EAR = (0.6, 0.45, 1.3)  # the ear: how far past the bowl it reaches, how far above it rises, and how tall its upright end is, in stems
+# the ear: how far past the bowl it reaches and how far above it rises, in Regular stems, and how far
+# below the bowl's top its level foot runs, a share of the x-height (Geist Serif's ear: 0.7, 0.5, 0.08)
+G_EAR = (0.7, 0.5, 0.08)
+G_EAR_ROOT = 4  # points along the bowl's edge where the ear is rooted
+KEEP_Y_KEY = "com.kerf.keepHeights"  # a glyph's contours, by index, that add_contrast leaves as drawn (the g's ear)
 G_FORMS = ("gcursive", "ghook", "gbar")  # built on g, drawn with one bowl: drawn out of g first so they keep it
 
 
@@ -350,23 +354,6 @@ def _extreme(poly, angle: float) -> tuple[float, float]:
     return max(poly, key=lambda q: q[0] * c + q[1] * s)
 
 
-def _ray(poly, origin, direction) -> tuple[float, float]:
-    """Where the ray from `origin` along `direction` last crosses the polygon."""
-    ox, oy = origin
-    dx, dy = direction
-    best = None
-    for (ax, ay), (bx, by) in zip(poly, poly[1:] + poly[:1]):
-        ex, ey = bx - ax, by - ay
-        den = dx * ey - dy * ex
-        if abs(den) < 1e-12:
-            continue
-        t = ((ax - ox) * ey - (ay - oy) * ex) / den
-        u = ((ax - ox) * dy - (ay - oy) * dx) / den
-        if t > 0 and 0 <= u <= 1 and (best is None or t > best):
-            best = t
-    return (ox + best * dx, oy + best * dy) if best is not None else origin
-
-
 def _o_parts(f) -> tuple:
     """o's outer and inner contours, its outer box and its side and top strokes."""
     o = f["o"]
@@ -398,7 +385,8 @@ def two_storey_g(fonts) -> None:
     back to o's and its counter lowered from the top so the band over it is
     G_BAND stems thick. A link G_LINK stems wide runs from the bowl's lower
     left, out to the left and into the band, and an ear leaves the bowl's top
-    right in a flag G_EAR[2] stems tall. The parts overlap and the glyph takes
+    right in a flag whose foot runs level G_EAR[2] of the x-height below the
+    bowl's top; the contrast leaves the ear as drawn (KEEP_Y_KEY). The parts overlap and the glyph takes
     the TrueType overlap flag. The letters of G_FORMS are drawn out of g first."""
     for f in fonts.values():
         decompose(f, [n for n in G_FORMS if n in f and any(c.baseGlyph == "g" for c in f[n].components)])
@@ -479,22 +467,25 @@ def two_storey_g(fonts) -> None:
             link.points.insert(0, link.points.pop())  # an on-curve point first, as the others
 
         # the ear: a flag from inside the bowl's top right, its top rising from the bowl, its foot level
-        k_ear = sw_ref * (sw / sw_ref) ** 0.4
-        reach, rise, tall = G_EAR[0] * sw_ref, G_EAR[1] * sw_ref, G_EAR[2] * k_ear
-        ex, et = bx1 + reach, oy1 + rise
-        foot_y = et - tall
+        weight = sw / sw_ref
+        ex, et = bx1 + G_EAR[0] * sw_ref, oy1 + G_EAR[1] * sw_ref * weight ** 0.2
+        foot_y = oy1 - G_EAR[2] * xh * weight ** 0.35
         def crossing(poly, y):
             xs = [a[0] + (y - a[1]) * (b[0] - a[0]) / (b[1] - a[1]) for a, b in zip(poly, poly[1:] + poly[:1]) if (a[1] - y) * (b[1] - y) < 0]
             return max(xs) if xs else None
-        out_x, in_x = crossing(bpoly, foot_y), crossing(bin_poly, foot_y)
-        r_foot = (out_x - 0.45 * ((out_x - in_x) if in_x is not None else hair * 2), foot_y)
-        r_top = mid(70, 0.45, bpoly, bin_poly)
-        # the root's middle point lies mid-stroke on the ray from the bowl's centre through the midpoint of
-        # its neighbours, so the root runs along the stroke from r_top to r_foot and never doubles back
+        out_x = crossing(bpoly, foot_y)
+        # the root follows the bowl's outer edge a little inside the ink, from the foot up to the shoulder,
+        # through G_EAR_ROOT points, so it never crosses itself or uncovers the counter
         bcy = sum(q[1] for q in bpoly) / len(bpoly)
-        aim = ((r_top[0] + r_foot[0]) / 2 - bcx, (r_top[1] + r_foot[1]) / 2 - bcy)
-        r_mid = tuple((o_ + i_) / 2 for o_, i_ in zip(_ray(bpoly, (bcx, bcy), aim), _ray(bin_poly, (bcx, bcy), aim)))
-        ear = _contour([(*r_top, True), (*r_mid, True), (*r_foot, True), (ex, foot_y, True), (ex, et, True), (ex - 0.12 * sw_ref, et, True)])
+        def inset(q, by=0.3 * hair):
+            d = math.hypot(bcx - q[0], bcy - q[1]) or 1.0
+            return (q[0] + (bcx - q[0]) * by / d, q[1] + (bcy - q[1]) * by / d)
+        n_b = len(bpoly)
+        k_top = bpoly.index(_extreme(bpoly, 70))
+        k_foot = min((k for k in range(n_b) if bpoly[k][0] > bcx), key=lambda k: math.hypot(bpoly[k][0] - out_x, bpoly[k][1] - foot_y))
+        span = (k_top - k_foot) % n_b  # the outer contour runs counter-clockwise, up the right side to the top
+        root = [inset(bpoly[(k_foot + round(m * span / (G_EAR_ROOT - 1))) % n_b]) for m in range(G_EAR_ROOT)]
+        ear = _contour([*((*q, True) for q in reversed(root)), (ex, foot_y, True), (ex, et, True), (ex - 0.12 * sw_ref, et, True)])
         if sum(a.x * b.y - b.x * a.y for a, b in zip(ear.points, ear.points[1:] + ear.points[:1])) < 0:
             ear = _contour([(q.x, q.y, True) for q in reversed(ear.points)])
 
@@ -506,6 +497,7 @@ def two_storey_g(fonts) -> None:
         for c in bowl + loop + [link, ear]:
             g.appendContour(c)
         g.lib["public.truetype.overlap"] = True
+        g.lib[KEEP_Y_KEY] = [len(g.contours) - 1]  # the ear: add_contrast leaves its heights as drawn
         shift = old.xMin - g.getBounds(f).xMin
         for c in g.contours:
             for q in c.points:
@@ -1508,7 +1500,10 @@ def add_contrast(fonts, amounts: dict) -> None:
         light = {name: snap[order[order.index(style) - 1]][name] for name in snap[style]}
         for g in f:
             ys, ays, cys = light[g.name]
+            keep = set(g.lib.get(KEEP_Y_KEY, ()))
             for ci, (c, cy) in enumerate(zip(g.contours, ys)):
+                if ci in keep:
+                    continue
                 if ci in dots.get(g.name, ()):
                     shift = amount * (min(cy) + max(cy) - min(pt.y for pt in c.points) - max(pt.y for pt in c.points)) / 2
                     for pt in c.points:
@@ -2408,6 +2403,66 @@ def small_cap_terminals(fonts, plan: dict) -> dict:
     return out
 
 
+# Letters whose top terminal ends as Geist Serif's does: a level cut about as wide as a stem, both
+# edges arriving upright at it, and no face or beak. The share of the x-height the cut moves down.
+BLOCK = {"a": 0.06, "c": 0.0}
+BLOCK_CUT = (1.12, 1.12, 0.95)  # Thin, Regular, Black: the block's level cut in the master's stems (Geist Serif's c 1.18, a 1.06)
+BLOCK_HANDLE = 0.9  # each edge's upright handle, at least this share of the cut, so the block's sides read straight
+
+
+def _base_letter(font, name: str) -> str:
+    """The character a glyph draws, or its base glyph's (a.sups is a)."""
+    base = name.split(".")[0]
+    codes = font[name].unicodes or (font[base].unicodes if base in font else [])
+    return chr(codes[0]) if codes else ""
+
+
+def block_terminals(fonts, plan: dict) -> dict:
+    """End the top terminal of the letters of BLOCK as a block, as Geist Serif does.
+
+    The level cut moves down the stroke by the letter's share of the x-height,
+    each edge split or extended along its own curve (`recut`). Each edge's last
+    handle then stands straight above its corner, so the stroke arrives upright
+    at both ends of the cut, and the inner corner moves away from the outer one,
+    its handle with it, until the cut is BLOCK_CUT of the master's stem; each
+    upright handle is at least BLOCK_HANDLE of the cut, so the sides read
+    straight, and never runs past three quarters of its edge. No
+    point is added, so the masters stay compatible. Returns the terminal plan
+    without these terminals, which take no face."""
+    ref = fonts["Regular"]
+    blocked = {name: [t for t in terms if t[0] == "level" and t[5] < 0 and _base_letter(ref, name) in BLOCK]
+               for name, terms in plan.items()}
+    for style, f in fonts.items():
+        sw = f.lib.get(SERIF_STEM_KEY) or stem(f)
+        xh = f.info.xHeight
+        share = dict(zip(("Thin", "Regular", "Black"), BLOCK_CUT)).get(style, BLOCK_CUT[1])
+        for name, terms in blocked.items():
+            for kind, ci, i, j, outer, way, scale in terms:
+                pts = f[name].contours[ci].points
+                drop = BLOCK[_base_letter(ref, name)] * xh
+                if drop:
+                    p, q = pts[i], pts[j]
+                    recut(pts, i, j, 0.0, through=((p.x + q.x) / 2, (p.y + q.y) / 2 - drop))
+                sides = _edges(pts, i, j, outer)
+                if sides is None:
+                    continue
+                o_side, n_side = sides
+                o, n_ = pts[o_side[0]], pts[n_side[0]]
+                cut = abs(n_.x - o.x)
+                for side in sides:
+                    corner, handle, far = pts[side[0]], pts[side[1]], pts[side[3]]
+                    rise = handle.y - corner.y
+                    up = 1 if (far.y - corner.y) > 0 else -1
+                    length = min(max(abs(rise), BLOCK_HANDLE * cut), 0.75 * abs(far.y - corner.y))
+                    handle.x, handle.y = corner.x, corner.y + up * length
+                grow = share * sw - cut
+                if grow > 0:
+                    d = grow if n_.x > o.x else -grow
+                    n_.x += d
+                    pts[n_side[1]].x += d
+    return {name: [t for t in terms if t not in blocked.get(name, [])] for name, terms in plan.items()}
+
+
 def cut_terminals(fonts, plan: dict) -> None:
     """Give every terminal plan_terminals found an upright face at its outer
     corner (`_facet`), on Text's own curve, which runs on past a level cut to a
@@ -2715,6 +2770,7 @@ def transform(p: Profile, italic: bool = False) -> tuple[dict, dict]:
     if p.serif_reach:
         # after the serifs (a facet adds a point, and their plan holds point numbers) and after the
         # small capitals, so each takes its own facets on its own curve, not its capital's re-emboldened
+        terminals = block_terminals(fonts, terminals)
         cut_terminals(fonts, terminals | small_cap_terminals(fonts, terminals))
     respace(fonts, p.spacing)
     set_space(fonts, p.space_width)
