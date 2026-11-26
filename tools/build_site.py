@@ -23,8 +23,9 @@ The site lives in its own repo, Katagami-Website, checked out next to this one
 Run after tools/build.sh, then commit and push Katagami-Website; Vercel deploys it.
 After editing only a page fragment, `tools/build_site.py --pages` rewraps the pages.
 After a change to the Curves plate's data, `tools/build_site.py --data` writes data.js and glyphs.js alone.
-After a change to the download table's links, `tools/build_site.py --downloads` writes the zip, the language packages
-(build/packages, for the release) and files.json alone.
+After a change to the download table's links, `tools/build_site.py --downloads` writes the full zip and the language
+packages (build/release, for the GitHub release) and files.json alone. The site holds no zip: it redirects
+/download/Katagami-<version>.zip to the release's copy.
 The full build and --data stop before writing data.js when build/, where the hero and the Curves
 plate read their glyphs, no longer draws them as fonts/ ships them.
 """
@@ -836,9 +837,9 @@ def fonts_ref() -> str:
 def site_facts() -> dict:
     """Numbers the header and footer print, read from the built data and the repository."""
     facts = {"version": VERSION, "characters": 0, "glyphs": 0, "features": 0, "people": "", "commit": "", "date": time.strftime("%Y-%m-%d"), "zip": ""}
-    zip_path = PUBLIC / "download" / ZIP
-    if zip_path.exists():
-        facts["zip"] = f"{zip_path.stat().st_size / 1048576:.1f} MB"  # the unit the download page uses
+    files_json = PUBLIC / "download" / "files.json"
+    if files_json.exists():
+        facts["zip"] = f"{json.loads(files_json.read_text())['zip']['bytes'] / 1048576:.1f} MB"  # the unit the download page uses
     data_js = PUBLIC / "data.js"
     if data_js.exists():
         text = data_js.read_text()
@@ -1041,10 +1042,10 @@ CJK_FILES = [ROOT / "fonts" / "cjk" / f"{name}{style}[wght].ttf" for name in CJK
 # members cut to the characters Katagami draws itself (Latin, Greek, Cyrillic and its
 # symbols) and the merged scripts a package names, and the CJK companion it names, roman
 # and Italic. Every font keeps its names and version, so the full set replaces a package
-# cleanly. Mono merges no scripts and ships whole. Together the packages weigh more than
-# the full zip, so they are assets of the GitHub release, not files in the site's git:
-# --downloads writes them to build/packages, and files.json links each to the release.
-PACKAGE_DIR = ROOT / "build" / "packages"
+# cleanly. Mono merges no scripts and ships whole. The packages and the full zip are assets
+# of the GitHub release, not files in the site's git: --downloads writes them to build/release,
+# and files.json links each to the release.
+RELEASE = ROOT / "build" / "release"  # the release's zips wait here to be uploaded; build/ is gitignored
 PACKAGES = [
     # the zip's name after the version, the flag the download menu draws (ISO 3166), the name it shows,
     # the merged scripts (build_world.SCRIPTS) and the CJK companion
@@ -1112,17 +1113,17 @@ def package_fresh(zpath: Path, fonts: list[Path], companions: list[Path], script
         return z.comment == package_key(fonts, companions, scripts).encode()
 
 
-def write_packages(fonts: list[Path], cjk_files: list[Path]) -> list[dict]:
-    """Each language package's zip in build/packages, made again where its fonts or its cut
-    changed, and its entry for files.json, linked to the release. Other zips there are removed."""
-    PACKAGE_DIR.mkdir(parents=True, exist_ok=True)
+def write_packages(fonts: list[Path], cjk_files: list[Path]) -> tuple[list[dict], list[str]]:
+    """Each language package's zip in build/release, made again where its fonts or its cut
+    changed, and its entry for files.json, linked to the release, with the names of the zips it
+    made. Zips there other than the packages and the full zip are removed."""
     packages = {f"Katagami-{VERSION}-{part}.zip": (part, *rest) for part, *rest in PACKAGES}
-    for old in PACKAGE_DIR.glob("*.zip"):
-        if old.name not in packages:
+    for old in RELEASE.glob("*.zip"):
+        if old.name not in packages and old.name != ZIP:
             old.unlink()
     tag, made, entries = f"v{VERSION}", [], []
     for name, (part, flag, label, scripts, companion) in packages.items():
-        zpath = PACKAGE_DIR / name
+        zpath = RELEASE / name
         companions = [path for path in cjk_files if companion and path.name.startswith(f"KatagamiCJK{companion}")]
         if not package_fresh(zpath, fonts, companions, scripts):
             started = time.time()
@@ -1134,28 +1135,27 @@ def write_packages(fonts: list[Path], cjk_files: list[Path]) -> list[dict]:
         entries.append({"key": part.lower(), "flag": flag, "name": label, "scripts": own,
                         "cjk": f"Katagami CJK {companion}" if companion else None, "file": name, "bytes": zpath.stat().st_size,
                         "url": f"{REPO}/releases/download/{tag}/{name}"})
-    if made or fonts_ref() != tag:
-        print(f"files.json links the packages to the {tag} release. Upload them there, once the release holds this checkout's fonts: "
-              f"gh release upload {tag} {PACKAGE_DIR.relative_to(ROOT)}/*.zip --clobber", file=sys.stderr)
-    return entries
+    return entries, made
 
 
 def write_downloads() -> None:
     """The zip of the five members and the four CJK companions, roman and Italic, and
-    the license, the language packages (write_packages), and files.json, which the
-    download page lists: every font file with its size and a link, and each package.
-    An older version's zip is removed."""
+    the license, in build/release for the GitHub release, the language packages beside it
+    (write_packages), and files.json, which the download page lists: every font file with
+    its size and a link, the zip and each package with its address on the release.
+    A zip left in the site's download folder is removed."""
     out = PUBLIC / "download"
     out.mkdir(exist_ok=True)
     for old in out.glob("Katagami-*.zip"):
-        if old.name != ZIP:
-            old.unlink()
-    zpath = out / ZIP
+        old.unlink()  # the zip is a release asset, and the site redirects its address there
+    RELEASE.mkdir(parents=True, exist_ok=True)
+    zpath = RELEASE / ZIP
     keys = ("sans", "round", "text", "serif", "mono")
     fonts = [path for key in keys for path in (FONTS[key], ITALICS[key]) if path.exists()]
     cjk_files = [path for path in CJK_FILES if path.exists()]
     folder = f"Katagami-{VERSION}"
-    if not all(fresh(path, zpath) for path in (*fonts, *cjk_files)):
+    made = not all(fresh(path, zpath) for path in (*fonts, *cjk_files))
+    if made:
         with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
             # fixed timestamps, so the same fonts make the same zip
             for arc, src in [*((f"{folder}/{path.name}", path) for path in fonts),
@@ -1175,9 +1175,16 @@ def write_downloads() -> None:
             "file": path.name, "bytes": path.stat().st_size, "url": raw(path)} for path in cjk_files]
     with zipfile.ZipFile(zpath) as z:
         listing = [i.filename for i in z.infolist()]
-    packages = write_packages(fonts, cjk_files)
-    (out / "files.json").write_text(json.dumps({"version": VERSION, "zip": {"file": zpath.name, "bytes": zpath.stat().st_size, "files": listing},
+    packages, made_packages = write_packages(fonts, cjk_files)
+    tag = f"v{VERSION}"
+    (out / "files.json").write_text(json.dumps({"version": VERSION, "zip": {"file": zpath.name, "bytes": zpath.stat().st_size, "files": listing,
+                                                                             "url": f"{REPO}/releases/download/{tag}/{ZIP}"},
                                                 "packages": packages, "members": files, "italics": italics, "cjk": cjk}, separators=(",", ":")))
+    if made or made_packages or ref != tag:
+        # the site redirects the zip's address to the release, so the release needs its zips before the site deploys
+        print(f"files.json links the zip and the packages to the {tag} release. Upload {RELEASE.relative_to(ROOT)}/*.zip there "
+              f"before the site deploys, once the release holds this checkout's fonts: gh release upload {tag} "
+              f"{RELEASE.relative_to(ROOT)}/*.zip --clobber", file=sys.stderr)
 
 
 def site_data() -> dict:
