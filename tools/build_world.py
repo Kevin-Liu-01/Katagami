@@ -33,8 +33,11 @@ from __future__ import annotations
 
 import copy
 import math
+import os
 import sys
 import tempfile
+from concurrent.futures import ProcessPoolExecutor
+from itertools import repeat
 from pathlib import Path
 
 from fontTools import subset
@@ -56,6 +59,7 @@ ROOT = Path(__file__).resolve().parents[1]
 NOTO = ROOT / "vendor" / "noto"
 NOTO_XHEIGHT = 536  # Noto Sans, per 1000
 MASTERS = {"Thin": 100, "Regular": 400, "Black": 900}
+JOBS = int(os.environ.get("KATAGAMI_JOBS", "4"))  # how many scripts are built side by side
 INSTANCES = ["Thin", "ExtraLight", "Light", "Regular", "Medium", "SemiBold", "Bold", "ExtraBold", "Black"]
 
 # Noto file stem -> the Unicode blocks taken from it
@@ -614,12 +618,15 @@ def build(key: str, only: list[str] | None = None, italic: bool = False) -> Path
         parts = {style: [] for style in MASTERS}
         dotted = {style: [] for style in MASTERS}
         with stage("build_world: script masters"):
-            for script in scripts:
-                paths, anchors = script_masters(script, factor, have, work, slant_by)
-                for style, path in paths.items():
-                    parts[style].append(path)
-                    dotted[style].append(anchors[style])
-                print(f"  {script}")
+            # each script is built from its own Noto font into files named after it, so the scripts are
+            # built side by side; map returns them in the order of `scripts`, the order they are merged in
+            with ProcessPoolExecutor(max_workers=JOBS) as pool:
+                built = pool.map(script_masters, scripts, repeat(factor), repeat(have), repeat(work), repeat(slant_by))
+                for script, (paths, anchors) in zip(scripts, built):
+                    for style, path in paths.items():
+                        parts[style].append(path)
+                        dotted[style].append(anchors[style])
+                    print(f"  {script}")
         with stage("build_world: merge masters"):
             merged = {style: merge_master(kerf[style], parts[style], work / f"merged-{style}.ttf", dotted[style]) for style in MASTERS}
 
