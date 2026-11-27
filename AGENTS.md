@@ -14,9 +14,10 @@ KATAGAMI_SITE=/absolute/path/to/Katagami-Website .venv/bin/python tools/build_si
 
 ## What takes long
 
-- `tools/build.sh` builds every member. One proportional member takes 15 to 40 minutes, and a full Katagami Serif build has taken over 3 hours on a busy machine.
+- `tools/build.sh` builds every member and prints how long each stage took, in lines that begin with `timing`. Katagami Text and Katagami Serif each took about 4 minutes on an idle machine in November 2026, most of it in the script merge. A busy machine has taken 15 to 40 minutes for a member and over 3 hours for Serif.
 - The CJK companions compile each Plex source once into `build/cjk-src`, which takes from a few minutes for KR to most of an hour for JP.
-- A full `tools/build_site.py` run has taken from 1.5 to almost 3 hours on a busy machine.
+- A full `tools/build_site.py` run took about 5 minutes on an idle machine in November 2026 and has taken almost 3 hours on a busy one.
+- The script merge and `tools/build_site.py` build several scripts or web font slices at once. `KATAGAMI_JOBS` sets how many, and the default is 4.
 - Never start any of them to look at a single glyph or to check a small change. Use a fast loop, and ask the owner before a full build.
 
 ## Fast loops
