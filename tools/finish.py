@@ -61,6 +61,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from kerf_build.contours import fix_shared_segments  # noqa: E402
 from kerf_build.fontops import VENDOR, VERSION  # noqa: E402
 from kerf_build.profiles import PROFILES  # noqa: E402
+from kerf_build.timing import stage  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 STEMS = {key: p.file_stem for key, p in PROFILES.items()} | {"mono": "KatagamiMono"}
@@ -530,37 +531,38 @@ def finish(key: str, only: str | None = None) -> None:
     for path, italic in ((roman_path, False), (italic_path, True)):
         if not path.exists() or only and only != ("italic" if italic else "roman"):
             continue
-        font = roman if not italic else TTFont(path)
-        drawn = draw_in_transformed(font)
-        if drawn:
-            print(f"{path.relative_to(ROOT)}: {len(drawn)} glyphs with transformed components drawn in")
-        changed, faded, left = fix_shared_segments(font)
-        if changed or left:
-            print(f"{path.relative_to(ROOT)}: shared segments removed in {len(changed)} glyphs"
-                  + (f" ({len(faded)} only near the default: {' '.join(faded)})" if faded else "")
-                  + (f"; still shared in {' '.join(left)}" if left else ""))
-        pruned = prune_unreachable(font)
-        if pruned:
-            print(f"{path.relative_to(ROOT)}: {pruned} unreachable glyphs dropped")
-        ps = names(font, family, italic)
-        version(font, ps)
-        style_bits(font, italic)
-        stat(font, italic)
-        if italic and roman is not None:
-            metrics_from(font, roman)
-        clipping(font, extremes)
-        unhinted(font)
-        sort_layout(font)
-        meta(font)
-        moved = glyph_classes(font)
-        if moved:
-            print(f"{path.relative_to(ROOT)}: {len(moved)} glyphs moved to their GDEF class")
-        prune_names(font)  # what an earlier STAT or a second run left behind
-        shortened = short_names(font)  # last: only the post table sees the new names
-        if shortened:
-            print(f"{path.relative_to(ROOT)}: {len(shortened)} glyph names shortened")
-        font.save(path)
-        print(f"{path.relative_to(ROOT)}: finished")
+        with stage("finish: " + path.name):
+            font = roman if not italic else TTFont(path)
+            drawn = draw_in_transformed(font)
+            if drawn:
+                print(f"{path.relative_to(ROOT)}: {len(drawn)} glyphs with transformed components drawn in")
+            changed, faded, left = fix_shared_segments(font)
+            if changed or left:
+                print(f"{path.relative_to(ROOT)}: shared segments removed in {len(changed)} glyphs"
+                      + (f" ({len(faded)} only near the default: {' '.join(faded)})" if faded else "")
+                      + (f"; still shared in {' '.join(left)}" if left else ""))
+            pruned = prune_unreachable(font)
+            if pruned:
+                print(f"{path.relative_to(ROOT)}: {pruned} unreachable glyphs dropped")
+            ps = names(font, family, italic)
+            version(font, ps)
+            style_bits(font, italic)
+            stat(font, italic)
+            if italic and roman is not None:
+                metrics_from(font, roman)
+            clipping(font, extremes)
+            unhinted(font)
+            sort_layout(font)
+            meta(font)
+            moved = glyph_classes(font)
+            if moved:
+                print(f"{path.relative_to(ROOT)}: {len(moved)} glyphs moved to their GDEF class")
+            prune_names(font)  # what an earlier STAT or a second run left behind
+            shortened = short_names(font)  # last: only the post table sees the new names
+            if shortened:
+                print(f"{path.relative_to(ROOT)}: {len(shortened)} glyph names shortened")
+            font.save(path)
+            print(f"{path.relative_to(ROOT)}: finished")
 
 
 if __name__ == "__main__":

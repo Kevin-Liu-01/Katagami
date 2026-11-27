@@ -62,6 +62,7 @@ from build_world import SCRIPTS  # noqa: E402
 from kerf_build.cjk import latin_chars  # noqa: E402
 from kerf_build.fontops import VERSION as _VERSION  # noqa: E402
 from kerf_build.sitepath import PUBLIC, SITE, require_site  # noqa: E402
+from kerf_build.timing import stage  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 FONTS = {"sans": ROOT / "fonts/sans/KatagamiSans[wght].ttf", "round": ROOT / "fonts/round/KatagamiRound[wght].ttf",
@@ -1281,15 +1282,21 @@ def write_data() -> None:
 
 def main() -> None:
     (PUBLIC / "fonts").mkdir(parents=True, exist_ok=True)
-    faces = web_fonts()
-    write_faces(faces)
-    first_fonts()
+    with stage("build_site: web_fonts"):
+        faces = web_fonts()
+    with stage("build_site: write_faces"):
+        write_faces(faces)
+    with stage("build_site: first_fonts"):
+        first_fonts()
     for name in stale_slices(faces):
         print(f"removed stale fonts/{name}")
-    write_downloads()
-    write_data()
+    with stage("build_site: write_downloads"):
+        write_downloads()
+    with stage("build_site: write_data"):
+        write_data()
 
-    write_pages()
+    with stage("build_site: write_pages"):
+        write_pages()
     for p in sorted(PUBLIC.rglob("*")):
         rel = p.relative_to(PUBLIC)
         if p.is_file() and not any(part.startswith(".") for part in rel.parts):

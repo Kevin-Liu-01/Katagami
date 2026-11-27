@@ -50,6 +50,7 @@ from kerf_build.fontops import italic_style  # noqa: E402
 from kerf_build.outline import polygon_area, sound  # noqa: E402
 from kerf_build.profiles import PROFILES  # noqa: E402
 from kerf_build.slant import slant  # noqa: E402
+from kerf_build.timing import stage  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 NOTO = ROOT / "vendor" / "noto"
@@ -298,13 +299,17 @@ def script_masters(script: str, factor: float, have: set[int], work: Path,
     (`dotted_circle_anchors`), or None where Noto has no dotted circle."""
     cmap = TTFont(noto_file(script)).getBestCmap()
     unicodes = [u for lo, hi in SCRIPTS[script] for u in range(lo, hi + 1) if u in cmap and u not in have]
-    statics = _statics(_subset(script, unicodes), factor, work, script, slant_by)
+    with stage("script_masters: subset"):
+        sub = _subset(script, unicodes)
+    with stage("script_masters: instance, embolden and scale"):
+        statics = _statics(sub, factor, work, script, slant_by)
     out = {style: _save(static, work / f"{script}-{style}.ttf") for style, static in statics.items()}
     dotted = dict.fromkeys(MASTERS)
     if 0x25CC in cmap:
-        # the same subset with Noto's dotted circle kept, read for its anchors only
-        with_dc = _statics(_subset(script, unicodes + [0x25CC]), factor, work, f"{script}-dc", slant_by)
-        dotted = {style: dotted_circle_anchors(with_dc[style], TTFont(out[style])) for style in MASTERS}
+        with stage("script_masters: dotted-circle pass"):
+            # the same subset with Noto's dotted circle kept, read for its anchors only
+            with_dc = _statics(_subset(script, unicodes + [0x25CC]), factor, work, f"{script}-dc", slant_by)
+            dotted = {style: dotted_circle_anchors(with_dc[style], TTFont(out[style])) for style in MASTERS}
     return out, dotted
 
 
@@ -603,17 +608,20 @@ def build(key: str, only: list[str] | None = None, italic: bool = False) -> Path
     scripts = only or list(SCRIPTS)
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
-        kerf = {style: _save(instantiateVariableFont(TTFont(core), {"wght": w}), work / f"kerf-{style}.ttf")
-                for style, w in MASTERS.items()}
+        with stage("build_world: instance the member's masters"):
+            kerf = {style: _save(instantiateVariableFont(TTFont(core), {"wght": w}), work / f"kerf-{style}.ttf")
+                    for style, w in MASTERS.items()}
         parts = {style: [] for style in MASTERS}
         dotted = {style: [] for style in MASTERS}
-        for script in scripts:
-            paths, anchors = script_masters(script, factor, have, work, slant_by)
-            for style, path in paths.items():
-                parts[style].append(path)
-                dotted[style].append(anchors[style])
-            print(f"  {script}")
-        merged = {style: merge_master(kerf[style], parts[style], work / f"merged-{style}.ttf", dotted[style]) for style in MASTERS}
+        with stage("build_world: script masters"):
+            for script in scripts:
+                paths, anchors = script_masters(script, factor, have, work, slant_by)
+                for style, path in paths.items():
+                    parts[style].append(path)
+                    dotted[style].append(anchors[style])
+                print(f"  {script}")
+        with stage("build_world: merge masters"):
+            merged = {style: merge_master(kerf[style], parts[style], work / f"merged-{style}.ttf", dotted[style]) for style in MASTERS}
 
         ds = DesignSpaceDocument()
         ax = AxisDescriptor()
@@ -632,7 +640,8 @@ def build(key: str, only: list[str] | None = None, italic: bool = False) -> Path
             inst.location = {"Weight": design[(i + 1) * 100]}
             ds.addInstance(inst)
         ds.write(work / "world.designspace")
-        font, _, _ = build_variable(str(work / "world.designspace"))
+        with stage("build_world: build the variable font"):
+            font, _, _ = build_variable(str(work / "world.designspace"))
         kept = keep_own_variations(vf, font)
         print(f"  {len(kept)} of the member's own glyphs keep fontmake's variations")
         font.save(target)

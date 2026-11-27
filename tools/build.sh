@@ -135,51 +135,53 @@ fi
 
 # wants KEY PART: true when this run builds KEY's roman or italic
 wants() { [[ "$which" == all || "$which" == "$1" || "$which" == "$1-$2" ]]; }
+# run CMD...: the command, then how long it took, for the timing table (rg '^timing' on the log)
+run() { local t=$SECONDS; "$@"; echo "timing  $((SECONDS - t)) s  $*"; }
 
 # proportional KEY STEM: Inter's masters into the member, fontmake, then the script merge
 proportional() {
   local key=$1 stem=$2
   mkdir -p "fonts/$key"
   if wants "$key" roman; then
-    $PY tools/build_sans.py "$key"
-    .venv/bin/fontmake -m "build/$key/$stem.designspace" -o variable \
+    run $PY tools/build_sans.py "$key"
+    run .venv/bin/fontmake -m "build/$key/$stem.designspace" -o variable \
       --output-path "build/$key/$stem-core[wght].ttf" --flatten-components
-    $PY tools/build_world.py "$key"
+    run $PY tools/build_world.py "$key"
   fi
   if wants "$key" italic; then
-    $PY tools/build_sans.py "$key" --italic
-    .venv/bin/fontmake -m "build/$key-italic/$stem-Italic.designspace" -o variable \
+    run $PY tools/build_sans.py "$key" --italic
+    run .venv/bin/fontmake -m "build/$key-italic/$stem-Italic.designspace" -o variable \
       --output-path "build/$key-italic/$stem-Italic-core[wght].ttf" --flatten-components
-    $PY tools/build_world.py "$key" --italic
+    run $PY tools/build_world.py "$key" --italic
   fi
   if wants "$key" roman || wants "$key" italic; then
-    $PY tools/finish.py "$key"
+    run $PY tools/finish.py "$key"
   fi
 }
 
 proportional sans KatagamiSans
 
 case "$which" in
-  all|cjk) $PY tools/build_cjk.py ;;
-  cjk-roman) $PY tools/build_cjk.py --roman ;;
-  cjk-italic) $PY tools/build_cjk.py --italic ;;
+  all|cjk) run $PY tools/build_cjk.py ;;
+  cjk-roman) run $PY tools/build_cjk.py --roman ;;
+  cjk-italic) run $PY tools/build_cjk.py --italic ;;
 esac
 
 mkdir -p fonts/mono
 if wants mono roman; then
-  $PY tools/build_mono.py
-  .venv/bin/fontmake -m build/mono/KatagamiMono.designspace -o variable \
+  run $PY tools/build_mono.py
+  run .venv/bin/fontmake -m build/mono/KatagamiMono.designspace -o variable \
     --output-path 'fonts/mono/KatagamiMono[wght].ttf' --flatten-components
-  $PY tools/build_mono.py --finish 'fonts/mono/KatagamiMono[wght].ttf'
+  run $PY tools/build_mono.py --finish 'fonts/mono/KatagamiMono[wght].ttf'
 fi
 if wants mono italic; then
-  $PY tools/build_mono.py --italic
-  .venv/bin/fontmake -m build/mono-italic/KatagamiMono-Italic.designspace -o variable \
+  run $PY tools/build_mono.py --italic
+  run .venv/bin/fontmake -m build/mono-italic/KatagamiMono-Italic.designspace -o variable \
     --output-path 'fonts/mono/KatagamiMono-Italic[wght].ttf' --flatten-components
-  $PY tools/build_mono.py --finish 'fonts/mono/KatagamiMono-Italic[wght].ttf'
+  run $PY tools/build_mono.py --finish 'fonts/mono/KatagamiMono-Italic[wght].ttf'
 fi
 if wants mono roman || wants mono italic; then
-  $PY tools/finish.py mono
+  run $PY tools/finish.py mono
 fi
 
 proportional round KatagamiRound

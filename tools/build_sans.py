@@ -47,6 +47,7 @@ from kerf_build.outline import (  # noqa: E402
 )
 from kerf_build.missing import add_missing, complete_anchors, declare_scripts, dot_marks, soft_dotted_modifiers, patch_ccmp, turned_small_f, unseat_marks  # noqa: E402
 from kerf_build.profiles import PROFILES, Profile  # noqa: E402
+from kerf_build.timing import stage  # noqa: E402
 
 FEATURES = ROOT / "vendor" / "inter" / "src" / "features"
 KEEP_ROUND = ("circle", "circled", "ring", "degree", "bullet", "dotted")
@@ -2784,12 +2785,15 @@ def transform(p: Profile, italic: bool = False) -> tuple[dict, dict]:
 
 
 def build(p: Profile, italic: bool = False) -> Path:
-    fonts, corners = transform(p, italic)
+    with stage("build_sans: transform"):
+        fonts, corners = transform(p, italic)
     if italic:
         # each glyph is the roman's design, slanted: Inter Italic's drawing
         # stays only where it matches the roman's
-        roman, roman_corners = transform(p)
-        distances = design_distances(fonts, roman)
+        with stage("build_sans: roman transform for the Italic"):
+            roman, roman_corners = transform(p)
+        with stage("build_sans: design distances"):
+            distances = design_distances(fonts, roman)
         # and where the Italic's own drawing takes terminal facets the roman's does not (or the other
         # way round: Inter Italic's J ends in a curve the facets can cut, the roman's in a straight stub)
         faceted = set(fonts["Regular"].lib.get(FACETS_KEY, [])) ^ set(roman["Regular"].lib.get(FACETS_KEY, []))
@@ -2813,18 +2817,19 @@ def build(p: Profile, italic: bool = False) -> Path:
     shutil.copytree(FEATURES, out / "features")
     patch_ccmp(out / "features")
     paths = {}
-    for style, f in fonts.items():
-        set_names(f, p.family, italic_style(style) if italic else style, MASTERS[style])
-        if italic:
-            f.info.styleMapStyleName = "italic" if style == "Regular" else None
-        assign_categories(f)
-        if corners:
-            # which corners were rounded, so the site can give Sans and Mono the
-            # same corners at zero radius and morph between them point for point
-            f.lib["com.kerf.roundedCorners"] = corners
-        path = out / f"{p.file_stem}-{(italic_style(style) if italic else style).replace(' ', '')}.ufo"
-        f.save(path, overwrite=True)
-        paths[style] = path
+    with stage("build_sans: save masters"):
+        for style, f in fonts.items():
+            set_names(f, p.family, italic_style(style) if italic else style, MASTERS[style])
+            if italic:
+                f.info.styleMapStyleName = "italic" if style == "Regular" else None
+            assign_categories(f)
+            if corners:
+                # which corners were rounded, so the site can give Sans and Mono the
+                # same corners at zero radius and morph between them point for point
+                f.lib["com.kerf.roundedCorners"] = corners
+            path = out / f"{p.file_stem}-{(italic_style(style) if italic else style).replace(' ', '')}.ufo"
+            f.save(path, overwrite=True)
+            paths[style] = path
     if italic:
         # which glyphs took the roman's drawing, and how far every glyph was from it
         (out / "romanized.json").write_text(json.dumps(

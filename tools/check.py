@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 from kerf_build.fontops import VERSION  # noqa: E402
 from kerf_build.outline import inside_out, polygon_area, sound  # noqa: E402
+from kerf_build.timing import _TOTALS, stage  # noqa: E402
 
 MEMBERS = ("sans", "round", "text", "serif", "mono")
 WIDE, MONO, CJK = (100, 400, 900), (100, 400, 700), (100, 100, 900)  # the weight axis: lowest, default, highest
@@ -120,6 +121,16 @@ class Outline(unittest.TestCase):
         self.assertFalse(sound(SQUARE, [(60, 60), (140, 60), (140, 140), (60, 140)]))  # moved outside itself
         self.assertFalse(sound(SQUARE, INNER, floor=7000))  # under the floor
         self.assertFalse(sound(SQUARE, [(10, 10), (90, 10), (90, 90), (120, 120), (120, 90), (90, 120), (90, 90), (10, 90)]))  # a new lobe
+
+
+class Timing(unittest.TestCase):
+    """kerf_build/timing.py: a stage entered twice is one line of the table, summed."""
+
+    def test_a_stage_entered_twice_is_counted_twice(self):
+        for _ in range(2):
+            with stage("check.py"):
+                pass
+        self.assertEqual(_TOTALS.pop("check.py")[1], 2)  # popped, so the table printed at exit stays empty
 
 
 class SiteHelpers(unittest.TestCase):
