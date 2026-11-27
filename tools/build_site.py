@@ -37,12 +37,14 @@ import hashlib
 import html
 import json
 import math
+import os
 import re
 import subprocess
 import time
 import unicodedata
 import zipfile
 from collections import Counter
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import sys
@@ -107,6 +109,7 @@ CJK = {
     "KatagamiCJKKR": [(0x1100, 0x11FF), (0x3130, 0x318F), (0xA960, 0xA97F), (0xAC00, 0xD7FF), (0xFFA0, 0xFFDC)],
 }
 FONT_URL = "https://katagami.kevinliu.studio/fonts/"
+JOBS = int(os.environ.get("KATAGAMI_JOBS", "4"))  # slices cut side by side; each worker holds one font of 7 to 9 MB
 HERO = "Katagami"  # morphs Mono, Round, Sans, Text and Serif; all five share Inter's point structure
 SERIF_REDRAWN = ("g",)  # letters Katagami Serif draws anew, which its hero state grows in and Text's shrinks away
 PAGES = {"page.html": "index.html", "about-page.html": "about.html", "map-page.html": "map.html", "convert-page.html": "convert.html",
@@ -591,31 +594,32 @@ def web_fonts() -> list[list]:
     """Write every member's slices, roman and Italic, and the CJK companions'; return
     the faces as [family, file, weights, unicode-range, style] with stamped file names."""
     faces = []
+    jobs = []  # (font, characters, slice): every slice, cut side by side below
     scripted = set(SCRIPT_OF)
     stamped = lambda name: stamp(f"fonts/{name}").removeprefix("fonts/")  # noqa: E731
     for key, path in FONTS.items():
         cmap = set(TTFont(path).getBestCmap())
         core = cmap - scripted
         stem = WOFF2[key].removesuffix(".woff2")
-        woff2_slice(path, core, PUBLIC / "fonts" / WOFF2[key])
-        faces.append([FAMILY[key], stamped(WOFF2[key]), WEIGHTS[key], unicode_range(core, avoid=scripted), "normal"])
+        jobs.append((path, sorted(core), PUBLIC / "fonts" / WOFF2[key]))
+        faces.append([FAMILY[key], WOFF2[key], WEIGHTS[key], unicode_range(core, avoid=scripted), "normal"])
         italic = ITALICS[key]
         if italic.exists():
             icore = set(TTFont(italic).getBestCmap()) - scripted
-            woff2_slice(italic, icore, PUBLIC / "fonts" / WOFF2_ITALIC[key])
-            faces.append([FAMILY[key], stamped(WOFF2_ITALIC[key]), WEIGHTS[key], unicode_range(icore, avoid=scripted), "italic"])
+            jobs.append((italic, sorted(icore), PUBLIC / "fonts" / WOFF2_ITALIC[key]))
+            faces.append([FAMILY[key], WOFF2_ITALIC[key], WEIGHTS[key], unicode_range(icore, avoid=scripted), "italic"])
         for script, ranges in SCRIPTS.items():
             have = {u for lo, hi in ranges for u in range(lo, hi + 1)} & cmap
             if not have:
                 continue
             name = f"{stem}-{script.lower()}.woff2"
-            woff2_slice(path, have, PUBLIC / "fonts" / name)
+            jobs.append((path, sorted(have), PUBLIC / "fonts" / name))
             ur = unicode_range(have, avoid=cmap - have)
-            faces.append([FAMILY[key], stamped(name), WEIGHTS[key], ur, "normal"])
+            faces.append([FAMILY[key], name, WEIGHTS[key], ur, "normal"])
             if italic.exists():
                 iname = f"{stem}-Italic-{script.lower()}.woff2"
-                woff2_slice(italic, have, PUBLIC / "fonts" / iname)
-                faces.append([FAMILY[key], stamped(iname), WEIGHTS[key], ur, "italic"])
+                jobs.append((italic, sorted(have), PUBLIC / "fonts" / iname))
+                faces.append([FAMILY[key], iname, WEIGHTS[key], ur, "italic"])
     latin = latin_chars()
     for name, ranges in CJK.items():
         src = ROOT / "fonts" / "cjk" / f"{name}[wght].ttf"
@@ -626,13 +630,20 @@ def web_fonts() -> list[list]:
         have = set(TTFont(src).getBestCmap()) - latin
         if name == "KatagamiCJKTC":
             have -= set(TTFont(src.with_name("KatagamiCJKSC[wght].ttf")).getBestCmap())
-        woff2_slice(src, have, out)
+        jobs.append((src, sorted(have), out))
         italic = src.with_name(f"{name}-Italic[wght].ttf")
-        woff2_slice(italic, have, PUBLIC / "fonts" / f"{name}-Italic.woff2")
+        jobs.append((italic, sorted(have), PUBLIC / "fonts" / f"{name}-Italic.woff2"))
         css = ",".join(f"U+{a:X}-{b:X}" for a, b in ranges)
         for key in ("sans", "round", "text", "serif"):
-            faces.append([FAMILY[key], stamped(f"{name}.woff2"), "100 900", css, "normal"])
-            faces.append([FAMILY[key], stamped(f"{name}-Italic.woff2"), "100 900", css, "italic"])
+            faces.append([FAMILY[key], f"{name}.woff2", "100 900", css, "normal"])
+            faces.append([FAMILY[key], f"{name}-Italic.woff2", "100 900", css, "italic"])
+    # each slice is cut from its own copy of its font, so the slices are cut side by side, and a
+    # face's file is stamped once it exists. The faces keep their order, the order of katagami.css.
+    with ProcessPoolExecutor(max_workers=JOBS) as pool:
+        for job in [pool.submit(woff2_slice, *job) for job in jobs]:
+            job.result()  # a worker's error stops the run here
+    for face in faces:
+        face[1] = stamped(face[1])
     return faces
 
 
