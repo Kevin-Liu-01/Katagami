@@ -83,7 +83,7 @@ def build(part, text, variant="moved", consts=None):
             for n in sorted(need):
                 nf.layers.defaultLayer.insertGlyph(f[n], n, copy=True)
             fonts[style] = nf
-        if getattr(P, "two_storey_g", False) and B is NEW and "g" in fonts["Regular"]:
+        if getattr(P, "two_storey_g", False) and hasattr(B, "two_storey_g") and "g" in fonts["Regular"]:
             B.two_storey_g(fonts)
         plan = B.plan_serifs(fonts)
         B.fit_serifs(fonts, plan, P.serif_reach, B.SERIF_FIT)
@@ -93,8 +93,9 @@ def build(part, text, variant="moved", consts=None):
         B.add_contrast(fonts, dict(P.serif_contrast))
         if strokes is not None:
             B.thin_strokes(fonts, strokes)
-        # build_sans.py cuts its terminals after the stem serifs since the facets (d6b70d5 and later)
-        after = M is NEW
+        # build_sans.py cuts its terminals after the stem serifs since the facets (6fd796e and later),
+        # and a "git:" variant of such a commit is cut the way that commit's build cut it
+        after = M is NEW or (variant.startswith("git:") and hasattr(M, "FACETS_KEY"))
         if option:
             kept = ENDS.cut(fonts, terminals, option)
         elif after:
