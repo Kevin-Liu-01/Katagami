@@ -882,6 +882,9 @@ def small_caps(fonts) -> None:
             if SERIFS_KEY in src.lib:  # drawn from the capital in order, so its serifs keep their indices
                 g.lib[SERIFS_KEY] = list(src.lib[SERIFS_KEY])
                 seat_brackets(f, g)
+            drawn_from = f[src.components[0].baseGlyph] if src.components and not src.contours else src
+            if drawn_from.unicodes and chr(drawn_from.unicodes[0]) in LEG_FEET:
+                fold_leg_wings(g, list(drawn_from.lib.get(SERIFS_KEY, [])))
         for lc in compound:
             src = f[pairs[lc]]
             g = f.newGlyph(f"{lc}.smcp")
@@ -1400,7 +1403,9 @@ def find_arm_ends(font, g, sw: float, middle: bool = False) -> list[tuple]:
 
 OWN_SERIFS = ("d",)  # drawn as a mirrored b, which would point its head serif right: drawn out, it takes its own
 ARMS = set("EFLTZzΓΕΖΤГЕТ")
-BARE_LEGS = set("KkRĸΚκКкЌќ")  # the foot of the leg ends bare, as Geist Serif's do
+BARE_LEGS = set("R")  # the foot of R's leg ends bare, as Geist Serif's does
+LEG_FEET = set("KkĸΚκКкЌќ")  # the foot of the leg takes a serif: out to the right, and inside where the stem's serif leaves it room
+LEG_WING = 0.25  # stems (Regular): how far past the leg's side a leg's inner wing must reach at Black, or the leg takes its outer wing only
 MIDDLE_ARMS = set("EFΕЕ")  # their middle bar's free end takes a beak both ways
 SERIF_WIDTH_CAP = 1.1  # stems: a serif's reach is measured on its stroke end, at most this wide
 def plan_serifs(fonts) -> dict:
@@ -1997,6 +2002,8 @@ def cut_serifs(fonts, plan: dict, reach: float, depth: float, head_drop: float, 
     gap = SERIF_GAP * sw_ref
     ink_clear = SERIF_CLEAR * sw_ref
     parts = serif_parts(fonts["Regular"])
+    black = fonts.get("Black", fonts["Regular"])
+    legs = _leg_feet(fonts, plan, reach, depth * crossbar(black) * SERIF_DEPTH_SCALE[-1], gap)
     for style, f in fonts.items():
         sw = stem(f)
         cap_ink = f["I"].getBounds(f)
@@ -2010,7 +2017,8 @@ def cut_serifs(fonts, plan: dict, reach: float, depth: float, head_drop: float, 
             g = f[name]
             ink = g.getBounds(f)
             spans = []
-            for ci, i, j, left, right, top, width, head in ends:
+            for e, (ci, i, j, left, right, top, width, head) in enumerate(ends):
+                left = left and legs.get(name, {}).get(e, True)  # a leg too close to its stem at Black takes its outer wing only
                 pts = g.contours[ci].points
                 n = len(pts)
                 a, q, prev, nxt = pts[i], pts[j], pts[(i - 1) % n], pts[(j + 1) % n]
@@ -2098,6 +2106,77 @@ def cut_serifs(fonts, plan: dict, reach: float, depth: float, head_drop: float, 
                 widened[name] = XMap(0, dl, 1)
         reflow_composites(f, widened, before)
         flag_overlaps(f)
+
+
+def _leg_feet(fonts, plan: dict, reach: float, t: float, gap: float) -> dict:
+    """The feet of the legs of LEG_FEET letters, as {glyph: {end: whether its inner
+    wing is cut}}, decided on Black, where the leg stands closest to its stem. The
+    leg's inner wing and the stem's serif share the white between them less `gap`,
+    as facing serifs do, and the wing's share must reach LEG_WING stems past the
+    leg's side at the height `t` of the serif's back, where the side has leaned
+    toward the stem. A shorter wing would only flare the foot of the leg and leave
+    a slit of white down to the baseline, as it would in k at Black, so there the
+    leg takes its outer wing only, in every master."""
+    ref = fonts["Regular"]
+    f = fonts.get("Black", ref)
+    sw_ref, sw = stem(ref), stem(f)
+    k = (sw / sw_ref) ** SERIF_REACH_POWER[sw > sw_ref]
+    char = {g.name: chr(g.unicodes[0]) for g in ref if g.unicodes}
+    out = {}
+    for name, (ends, _) in plan.items():
+        if char.get(name if name in char else name.split(".")[0], "") not in LEG_FEET:
+            continue
+        feet = {}
+        for e, end in enumerate(ends):
+            ci, i, j, left, right, top, width, head = end
+            if not left or not _is_leg(ref[name], end):
+                continue
+            g = f[name]
+            pts = g.contours[ci].points
+            a, prev = pts[i], pts[(i - 1) % len(pts)]
+            # the nearest stem foot to its left on the baseline, and whether its serif reaches toward the leg
+            stems = [(g.contours[c2].points[j2].x, r2) for c2, i2, j2, l2, r2, t2, w2, h2 in ends
+                     if not t2 and abs(g.contours[c2].points[i2].y - a.y) <= 2 and g.contours[c2].points[j2].x < a.x]
+            x1, facing = max(stems, default=(None, False))
+            room = max(0.0, a.x - x1 - gap) if x1 is not None else math.inf
+            wing = min(reach * width * k, room / 2 if facing else room)
+            lean = a.x - _side_x(((a.x, a.y), (prev.x, prev.y)), a.y + t)
+            feet[e] = wing - lean >= LEG_WING * sw_ref
+        if feet:
+            out[name] = feet
+    return out
+
+
+def fold_leg_wings(g, serifs: list[int]) -> None:
+    """Fold the inner wing of the leg's foot serif onto the leg's side in a small
+    capital drawn from K, Κ, К or a letter built on them, whose serif contours
+    are `serifs`. A small capital has the lowercase's proportions, and at Black
+    its leg stands as close to its stem as k's, where the capital's inner wing
+    left a slit of white about 24 units wide down to the baseline; so it takes
+    k's outer wing only. The leg's inner corner is the second point from the
+    right on the baseline, and its side runs up from it. Each point of the serif
+    under the leg left of that side moves onto it at its own height, so the
+    masters stay compatible."""
+    base = sorted((p.x, ci, k) for ci, c in enumerate(g.contours) if ci not in serifs
+                  for k, p in enumerate(c.points) if p.type and abs(p.y) < 3)
+    if len(base) < 4:
+        return
+    _, ci, k = base[-2]
+    pts = g.contours[ci].points
+    n = len(pts)
+    a = pts[k]
+    q = next((pts[m] for m in ((k - 1) % n, (k + 1) % n) if pts[m].type and pts[m].y > a.y + 3), None)
+    if q is None:
+        return
+    for i in serifs:
+        c = g.contours[i].points if i < len(g.contours) else []
+        foot = [p.x for p in c if p.type and abs(p.y) < 3]
+        if not foot or min(foot) > a.x + 1 or max(foot) < base[-1][0] - 1:
+            continue  # not the serif under the leg
+        for p in c:
+            x = a.x + (p.y - a.y) * (q.x - a.x) / (q.y - a.y)
+            if p.x < x:
+                p.x = x
 
 
 def seat_brackets(font, g) -> None:
