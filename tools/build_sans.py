@@ -1564,21 +1564,33 @@ def plan_thin_strokes(fonts) -> dict:
         if ch not in THIN_LETTERS:
             continue
         uprights = THIN_UPRIGHTS.get(ch) if g.name == base(g) else None
+
+        def inside(x, y):
+            pen = PointInsidePen(ref, (x, y))
+            g.draw(pen)
+            return pen.getResult()
+
+        def buried(a, b, length):
+            """Ink on both sides of the edge all along it: it lies inside another
+            contour (the top of K's leg, inside the arm) and draws nothing. An
+            edge that a crossbar covers only in part (inside A's left stroke) shows."""
+            nx, ny = -(b[1] - a[1]) / length * 2, (b[0] - a[0]) / length * 2
+            for t in (0.2, 0.35, 0.5, 0.65, 0.8):
+                mx, my = a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])
+                if not (inside(mx + nx, my + ny) and inside(mx - nx, my - ny)):
+                    return False
+            return True
         edges = []
         for ci, i, j, a, b in _straight_edges(g):
             dx, dy = b[0] - a[0], b[1] - a[1]
             length = math.hypot(dx, dy)
-            if length < 0.8 * sw:
+            if length < 0.8 * sw or buried(a, b, length):
                 continue
             angle = math.degrees(math.atan2(dy, dx)) % 180
             if THIN_RISING[0] <= angle <= THIN_RISING[1] and ch not in "ИЙЍ":  # a mirrored N keeps its rising diagonal thick
                 edges.append(("rising", ci, i, j, a, b, angle))
             elif uprights and abs(angle - 90) < 1:
                 edges.append(("upright", ci, i, j, a, b, angle))
-        def inside(x, y):
-            pen = PointInsidePen(ref, (x, y))
-            g.draw(pen)
-            return pen.getResult()
         pairs = {}
         for e1 in edges:
             for e2 in edges:
@@ -1635,14 +1647,17 @@ def thin_strokes(fonts, plan: dict) -> None:
     where it meets another straight edge slides along that edge; a corner where
     it meets a curve slides along the curve's tangent and takes its handle with
     it, or moves with the edge where the curve carries the edge straight on (the
-    foot of U's stem). The point counts do not change, so the masters stay
-    compatible."""
+    foot of U's stem). The top of a leg that Inter buries in the arm (K, k) is
+    then set back inside the thinned arm by _seat_legs, in every master. The
+    point counts do not change, so the masters stay compatible."""
     for style, f in fonts.items():
         share = dict(zip(("Thin", "Regular", "Black"), THIN_STROKE)).get(style, 1.0)
-        if share >= 1:
-            continue
         for name, edges in plan.items():
             g = f[name]
+            legs = _legs(g)
+            if share >= 1:
+                _seat_legs(g, legs)
+                continue
             P = [[(pt.x, pt.y) for pt in c.points] for c in g.contours]
             shift = {}
             for ci, i, j, others in edges:
@@ -1698,6 +1713,93 @@ def thin_strokes(fonts, plan: dict) -> None:
                         new[(ci, other)] = (o[0] + to[0] - here[0], o[1] + to[1] - here[1])
             for (ci, k), (x, y) in new.items():
                 g.contours[ci].points[k].x, g.contours[ci].points[k].y = x, y
+            _seat_legs(g, legs)
+
+
+def _legs(g) -> list[tuple]:
+    """The legs of g whose tops Inter buries in another stroke, as (leg contour,
+    [(foot point, top point), ...], the contour the top lies in): four straight
+    sides, two corners on the baseline and two inside another contour (the leg
+    of K and k, whose top end lies in the arm)."""
+    from fontTools.pens.pointInsidePen import PointInsidePen
+    out = []
+    for ci, c in enumerate(g.contours):
+        pts = c.points
+        if len(pts) != 4 or any(p.type != "line" for p in pts):
+            continue
+        feet = [k for k in range(4) if abs(pts[k].y) < 3]
+        tops = [k for k in range(4) if k not in feet]
+        if len(feet) != 2 or len(tops) != 2 or (tops[1] - tops[0]) % 4 not in (1, 3):
+            continue
+        for hi, host in enumerate(g.contours):
+            if hi == ci:
+                continue
+            inside = []
+            for k in tops:
+                pen = PointInsidePen(None, (pts[k].x, pts[k].y))
+                host.draw(pen)
+                inside.append(pen.getResult())
+            if all(inside):
+                pairs = [(next(m for m in ((k - 1) % 4, (k + 1) % 4) if m in feet), k) for k in tops]
+                out.append((ci, pairs, hi))
+                break
+    return out
+
+
+def _seat_legs(g, legs) -> None:
+    """Put each buried corner of a leg's top halfway across the stroke it lies in,
+    measured along the leg's own side, after that stroke has been thinned: the
+    sides keep their angles and the top stays inside, so neither a corner nor
+    the top's edge shows past the thinned arm of K."""
+    for ci, pairs, hi in legs:
+        line = _flatten(g.contours[hi])
+        for fi, ti in pairs:
+            foot, top = g.contours[ci].points[fi], g.contours[ci].points[ti]
+            dx, dy = top.x - foot.x, top.y - foot.y
+            ts = []
+            for (x0, y0), (x1, y1) in zip(line, line[1:] + line[:1]):
+                ex, ey = x1 - x0, y1 - y0
+                den = dx * ey - dy * ex
+                if abs(den) < 1e-9:
+                    continue
+                t = ((x0 - foot.x) * ey - (y0 - foot.y) * ex) / den
+                s = ((x0 - foot.x) * dy - (y0 - foot.y) * dx) / den
+                if 0 <= s < 1 and t > 0:
+                    ts.append(t)
+            ts.sort()
+            if len(ts) >= 2:
+                t = (ts[0] + ts[1]) / 2
+                top.x, top.y = foot.x + t * dx, foot.y + t * dy
+
+
+def _flatten(contour, steps: int = 16) -> list[tuple]:
+    """A closed contour as a polygon, its curves cut into `steps` straight pieces."""
+    pts = contour.points
+    n = len(pts)
+    start = next(k for k in range(n) if pts[k].type is not None)
+    out, handles = [], []
+    for s in range(1, n + 1):
+        p = pts[(start + s) % n]
+        if p.type is None:
+            handles.append((p.x, p.y))
+            continue
+        a = out[-1] if out else (pts[start].x, pts[start].y)
+        if len(handles) == 2:
+            (bx, by), (cx, cy) = handles
+            for k in range(1, steps):
+                t = k / steps
+                m = 1 - t
+                out.append((m ** 3 * a[0] + 3 * m * m * t * bx + 3 * m * t * t * cx + t ** 3 * p.x,
+                            m ** 3 * a[1] + 3 * m * m * t * by + 3 * m * t * t * cy + t ** 3 * p.y))
+        elif len(handles) == 1:
+            (bx, by), = handles
+            for k in range(1, steps):
+                t = k / steps
+                m = 1 - t
+                out.append((m * m * a[0] + 2 * m * t * bx + t * t * p.x, m * m * a[1] + 2 * m * t * by + t * t * p.y))
+        out.append((p.x, p.y))
+        handles = []
+    return out
 
 
 DOT_SIZE = 1.8  # stems (Regular): the most a dot measures across
