@@ -879,12 +879,13 @@ def small_caps(fonts) -> None:
             for a in src.anchors:
                 g.appendAnchor({"name": a.name, "x": a.x * kx + ddx / 2 + track / 2, "y": a.y * kk + ddy / 2})
             g.width = round(src.width * kx + ddx + track)
-            if SERIFS_KEY in src.lib:  # drawn from the capital in order, so its serifs keep their indices
-                g.lib[SERIFS_KEY] = list(src.lib[SERIFS_KEY])
-                seat_brackets(f, g)
+            serifs = _drawn_serifs(f, src)[0]
+            if serifs:
+                g.lib[SERIFS_KEY] = [i for i, _ in serifs]
+                seat_brackets(f, g, {i for i, flipped in serifs if flipped})
             drawn_from = f[src.components[0].baseGlyph] if src.components and not src.contours else src
             if drawn_from.unicodes and chr(drawn_from.unicodes[0]) in LEG_FEET:
-                fold_leg_wings(g, list(drawn_from.lib.get(SERIFS_KEY, [])))
+                fold_leg_wings(g, g.lib.get(SERIFS_KEY, []))
         for lc in compound:
             src = f[pairs[lc]]
             g = f.newGlyph(f"{lc}.smcp")
@@ -2179,18 +2180,40 @@ def fold_leg_wings(g, serifs: list[int]) -> None:
                 p.x = x
 
 
-def seat_brackets(font, g) -> None:
+def _drawn_serifs(font, g, flipped: bool = False, first: int = 0) -> tuple[list, int]:
+    """The serif contours of g with its components drawn in, in the order a
+    DecomposingRecordingPen draws them (g's own contours, then each component's),
+    as (index, drawn reversed), and the number of contours drawn. A capital set
+    from another (Κ is K, И is N mirrored) has no serifs of its own: its small
+    capital takes the serifs of the capitals it is set from."""
+    out = [(first + i, flipped) for i in g.lib.get(SERIFS_KEY, []) if i < len(g.contours)]
+    n = len(g.contours)
+    for c in g.components:
+        if c.baseGlyph not in font:
+            continue
+        a, b, cc, d = c.transformation[:4]
+        sub, m = _drawn_serifs(font, font[c.baseGlyph], flipped ^ (a * d - b * cc < 0), first + n)
+        out += sub
+        n += m
+    return out, n
+
+
+def seat_brackets(font, g, reversed_serifs: set = frozenset()) -> None:
     """Each serif's two ends on its stroke, where its brackets leave the stroke's sides, back on
     those sides. Emboldening moves such an end along the bisector of its bracket and the line
     across the stroke, and a diagonal's side along the side's own normal, so on a diagonal (M, N,
-    K, W, A) the end lands in the white and the line across the stroke runs out into it as a barb."""
+    K, W, A) the end lands in the white and the line across the stroke runs out into it as a barb.
+    A serif's ends are its first and last points; one in `reversed_serifs` was drawn from a
+    mirrored capital (И is N mirrored) and reversed, which keeps its first point first and
+    brings its other end second."""
     serifs = g.lib.get(SERIFS_KEY, [])
     body = font.newGlyph("_smcp_body")
     for i, c in enumerate(g.contours):
         if i not in serifs:
             c.drawPoints(body.getPointPen())
     for i in serifs:
-        ends = (g.contours[i].points[0], g.contours[i].points[-1])
+        pts = g.contours[i].points
+        ends = (pts[0], pts[1] if i in reversed_serifs else pts[-1])
         mid = (ends[0].x + ends[1].x) / 2
         for p in ends:
             # the stroke is the ink the line across it crosses
